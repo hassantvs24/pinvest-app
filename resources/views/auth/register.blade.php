@@ -15,6 +15,8 @@
             <h1 class="text-2xl font-bold text-emerald-700">{{ __('messages.create_account') }}</h1>
         </div>
 
+        <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-4">⚠️ {{ __('messages.register_allow_hint') }}</p>
+
         @if($errors->any())
             <div class="bg-red-100 border border-red-400 text-red-800 rounded-lg px-4 py-3 mb-4">❌ {{ $errors->first() }}</div>
         @endif

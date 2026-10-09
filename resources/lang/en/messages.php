@@ -331,6 +331,8 @@ return [
     'output_split_hint' => 'When a run yields several goods, cost is split automatically — higher-priced goods carry a higher cost share (e.g. melting gold plus scrap).',
     'remove' => 'Remove',
     'production_saved' => 'Production recorded',
+    'production_unit_hint' => 'Each product is counted in its own unit — match the (kg / pcs / tola) label next to it before entering quantities.',
+    'production_stock_hint' => 'If a material quantity exceeds stock, the stock will show a shortage — check current stock on the 🏪 Stock page first.',
     'production_deleted' => 'Production deleted',
     'labour_double_count_hint' => 'If labour is entered here, do NOT enter it again as an expense entry (it would count twice).',
     'withdrawal_exceeds_cash' => 'Cash in hand is ৳:cash — you cannot withdraw more than that',
@@ -342,7 +344,7 @@ return [
     // Entry form hints (what each entry does)
     'entry_hint_expenses' => 'Record any cost. "Product cost" joins stock (costed when sold), "general cost" is deducted from profit directly. ⏳ It counts only after the owner approves.',
     'entry_hint_purchases' => 'Record buying raw materials/goods — they join stock; when sold later, cost comes out at the average rate to compute profit.',
-    'entry_hint_sales' => 'Record a sale. Linked or manufactured items get their cost deducted automatically; unlinked items trigger a warning at close.',
+    'entry_hint_sales' => 'Record a sale. Purchased or manufactured items get their cost deducted automatically. You cannot sell more than the stock available.',
     'entries_status_legend' => '⏳ = awaiting owner approval, ✅ = counted in the books, ❌ = rejected.',
 
     // Page section hints
@@ -351,19 +353,22 @@ return [
     'partner_rate_hint' => 'On a profitable cycle the partner earns this % as commission — on a loss they get nothing. If total rates pass 100%, your own share shrinks.',
     'my_commissions_hint' => 'Your commission ledger. ⏳ pending means it can be withdrawn — send a request below; once the owner approves, you are paid.',
     'production_pending_hint' => '⏳ Your production counts towards stock and cost only after the owner approves it.',
+    'production_pending_hint_owner' => '⏳ A partner\'s pending production counts towards stock and cost only after you approve it.',
     'payout_requests_hint' => 'Partner withdrawal requests. ✅ Approving pays out ALL of that partner\'s pending commission (deducted from cash).',
     'reports_intro_hint' => 'Summary: investment, purchases, sales, expenses, stock, commission and cash — for the selected period/cycle (lifetime when nothing is selected).',
 
     // Cautions (⚠️)
     'warn_expense_double_count' => 'Product costs join stock and are costed when sold — entering the same cost again as production labour counts it twice.',
-    'warn_sale_unlinked' => 'Selling an item with no purchase link and no production counts its cost as 0 — profit looks inflated. Link it from Masters.',
-    'warn_unit_locked' => 'Links and names can be changed later, but the unit cannot — make sure the unit is correct before saving.',
+    'warn_sale_unlinked' => 'Selling an item with no purchase or production history counts its cost as 0 — profit looks inflated.',
+    'warn_unit_locked' => 'Only the name can be changed later — the unit and default price cannot. Make sure both are correct before saving.',
 
     // Stock losses
     'stock_loss' => 'Stock loss',
     'stock_losses' => 'Stock losses',
     'add_stock_loss' => 'Report stock loss',
-    'stock_loss_hint' => 'Record goods lost without a sale (rot, damage, theft, shrinkage) — stock and profit stay accurate.',
+    'stock_loss_hint' => 'Record goods lost without a sale (rot, damage, theft, shrinkage) — stock and profit stay accurate. You cannot report more than the stock available.',
+    'stock_loss_pending_hint_owner' => '⏳ A partner\'s pending loss leaves stock and counts as a cycle loss once you approve it.',
+    'register_allow_hint' => 'To create an account, first ask the Owner to allow your mobile number for registration — sign-up is not possible without it.',
     'stock_loss_pending_hint' => 'It leaves stock and counts as a cycle loss once the owner approves.',
     'reason' => 'Reason',
     'stock_loss_reason_placeholder' => 'e.g. rotted / broken / stolen',

@@ -33,6 +33,7 @@
                         ➕ {{ __('messages.add_output') }}
                     </button>
                     <p class="text-xs text-gray-500 mt-1">{{ __('messages.output_split_hint') }}</p>
+                    <p class="text-xs text-gray-500 mt-1">⚖️ {{ __('messages.production_unit_hint') }}</p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -65,6 +66,8 @@
                     <button type="button" id="js-add-row" class="mt-2 w-full border-2 border-dashed border-emerald-300 text-emerald-700 font-bold rounded-lg py-2">
                         ➕ {{ __('messages.add_material') }}
                     </button>
+                    <p class="text-xs text-gray-500 mt-1">⚖️ {{ __('messages.production_unit_hint') }}</p>
+                    <p class="text-xs text-gray-500 mt-1">📦 {{ __('messages.production_stock_hint') }}</p>
                 </div>
 
                 <div>

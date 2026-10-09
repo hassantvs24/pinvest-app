@@ -7,7 +7,8 @@
         {{-- Create form --}}
         <div class="bg-white rounded-2xl shadow-lg p-5 mb-4">
             <h1 class="text-xl font-bold mb-1">🏭 {{ __('messages.add_production') }}</h1>
-            <p class="text-sm text-gray-500 mb-4">{{ __('messages.production_hint') }}</p>
+            <p class="text-sm text-gray-500 mb-2">{{ __('messages.production_hint') }}</p>
+            <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">{{ __('messages.production_pending_hint_owner') }}</p>
 
             <form method="POST" action="{{ route('owner.productions.store') }}" class="space-y-4 js-confirm-submit">
                 @csrf
@@ -32,6 +33,7 @@
                         ➕ {{ __('messages.add_output') }}
                     </button>
                     <p class="text-xs text-gray-500 mt-1">{{ __('messages.output_split_hint') }}</p>
+                    <p class="text-xs text-gray-500 mt-1">⚖️ {{ __('messages.production_unit_hint') }}</p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -67,6 +69,8 @@
                     <button type="button" id="js-add-row" class="mt-2 w-full border-2 border-dashed border-emerald-300 text-emerald-700 font-bold rounded-lg py-2">
                         ➕ {{ __('messages.add_material') }}
                     </button>
+                    <p class="text-xs text-gray-500 mt-1">⚖️ {{ __('messages.production_unit_hint') }}</p>
+                    <p class="text-xs text-gray-500 mt-1">📦 {{ __('messages.production_stock_hint') }}</p>
                 </div>
 
                 <div>

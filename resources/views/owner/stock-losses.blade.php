@@ -7,7 +7,8 @@
         {{-- Report form --}}
         <div class="bg-white rounded-2xl shadow-lg p-5 mb-4">
             <h1 class="text-xl font-bold mb-1">📉 {{ __('messages.add_stock_loss') }}</h1>
-            <p class="text-sm text-gray-500 mb-4">{{ __('messages.stock_loss_hint') }}</p>
+            <p class="text-sm text-gray-500 mb-2">{{ __('messages.stock_loss_hint') }}</p>
+            <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">{{ __('messages.stock_loss_pending_hint_owner') }}</p>
 
             <form method="POST" action="{{ route('owner.stock-losses.store') }}" class="space-y-4 js-confirm-submit">
                 @csrf

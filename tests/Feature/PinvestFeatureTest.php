@@ -645,6 +645,8 @@ it('prevents duplicate master item names within a group', function (): void {
 });
 
 it('rejects registration when the phone is not allow-listed', function (): void {
+    $this->get('/register')->assertSee(__('messages.register_allow_hint'));
+
     $this->from('/register')->post('/register', [
         'name' => 'Hacker',
         'phone' => '01600000000',
@@ -1635,6 +1637,9 @@ it('reduces stock and profit when confirmed stock loss is recorded', function ()
     $rowOf = fn () => collect(InventoryService::stockRows(now()))->firstWhere('item.id', $purchaseItem->id);
     expect($loss->status)->toBe(EntryStatus::Pending)
         ->and($rowOf()['base_quantity'])->toBe(5.0);
+
+    $this->actingAs($owner)->get('/owner/stock-losses')
+        ->assertSee(__('messages.stock_loss_pending_hint_owner'));
 
     // Owner confirms → stock drops to 3, cycle profit drops by 2 × 100.
     $this->actingAs($owner)->patch("/owner/stock-losses/{$loss->id}/confirm")->assertRedirect();
