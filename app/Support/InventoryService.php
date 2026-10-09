@@ -33,7 +33,8 @@ use Illuminate\Support\Collection;
  * stored, so owner edits and deletes always stay consistent.
  *
  * @phpstan-type ItemState array{item: Item, in_qty: float, in_cost: float, purchase_cost: float, out_qty: float}
- * @phpstan-type Simulation array{states: array<int, ItemState>, cogs: float, loss_cost: float, warnings: list<string>}
+ * @phpstan-type TraceEntry array{sort: string, unit_cost: float, cost: float}
+ * @phpstan-type Simulation array{states: array<int, ItemState>, cogs: float, loss_cost: float, warnings: list<string>, trace: list<TraceEntry>}
  */
 class InventoryService
 {
@@ -148,10 +149,17 @@ class InventoryService
      * carries a running balance in the item's own unit. Pending sales
      * are returned separately — they reserve stock but do not move it.
      *
-     * @return array{rows: list<array{date: string, kind: string, direction: string, quantity: float, balance: float, note: string}>, pending: list<array{date: string, quantity: float, note: string}>}
+     * @return array{rows: list<array{date: Carbon, kind: string, direction: string, quantity: float, balance: float, unit_price: float|null, total: float|null, note: string}>, pending: list<array{date: Carbon, quantity: float, note: string}>, totals: array{purchase: array{qty: float, amount: float}, sale: array{qty: float, amount: float}, production_in: array{qty: float, amount: float}, production_out: array{qty: float, amount: float}, stock-loss: array{qty: float, amount: float}>}
      */
     public static function ledger(Item $item, Carbon $asOf): array
     {
+        // Costs per movement (production allocation, sale/loss at the
+        // average cost of that moment) come from the simulation trace.
+        /** @var array<string, TraceEntry> $traceMap */
+        $traceMap = collect(self::simulate(null, $asOf)['trace'])
+            ->keyBy('sort')
+            ->all();
+
         $events = collect();
 
         Purchase::query()->confirmed()->where('item_id', $item->id)
@@ -162,6 +170,8 @@ class InventoryService
                 'kind' => 'purchase',
                 'direction' => 'in',
                 'quantity_base' => ItemUnits::toBase((float) $purchase->quantity, $item->unit),
+                'unit_price' => (float) $purchase->unit_price,
+                'total' => (float) $purchase->total,
                 'note' => self::ledgerNote($purchase->user?->name, $purchase->note),
             ]));
 
@@ -180,7 +190,9 @@ class InventoryService
                         'kind' => 'production',
                         'direction' => 'out',
                         'quantity_base' => ItemUnits::toBase((float) $component->quantity, $item->unit),
-                        'note' => __('messages.ledger_production', ['id' => $production->id]),
+                        'unit_price' => null,
+                        'total' => null,
+                        'note' => self::ledgerProductionNote($production),
                     ]);
                 }
                 foreach ($production->outputs->where('item_id', $item->id) as $output) {
@@ -190,7 +202,9 @@ class InventoryService
                         'kind' => 'production',
                         'direction' => 'in',
                         'quantity_base' => ItemUnits::toBase((float) $output->quantity, $item->unit),
-                        'note' => __('messages.ledger_production', ['id' => $production->id]),
+                        'unit_price' => null,
+                        'total' => null,
+                        'note' => self::ledgerProductionNote($production),
                     ]);
                 }
             });
@@ -203,6 +217,8 @@ class InventoryService
                 'kind' => 'sale',
                 'direction' => 'out',
                 'quantity_base' => ItemUnits::toBase((float) $sale->quantity, $item->unit),
+                'unit_price' => (float) $sale->unit_price,
+                'total' => (float) $sale->total,
                 'note' => self::ledgerNote($sale->user?->name, $sale->note),
             ]));
 
@@ -214,12 +230,15 @@ class InventoryService
                 'kind' => 'stock-loss',
                 'direction' => 'out',
                 'quantity_base' => ItemUnits::toBase((float) $loss->quantity, $item->unit),
+                'unit_price' => null,
+                'total' => null,
                 'note' => self::ledgerNote($loss->user?->name, $loss->note),
             ]));
 
         $balance = 0.0;
-        $rows = $events->sortBy('sort')->values()->map(function (array $event) use (&$balance, $item): array {
+        $rows = $events->sortBy('sort')->values()->map(function (array $event) use (&$balance, $item, $traceMap): array {
             $balance += $event['direction'] === 'in' ? $event['quantity_base'] : -$event['quantity_base'];
+            $costInfo = $traceMap[$event['sort']] ?? null;
 
             return [
                 'date' => $event['date'],
@@ -227,9 +246,26 @@ class InventoryService
                 'direction' => $event['direction'],
                 'quantity' => ItemUnits::fromBase($event['quantity_base'], $item->unit),
                 'balance' => ItemUnits::fromBase($balance, $item->unit),
+                'unit_price' => $event['unit_price'] ?? $costInfo['unit_cost'] ?? null,
+                'total' => $event['total'] ?? $costInfo['cost'] ?? null,
                 'note' => $event['note'],
             ];
         })->all();
+
+        // Per-kind totals over the whole ledger (quantity in the item's
+        // own unit + money moved).
+        $totals = [
+            'purchase' => ['qty' => 0.0, 'amount' => 0.0],
+            'sale' => ['qty' => 0.0, 'amount' => 0.0],
+            'production_in' => ['qty' => 0.0, 'amount' => 0.0],
+            'production_out' => ['qty' => 0.0, 'amount' => 0.0],
+            'stock-loss' => ['qty' => 0.0, 'amount' => 0.0],
+        ];
+        foreach ($rows as $row) {
+            $key = $row['kind'] === 'production' ? 'production_'.$row['direction'] : $row['kind'];
+            $totals[$key]['qty'] += $row['quantity'];
+            $totals[$key]['amount'] += $row['total'] ?? 0.0;
+        }
 
         $pending = Sale::query()->pending()->where('item_id', $item->id)
             ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
@@ -239,7 +275,7 @@ class InventoryService
                 'note' => self::ledgerNote($sale->user?->name, $sale->note),
             ])->all();
 
-        return ['rows' => $rows, 'pending' => $pending];
+        return ['rows' => $rows, 'pending' => $pending, 'totals' => $totals];
     }
 
     /**
@@ -248,6 +284,14 @@ class InventoryService
     private static function ledgerNote(?string $userName, ?string $note): string
     {
         return trim(($userName ?? '').($note ? ' — '.$note : ''));
+    }
+
+    /**
+     * Ledger reference for a production run: its number plus note.
+     */
+    private static function ledgerProductionNote(Production $production): string
+    {
+        return '#'.$production->id.($production->note ? ' — '.$production->note : '');
     }
 
     /**
@@ -301,8 +345,12 @@ class InventoryService
         $lossCost = 0.0;
         $unallocatedExpense = 0.0;
         $negativeNames = [];
+        /** @var list<TraceEntry> $trace */
+        $trace = [];
 
         foreach ($events as $event) {
+            $sort = $event['date'].'|'.$event['order'].'|'.$event['id'];
+
             if ($event['kind'] === 'purchase') {
                 $state = $states[$event['item_id']];
                 $state['in_qty'] += $event['qty_base'];
@@ -320,7 +368,7 @@ class InventoryService
             }
 
             if ($event['kind'] === 'production') {
-                $states = self::applyProduction($states, $event, $negativeNames);
+                $states = self::applyProduction($states, $event, $negativeNames, $trace);
 
                 continue;
             }
@@ -328,7 +376,8 @@ class InventoryService
             // Sale or stock loss: consume stock at the average cost
             // current right now.
             $state = $states[$event['item_id']];
-            $cost = round($event['qty_base'] * self::stateAvgCost($state), 2);
+            $unitCost = self::stateAvgCost($state);
+            $cost = round($event['qty_base'] * $unitCost, 2);
 
             if ($event['kind'] === 'sale' && $event['count_cogs']) {
                 $cogs += $cost;
@@ -337,6 +386,8 @@ class InventoryService
             if ($event['kind'] === 'stock-loss' && $event['count_cost']) {
                 $lossCost += $cost;
             }
+
+            $trace[] = ['sort' => $sort, 'unit_cost' => $unitCost, 'cost' => $cost];
 
             $state['out_qty'] += $event['qty_base'];
             $states[$event['item_id']] = $state;
@@ -361,6 +412,7 @@ class InventoryService
             'cogs' => round($cogs, 2),
             'loss_cost' => round($lossCost, 2),
             'warnings' => $warnings,
+            'trace' => $trace,
         ];
     }
 
@@ -415,7 +467,7 @@ class InventoryService
      * component consumption and output lines (base quantities; output
      * values from quantity × default price drive the cost split).
      *
-     * @return Collection<int, array{kind: string, id: string, date: string, order: int, extra_cost: float, components: array<int, array{item_id: int, qty_base: float}>, outputs: array<int, array{item_id: int, qty_base: float, value: float}>}>
+     * @return Collection<int, array{kind: string, id: string, num: int, date: string, order: int, extra_cost: float, components: array<int, array{item_id: int, cid: int, qty_base: float}>, outputs: array<int, array{item_id: int, oid: int, qty_base: float, value: float}>}>
      */
     private static function productionEvents(Carbon $to): Collection
     {
@@ -427,18 +479,21 @@ class InventoryService
             ->map(fn (Production $production): array => [
                 'kind' => 'production',
                 'id' => 'pr'.$production->id,
+                'num' => $production->id,
                 'date' => $production->entry_date->format('Y-m-d'),
                 'order' => 2,
                 'extra_cost' => (float) $production->extra_cost,
                 'components' => $production->components
                     ->map(fn ($component): array => [
                         'item_id' => $component->item_id,
+                        'cid' => $component->id,
                         'qty_base' => ItemUnits::toBase((float) $component->quantity, $component->item->unit),
                     ])
                     ->all(),
                 'outputs' => $production->outputs
                     ->map(fn ($output): array => [
                         'item_id' => $output->item_id,
+                        'oid' => $output->id,
                         'qty_base' => ItemUnits::toBase((float) $output->quantity, $output->item->unit),
                         'value' => (float) $output->quantity * (float) $output->item->default_price,
                     ])
@@ -502,9 +557,10 @@ class InventoryService
      *
      * @param  array<int, ItemState>  $states
      * @param  array<int, string>  $negativeNames
+     * @param  list<TraceEntry>  $trace
      * @return array<int, ItemState>
      */
-    private static function applyProduction(array $states, array $event, array &$negativeNames): array
+    private static function applyProduction(array $states, array $event, array &$negativeNames, array &$trace): array
     {
         $poolCost = $event['extra_cost'];
 
@@ -514,7 +570,14 @@ class InventoryService
             }
 
             $state = $states[$component['item_id']];
-            $poolCost += $component['qty_base'] * self::stateAvgCost($state);
+            $unitCost = self::stateAvgCost($state);
+            $poolCost += $component['qty_base'] * $unitCost;
+
+            $trace[] = [
+                'sort' => $event['date'].'|2|prc'.$event['num'].'c'.$component['cid'],
+                'unit_cost' => $unitCost,
+                'cost' => round($component['qty_base'] * $unitCost, 2),
+            ];
 
             $state['out_qty'] += $component['qty_base'];
             $states[$component['item_id']] = $state;
@@ -544,6 +607,12 @@ class InventoryService
             }
 
             $allocated += $share;
+
+            $trace[] = [
+                'sort' => $event['date'].'|2|pro'.$event['num'].'o'.$output['oid'],
+                'unit_cost' => $output['qty_base'] > 0.0 ? $share / $output['qty_base'] : 0.0,
+                'cost' => $share,
+            ];
 
             $state = $states[$output['item_id']];
             $state['in_qty'] += $output['qty_base'];

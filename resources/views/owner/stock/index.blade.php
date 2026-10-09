@@ -31,6 +31,10 @@
                             <div class="text-right shrink-0">
                                 <div class="font-bold">{{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
                                 <div class="text-xs text-gray-500">৳{{ number_format($row['value'], 2) }}</div>
+                                <div class="text-xs text-gray-500">
+                                    {{ __('messages.avg_cost') }} ৳{{ number_format($row['avg_cost'], 2) }}
+                                    ・{{ __('messages.avg_sale_price') }} {{ $row['avg_sale_price'] !== null ? '৳'.number_format($row['avg_sale_price'], 2) : '—' }}
+                                </div>
                             </div>
                         </a>
                     </li>

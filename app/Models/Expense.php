@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'expense_head_id', 'purchase_item_id', 'amount', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
+#[Fillable(['user_id', 'expense_head_id', 'item_id', 'amount', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
 class Expense extends Model
 {
     /** @use HasFactory<ExpenseFactory> */

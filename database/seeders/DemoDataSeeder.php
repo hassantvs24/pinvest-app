@@ -13,6 +13,7 @@ use App\Models\Payout;
 use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
+use App\Models\StockLoss;
 use App\Models\User;
 use App\Support\CommissionSettlementService;
 use Illuminate\Database\Seeder;
@@ -169,6 +170,20 @@ class DemoDataSeeder extends Seeder
                     'confirmed_by' => $owner->id,
                     'confirmed_at' => $mid->copy()->addDays(3),
                 ]);
+
+                // A little shrinkage every month so the stock-loss
+                // reports, ledger and cost flows are demoable. Chips
+                // stock always outgrows this (output 140+, sales 70).
+                StockLoss::query()->create([
+                    'user_id' => $sahel->id,
+                    'item_id' => $chipsId,
+                    'quantity' => 2 + ($i % 3),
+                    'note' => $i % 2 === 0 ? 'গুদামে পচন' : 'প্যাকেট ভেঙে গেছে',
+                    'entry_date' => $mid->copy()->addDays(3),
+                    'status' => EntryStatus::Confirmed,
+                    'confirmed_by' => $owner->id,
+                    'confirmed_at' => $mid->copy()->addDays(4),
+                ]);
                 Expense::query()->create([
                     'user_id' => $raju->id,
                     'expense_head_id' => $transportId,
@@ -241,6 +256,16 @@ class DemoDataSeeder extends Seeder
             'unit_price' => 400,
             'total' => 1200,
             'note' => 'ডেমো ক্রয়',
+            'entry_date' => now()->subDay(),
+            'status' => EntryStatus::Pending,
+        ]);
+
+        // Pending stock loss so the owner can try the confirm/reject flow.
+        StockLoss::query()->create([
+            'user_id' => $raju->id,
+            'item_id' => $chipsId,
+            'quantity' => 5,
+            'note' => 'ডেমো মজুদ ক্ষতি (পানি লেগে নষ্ট)',
             'entry_date' => now()->subDay(),
             'status' => EntryStatus::Pending,
         ]);

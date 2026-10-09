@@ -6,6 +6,7 @@ use App\Http\Controllers\EntryController;
 use App\Http\Controllers\LanguageController;
 use App\Http\Controllers\Owner\CommissionController as OwnerCommissionController;
 use App\Http\Controllers\Owner\EntryController as OwnerEntryController;
+use App\Http\Controllers\Owner\ExpenseHeadController as OwnerExpenseHeadController;
 use App\Http\Controllers\Owner\InvestmentController as OwnerInvestmentController;
 use App\Http\Controllers\Owner\MasterController as OwnerMasterController;
 use App\Http\Controllers\Owner\PartnerController as OwnerPartnerController;
@@ -75,6 +76,10 @@ Route::middleware('auth')->group(function (): void {
         // Live stock levels + per-item movement ledger.
         Route::get('/stock', [OwnerStockController::class, 'index'])->name('stock.index');
         Route::get('/stock/{item}', [OwnerStockController::class, 'show'])->name('stock.show');
+
+        // Expense ledger per head — which head costs the most.
+        Route::get('/expense-heads', [OwnerExpenseHeadController::class, 'index'])->name('expense-heads.index');
+        Route::get('/expense-heads/{head}', [OwnerExpenseHeadController::class, 'show'])->name('expense-heads.show');
 
         // Production runs (raw materials -> finished goods).
         Route::get('/productions', [OwnerProductionController::class, 'index'])->name('productions.index');

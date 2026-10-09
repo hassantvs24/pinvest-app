@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Owner;
 
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Models\Sale;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 
 /**
@@ -22,6 +25,15 @@ class StockController extends Controller
     {
         $reservations = InventoryService::pendingReservations();
 
+        // Average sale price per item (all confirmed sales, amount ÷ qty).
+        $avgSalePrices = Sale::query()->confirmed()
+            ->selectRaw('item_id, SUM(total) as amount, SUM(quantity) as qty')
+            ->groupBy('item_id')
+            ->get()
+            ->mapWithKeys(fn (Sale $sale): array => [
+                $sale->item_id => (float) $sale->qty > 0.0 ? (float) $sale->amount / (float) $sale->qty : null,
+            ]);
+
         $rows = array_values(array_filter(
             InventoryService::stockRows(now(), true),
             fn (array $row): bool => $row['base_quantity'] > 0.00001 || $row['item']->is_active,
@@ -34,6 +46,7 @@ class StockController extends Controller
                 max(0.0, $row['base_quantity'] - $reserved),
                 $row['item']->unit,
             );
+            $row['avg_sale_price'] = $avgSalePrices[$row['item']->id] ?? null;
         }
         unset($row);
 
@@ -43,11 +56,23 @@ class StockController extends Controller
     }
 
     /**
-     * One item's movement ledger with running balance.
+     * One item's movement ledger with running balance (30 rows per page).
+     * Balances are computed over the full history first, so paging never
+     * breaks them.
      */
-    public function show(Item $item): View
+    public function show(Item $item, Request $request): View
     {
         $ledger = InventoryService::ledger($item, now());
+
+        $perPage = 30;
+        $page = max(1, (int) $request->query('page', 1));
+        $rows = new LengthAwarePaginator(
+            array_slice($ledger['rows'], ($page - 1) * $perPage, $perPage),
+            count($ledger['rows']),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'pageName' => 'page'],
+        );
 
         $state = InventoryService::stockRows(now(), true);
         $summary = collect($state)->firstWhere('item', $item) ?? [
@@ -59,8 +84,9 @@ class StockController extends Controller
 
         return view('owner.stock.show', [
             'item' => $item,
-            'rows' => $ledger['rows'],
+            'rows' => $rows,
             'pending' => $ledger['pending'],
+            'totals' => $ledger['totals'],
             'summary' => $summary,
         ]);
     }

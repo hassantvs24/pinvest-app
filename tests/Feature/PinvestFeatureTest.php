@@ -1494,7 +1494,10 @@ it('only seeds demo data on a database without any commission period', function 
 
     // Empty of cycles → demo runs.
     $this->seed(DemoDataSeeder::class);
-    expect(CommissionPeriod::query()->count())->toBe(11); // 10 closed + 1 demo open
+    expect(CommissionPeriod::query()->count())->toBe(11) // 10 closed + 1 demo open
+        ->and(StockLoss::query()->count())->toBe(10) // one confirmed loss per regular month
+        ->and(StockLoss::query()->pending()->count())->toBe(1) // demo pending loss
+        ->and(InventoryService::warnings(now()))->toBe([]); // no negative stock
 
     // Cycles now exist → demo is skipped, no duplicates.
     $this->seed(DemoDataSeeder::class);

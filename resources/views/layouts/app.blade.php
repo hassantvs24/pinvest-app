@@ -29,6 +29,7 @@
                     @if(auth()->user()->isOwner())
                         <a href="{{ route('owner.entries.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.entries.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📋 {{ __('messages.entries') }}</a>
                         <a href="{{ route('owner.reports.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.reports.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📊 {{ __('messages.reports') }}</a>
+                        <a href="{{ route('owner.expense-heads.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.expense-heads.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">💸 {{ __('messages.expense_heads_page') }}</a>
                         <a href="{{ route('owner.stock.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.stock.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏪 {{ __('messages.stock_page') }}</a>
                         <a href="{{ route('owner.productions.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.productions.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏭 {{ __('messages.productions') }}</a>
                         <a href="{{ route('owner.masters.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.masters.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">⚙️ {{ __('messages.masters') }}</a>
@@ -87,7 +88,7 @@
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg">
-        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-7' : 'grid-cols-5' }} text-center text-xs">
+        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-8' : 'grid-cols-5' }} text-center text-xs">
             <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                 <div class="text-xl">🏠</div>{{ __('messages.home') }}
             </a>
@@ -97,6 +98,9 @@
                 </a>
                 <a href="{{ route('owner.reports.index') }}" class="py-2 {{ request()->routeIs('owner.reports.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">📊</div>{{ __('messages.reports') }}
+                </a>
+                <a href="{{ route('owner.expense-heads.index') }}" class="py-2 {{ request()->routeIs('owner.expense-heads.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
+                    <div class="text-xl">💸</div>{{ __('messages.expense_heads_page') }}
                 </a>
                 <a href="{{ route('owner.stock.index') }}" class="py-2 {{ request()->routeIs('owner.stock.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">🏪</div>{{ __('messages.stock_page') }}
