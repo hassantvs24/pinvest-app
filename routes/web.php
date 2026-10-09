@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/masters', [OwnerMasterController::class, 'index'])->name('masters.index');
         Route::post('/masters/{group}', [OwnerMasterController::class, 'store'])->name('masters.store');
+        Route::patch('/masters/{group}/{id}', [OwnerMasterController::class, 'update'])->name('masters.update');
         Route::patch('/masters/{group}/{id}/toggle', [OwnerMasterController::class, 'toggle'])->name('masters.toggle');
         Route::delete('/masters/{group}/{id}', [OwnerMasterController::class, 'destroy'])->name('masters.destroy');
 

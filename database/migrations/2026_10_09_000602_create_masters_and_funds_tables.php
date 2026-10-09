@@ -13,14 +13,14 @@ return new class extends Migration
     {
         Schema::create('expense_heads', function (Blueprint $table): void {
             $table->id();
-            $table->string('name');
+            $table->string('name')->unique();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
 
         Schema::create('purchase_items', function (Blueprint $table): void {
             $table->id();
-            $table->string('name');
+            $table->string('name')->unique();
             $table->string('unit')->default('pcs'); // kg, gram, tola, pcs, ml
             $table->boolean('is_active')->default(true);
             $table->timestamps();
@@ -28,7 +28,7 @@ return new class extends Migration
 
         Schema::create('sale_items', function (Blueprint $table): void {
             $table->id();
-            $table->string('name');
+            $table->string('name')->unique();
             $table->decimal('default_price', 10, 2)->default(0);
             $table->string('unit')->default('pcs'); // kg, gram, tola, pcs, ml
             $table->boolean('is_active')->default(true);

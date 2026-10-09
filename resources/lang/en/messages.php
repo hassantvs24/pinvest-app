@@ -211,6 +211,11 @@ return [
     'payout_history_hint' => 'Payouts appear here automatically when you approve a partner\'s request — nothing to enter manually.',
 
     // Owner-managed commission cycles
+    'cycle' => 'Cycle',
+    'all_cycles' => 'All cycles (custom range)',
+    'status_open' => 'Open',
+    'status_closed' => 'Closed',
+    'entry_details' => 'Entry details',
     'current_period' => 'Current cycle',
     'period_days' => 'running for :count day|running for :count days',
     'opened_on' => 'Opened on',
@@ -241,6 +246,8 @@ return [
     'confirm_blocked_no_period' => 'Open a cycle first — entries cannot be confirmed without an open cycle',
     'partner_period_note' => 'Your commission is created from the total profit when the cycle closes',
     'close_summary' => 'Close cycle summary',
+    'unapproved_entries' => 'Unapproved entries',
+    'close_blocked_pending' => 'The cycle cannot close while :count entry awaits the owner\'s approval. Approve or reject it first.|The cycle cannot close while :count entries await the owner\'s approval. Approve or reject them first.',
     'expected_commission' => 'Expected commission (profit × rate)',
     'confirm_close' => 'Confirm & close cycle',
     'loss_no_commission' => 'No commission will be created due to the loss',
@@ -256,4 +263,7 @@ return [
     'unit_tola' => 'tola',
     'unit_pcs' => 'pcs',
     'unit_ml' => 'ml',
+
+    // Master item rename
+    'item_renamed' => 'Item renamed',
 ];

@@ -10,6 +10,7 @@ use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 /**
@@ -77,7 +78,12 @@ class MasterController extends Controller
     {
         $config = $this->groupConfig($group);
 
-        $rules = ['name' => ['required', 'string', 'max:255']];
+        /** @var class-string<Model> $modelClass */
+        $modelClass = $config['model'];
+
+        $rules = [
+            'name' => ['required', 'string', 'max:255', Rule::unique((new $modelClass)->getTable(), 'name')],
+        ];
         if ($config['has_price']) {
             $rules['default_price'] = ['required', 'numeric', 'min:0'];
         }
@@ -86,9 +92,6 @@ class MasterController extends Controller
         }
 
         $validated = $request->validate($rules);
-
-        /** @var class-string<Model> $modelClass */
-        $modelClass = $config['model'];
 
         $modelClass::query()->create([
             'name' => $validated['name'],
@@ -113,6 +116,34 @@ class MasterController extends Controller
         $item->update(['is_active' => ! $item->is_active]);
 
         return back()->with('success', __('messages.saved_success'));
+    }
+
+    /**
+     * Rename a master item. Allowed even when entries reference it —
+     * that is exactly why editing exists (used items cannot be deleted).
+     * Names must stay unique within the group.
+     */
+    public function update(string $group, int $id, Request $request): RedirectResponse
+    {
+        $config = $this->groupConfig($group);
+
+        /** @var class-string<Model> $modelClass */
+        $modelClass = $config['model'];
+
+        $item = $modelClass::query()->findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => [
+                'required',
+                'string',
+                'max:255',
+                Rule::unique($item->getTable(), 'name')->ignore($item->id),
+            ],
+        ]);
+
+        $item->update(['name' => $validated['name']]);
+
+        return back()->with('success', __('messages.item_renamed'));
     }
 
     /**

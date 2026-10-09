@@ -94,10 +94,12 @@ class CommissionController extends Controller
         $profit = CommissionSettlementService::periodProfit($period->opened_at, $closedAt);
         $rows = CommissionSettlementService::settlementRows($profit);
         $totalCommission = array_sum(array_column($rows, 'amount'));
+        $pendingEntries = CommissionSettlementService::pendingEntries();
 
         return view('owner.close-preview', [
             'period' => $period,
             'closedAt' => $closedAt,
+            'pendingEntries' => $pendingEntries,
             'profit' => $profit,
             'rows' => $rows,
             'totalCommission' => $totalCommission,
@@ -112,6 +114,15 @@ class CommissionController extends Controller
     public function closePeriod(Request $request): RedirectResponse
     {
         $period = CommissionPeriod::query()->open()->latest('id')->firstOrFail();
+
+        // The cycle cannot close while any entry awaits the owner's approval.
+        $pendingCount = CommissionSettlementService::pendingEntries()->count();
+
+        if ($pendingCount > 0) {
+            return redirect()
+                ->route('owner.commissions.index')
+                ->with('warning', trans_choice(__('messages.close_blocked_pending'), $pendingCount, ['count' => $pendingCount]));
+        }
 
         $validated = $request->validate([
             'closed_at' => ['required', 'date', 'after_or_equal:'.$period->opened_at->format('Y-m-d')],

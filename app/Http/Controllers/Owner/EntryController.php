@@ -5,13 +5,11 @@ namespace App\Http\Controllers\Owner;
 use App\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
-use App\Models\Expense;
 use App\Models\ExpenseHead;
-use App\Models\Purchase;
 use App\Models\PurchaseItem;
-use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\User;
+use App\Support\EntryTypes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,51 +21,11 @@ use Illuminate\View\View;
 class EntryController extends Controller
 {
     /**
-     * Allowed entry types => model + eager-load relations.
-     *
-     * @return array<string, array{model: class-string<Model>, relations: array<int, string>, item_field: string, head_label: string}>
-     */
-    private function types(): array
-    {
-        return [
-            'expenses' => [
-                'model' => Expense::class,
-                'relations' => ['user', 'expenseHead'],
-                'item_field' => 'expense_head_id',
-                'head_label' => 'expense_head',
-            ],
-            'purchases' => [
-                'model' => Purchase::class,
-                'relations' => ['user', 'purchaseItem'],
-                'item_field' => 'purchase_item_id',
-                'head_label' => 'purchase_item',
-            ],
-            'sales' => [
-                'model' => Sale::class,
-                'relations' => ['user', 'saleItem'],
-                'item_field' => 'sale_item_id',
-                'head_label' => 'sale_item',
-            ],
-        ];
-    }
-
-    /**
-     * @return array{model: class-string<Model>, relations: array<int, string>, item_field: string, head_label: string}
-     */
-    private function typeConfig(string $type): array
-    {
-        $types = $this->types();
-        abort_unless(isset($types[$type]), 404);
-
-        return $types[$type];
-    }
-
-    /**
      * Find an entry of the given type or 404.
      */
     private function findEntry(string $type, int $id): Model
     {
-        $config = $this->typeConfig($type);
+        $config = EntryTypes::config($type);
 
         /** @var class-string<Model> $modelClass */
         $modelClass = $config['model'];
@@ -81,7 +39,7 @@ class EntryController extends Controller
     public function index(Request $request): View
     {
         $type = $request->query('type', 'sales');
-        $config = $this->typeConfig($type);
+        $config = EntryTypes::config($type);
 
         /** @var class-string<Model> $modelClass */
         $modelClass = $config['model'];
@@ -176,7 +134,7 @@ class EntryController extends Controller
             return back()->with('warning', __('messages.confirm_blocked_no_period'));
         }
 
-        $config = $this->typeConfig($type);
+        $config = EntryTypes::config($type);
         $model = $this->findEntry($type, $entry);
 
         if ($type === 'expenses') {

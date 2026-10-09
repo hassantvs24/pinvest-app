@@ -15,11 +15,9 @@ class SetLocale
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
-
-        if ($user) {
-            App::setLocale($user->preferred_language ?? 'bn');
-        }
+        // Logged-in users get their saved preference; guests (login,
+        // register, language picker) default to Bangla — never English.
+        App::setLocale($request->user()->preferred_language ?? 'bn');
 
         return $next($request);
     }

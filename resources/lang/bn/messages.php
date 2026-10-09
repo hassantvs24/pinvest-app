@@ -211,6 +211,11 @@ return [
     'payout_history_hint' => 'পার্টনারের রিকোয়েস্ট approve করলেই payout এখানে অটো যুক্ত হয় — ম্যানুয়ালি লেখা লাগে না।',
 
     // Owner-managed commission cycles
+    'cycle' => 'সাইকেল',
+    'all_cycles' => 'সব সাইকেল (নিজের রেঞ্জ)',
+    'status_open' => 'খোলা',
+    'status_closed' => 'বন্ধ',
+    'entry_details' => 'এন্ট্রি বিস্তারিত',
     'current_period' => 'চলমান সাইকেল',
     'period_days' => ':count দিন ধরে চলছে|:count দিন ধরে চলছে',
     'opened_on' => 'খোলা হয়েছে',
@@ -241,6 +246,8 @@ return [
     'confirm_blocked_no_period' => 'প্রথমে সাইকেল খুলুন — সাইকেল ছাড়া এন্ট্রি নিশ্চিত করা যাবে না',
     'partner_period_note' => 'সাইকেল বন্ধ হলে মোট লাভের ভিত্তিতে আপনার কমিশন তৈরি হবে',
     'close_summary' => 'সাইকেল বন্ধ করার সামারি',
+    'unapproved_entries' => 'অননুমোদিত এন্ট্রি',
+    'close_blocked_pending' => ':count টি এন্ট্রির মালিকের অনুমোদন বাকি থাকায় সাইকেল বন্ধ করা যাবে না — আগে approve বা reject করুন।|:count টি এন্ট্রির মালিকের অনুমোদন বাকি থাকায় সাইকেল বন্ধ করা যাবে না — আগে approve বা reject করুন।',
     'expected_commission' => 'প্রাপ্য কমিশন (লাভ × রেট)',
     'confirm_close' => 'নিশ্চিত করে সাইকেল বন্ধ করুন',
     'loss_no_commission' => 'লোকসানের কারণে কোনো কমিশন তৈরি হবে না',
@@ -256,4 +263,7 @@ return [
     'unit_tola' => 'তোলা',
     'unit_pcs' => 'পিস',
     'unit_ml' => 'মি.লি.',
+
+    // Master item rename
+    'item_renamed' => 'আইটেমের নাম বদলানো হয়েছে',
 ];

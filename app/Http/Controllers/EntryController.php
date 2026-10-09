@@ -5,11 +5,9 @@ namespace App\Http\Controllers;
 use App\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Expense;
-use App\Models\ExpenseHead;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\Sale;
-use App\Models\SaleItem;
+use App\Support\EntryTypes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,59 +22,6 @@ use Illuminate\View\View;
 class EntryController extends Controller
 {
     /**
-     * Allowed entry types => configuration.
-     *
-     * @return array<string, array{model: class-string<Model>, items: class-string<Model>|null, item_relation: string|null, label: string, icon: string, has_quantity: bool, has_unit: bool, has_head: bool}
-     */
-    private function types(): array
-    {
-        return [
-            'expenses' => [
-                'model' => Expense::class,
-                'items' => ExpenseHead::class,
-                'item_relation' => 'expenseHead',
-                'label' => 'expenses',
-                'icon' => '💸',
-                'has_quantity' => false,
-                'has_unit' => false,
-                'has_head' => true,
-            ],
-            'purchases' => [
-                'model' => Purchase::class,
-                'items' => PurchaseItem::class,
-                'item_relation' => 'purchaseItem',
-                'label' => 'purchases',
-                'icon' => '🛒',
-                'has_quantity' => true,
-                'has_unit' => true,
-                'has_head' => false,
-            ],
-            'sales' => [
-                'model' => Sale::class,
-                'items' => SaleItem::class,
-                'item_relation' => 'saleItem',
-                'label' => 'sales',
-                'icon' => '💰',
-                'has_quantity' => true,
-                'has_unit' => true,
-                'has_head' => false,
-            ],
-        ];
-    }
-
-    /**
-     * Resolve a type key into its config or abort 404.
-     *
-     * @return array{model: class-string<Model>, items: class-string<Model>|null, item_relation: string|null, label: string, icon: string, has_quantity: bool, has_unit: bool, has_head: bool}
-     */
-    private function typeConfig(string $type): array
-    {
-        abort_unless(isset($this->types()[$type]), 404);
-
-        return $this->types()[$type];
-    }
-
-    /**
      * The currently open commission cycle, if any.
      */
     private function openPeriod(): ?CommissionPeriod
@@ -89,7 +34,7 @@ class EntryController extends Controller
      */
     public function index(string $type, Request $request): View
     {
-        $config = $this->typeConfig($type);
+        $config = EntryTypes::config($type);
 
         /** @var class-string<Model> $modelClass */
         $modelClass = $config['model'];
@@ -125,7 +70,7 @@ class EntryController extends Controller
                 ->with('warning', __('messages.entry_blocked_no_period'));
         }
 
-        $config = $this->typeConfig($type);
+        $config = EntryTypes::config($type);
 
         /** @var class-string<Model>|null $itemsClass */
         $itemsClass = $config['items'];
@@ -149,7 +94,7 @@ class EntryController extends Controller
             return back()->with('warning', __('messages.entry_blocked_no_period'));
         }
 
-        $config = $this->typeConfig($type);
+        $config = EntryTypes::config($type);
         $user = $request->user();
         $status = $user->isOwner() ? EntryStatus::Confirmed : EntryStatus::Pending;
         $confirmed = $user->isOwner()

@@ -15,6 +15,7 @@ use App\Models\SaleItem;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
+use App\Support\DateFormats;
 use App\Support\ItemUnits;
 use App\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,6 +47,26 @@ it('logs in with email or mobile number', function (): void {
         ->assertRedirect('/dashboard');
 
     $this->assertAuthenticatedAs($user);
+});
+
+it('renders guest pages in Bangla by default and honors the saved preference', function (): void {
+    // Guests (login/register) see Bangla, not English.
+    $this->get('/login')
+        ->assertOk()
+        ->assertSee(__('messages.login', [], 'bn'));
+
+    // A saved English preference is honored once logged in.
+    $owner = makeUser([
+        'role' => UserRole::Owner,
+        'email' => 'owner@x.com',
+        'phone' => '01900000000',
+        'preferred_language' => 'en',
+    ]);
+
+    $this->actingAs($owner)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee(__('messages.dashboard', [], 'en'));
 });
 
 it('rejects invalid credentials with translated message', function (): void {
@@ -222,6 +243,82 @@ it('uses the partner rate at closing time and ignores sales shares', function ()
         ->and((float) CommissionSettlement::where('user_id', $b->id)->sole()->amount)->toBe(200.0);
 });
 
+it('blocks closing the cycle while unapproved entries exist and explains why', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000015']);
+    CommissionPeriod::factory()->open()->create();
+    $item = SaleItem::factory()->create();
+    $head = ExpenseHead::factory()->create();
+
+    Sale::factory()->create([
+        'user_id' => $partner->id,
+        'sale_item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 250,
+        'total' => 250,
+        'entry_date' => now(),
+        'status' => EntryStatus::Pending,
+    ]);
+    Expense::factory()->create([
+        'user_id' => $partner->id,
+        'expense_head_id' => $head->id,
+        'amount' => 75.50,
+        'entry_date' => now(),
+        'status' => EntryStatus::Pending,
+    ]);
+
+    // Close preview shows the blocking reason and hides the confirm button.
+    $this->actingAs($owner)
+        ->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.unapproved_entries'))
+        ->assertSee($partner->name)
+        ->assertSee('৳250.00')
+        ->assertSee('৳75.50')
+        ->assertDontSee(__('messages.confirm_close'));
+
+    // Submitting the close is refused and the cycle stays open.
+    $this->actingAs($owner)
+        ->post('/owner/commissions/close', ['closed_at' => now()->format('Y-m-d')])
+        ->assertRedirect();
+
+    expect(CommissionPeriod::sole()->status)->toBe('open')
+        ->and(CommissionSettlement::count())->toBe(0);
+
+    // Approving the entries unblocks the close.
+    Sale::sole()->update(['status' => EntryStatus::Confirmed]);
+    Expense::sole()->update(['status' => EntryStatus::Confirmed]);
+
+    $this->actingAs($owner)
+        ->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.confirm_close'));
+
+    $this->actingAs($owner)
+        ->post('/owner/commissions/close', ['closed_at' => now()->format('Y-m-d')])
+        ->assertRedirect();
+
+    expect(CommissionPeriod::sole()->status)->toBe('closed');
+});
+
+it('shows the recorded time next to each transaction date', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000016']);
+    CommissionPeriod::factory()->open()->create();
+    $item = SaleItem::factory()->create();
+
+    $sale = Sale::factory()->create([
+        'user_id' => $partner->id,
+        'sale_item_id' => $item->id,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now(),
+    ]);
+    $time = $sale->created_at->format(DateFormats::TIME);
+
+    $this->actingAs($owner)->get('/owner/entries?type=sales')->assertSee($time);
+    $this->actingAs($partner)->get('/entries/sales')->assertSee($time);
+});
+
 it('shows owner reports with date filtering and guards them from partners', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 5, 'phone' => '01700000009']);
@@ -255,6 +352,98 @@ it('shows owner reports with date filtering and guards them from partners', func
         ->assertDontSee('৳100.00');
 
     $this->actingAs($partner)->get('/owner/reports')->assertForbidden();
+});
+
+it('scopes the owner report to a selected cycle and shows cycle meta', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 5, 'phone' => '01700000007']);
+    $item = SaleItem::factory()->create();
+
+    $period = CommissionPeriod::factory()->create([
+        'label' => 'August session',
+        'opened_at' => '2026-08-01',
+        'closed_at' => '2026-08-31',
+    ]);
+
+    Sale::factory()->create([
+        'user_id' => $partner->id,
+        'sale_item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 400,
+        'total' => 400,
+        'entry_date' => '2026-08-15',
+        'status' => EntryStatus::Confirmed,
+    ]);
+
+    Sale::factory()->create([
+        'user_id' => $partner->id,
+        'sale_item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 999,
+        'total' => 999,
+        'entry_date' => now(),
+        'status' => EntryStatus::Confirmed,
+    ]);
+
+    // Cycle filter: only the in-range sale counts, meta shown, monthly hidden.
+    $this->actingAs($owner)
+        ->get('/owner/reports?cycle='.$period->id)
+        ->assertOk()
+        ->assertSee('August session')
+        ->assertSee('৳400.00')
+        ->assertDontSee('৳999.00')
+        ->assertSee(__('messages.owner_share'))
+        ->assertDontSee(__('messages.monthly_report'));
+
+    // The cycle wins over conflicting from/to filters.
+    $this->actingAs($owner)
+        ->get('/owner/reports?cycle='.$period->id.'&from='.now()->format('Y-m-d').'&to='.now()->format('Y-m-d'))
+        ->assertOk()
+        ->assertSee('৳400.00')
+        ->assertDontSee('৳999.00');
+
+    // Invalid cycle id is ignored — normal all-time report, no cycle meta card.
+    $this->actingAs($owner)
+        ->get('/owner/reports?cycle=999')
+        ->assertOk()
+        ->assertDontSee(trans_choice(__('messages.period_days'), 31, ['count' => 31]))
+        ->assertSee('৳999.00');
+});
+
+it('lists only the settlements of the selected cycle', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000006']);
+
+    $periodA = CommissionPeriod::factory()->create([
+        'opened_at' => '2026-08-01',
+        'closed_at' => '2026-08-31',
+    ]);
+    $periodB = CommissionPeriod::factory()->create([
+        'opened_at' => '2026-08-15',
+        'closed_at' => '2026-09-15',
+    ]);
+
+    // Same period_start range, but each settlement belongs to a different cycle.
+    CommissionSettlement::factory()->create([
+        'user_id' => $partner->id,
+        'commission_period_id' => $periodA->id,
+        'period_start' => '2026-08-01',
+        'period_end' => '2026-08-31',
+        'amount' => 456.78,
+    ]);
+    CommissionSettlement::factory()->create([
+        'user_id' => $partner->id,
+        'commission_period_id' => $periodB->id,
+        'period_start' => '2026-08-01',
+        'period_end' => '2026-09-15',
+        'amount' => 876.54,
+    ]);
+
+    $this->actingAs($owner)
+        ->get('/owner/reports?cycle='.$periodA->id)
+        ->assertOk()
+        ->assertSee('৳456.78')
+        ->assertDontSee('৳876.54');
 });
 
 it('shows commission due per partner on the report (pending settlements)', function (): void {
@@ -296,6 +485,38 @@ it('stores item units and rejects invalid ones', function (): void {
 
     // Unit label renders translated in entry forms.
     expect(ItemUnits::label('kg'))->toBe(__('messages.unit_kg'));
+});
+
+it('lets the owner rename master items, even when entries reference them', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $head = ExpenseHead::factory()->create(['name' => 'Transport']);
+
+    // An entry references the item — deletion would be blocked, rename must work.
+    Expense::factory()->create(['expense_head_id' => $head->id]);
+
+    $this->actingAs($owner)->patch("/owner/masters/expense-heads/{$head->id}", [
+        'name' => 'ভ্যান ভাড়া',
+    ])->assertRedirect();
+
+    expect($head->fresh()->name)->toBe('ভ্যান ভাড়া');
+    $this->actingAs($owner)->get('/owner/masters')->assertSee('ভ্যান ভাড়া');
+});
+
+it('prevents duplicate master item names within a group', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    ExpenseHead::factory()->create(['name' => 'Transport']);
+    $other = ExpenseHead::factory()->create(['name' => 'Rent']);
+
+    // Adding a duplicate is rejected...
+    $this->actingAs($owner)->post('/owner/masters/expense-heads', ['name' => 'Transport'])
+        ->assertSessionHasErrors(['name']);
+
+    // ...and renaming onto an existing name is rejected too.
+    $this->actingAs($owner)->patch("/owner/masters/expense-heads/{$other->id}", ['name' => 'Transport'])
+        ->assertSessionHasErrors(['name']);
+
+    expect(ExpenseHead::where('name', 'Transport')->count())->toBe(1)
+        ->and($other->fresh()->name)->toBe('Rent');
 });
 
 it('rejects registration when the phone is not allow-listed', function (): void {

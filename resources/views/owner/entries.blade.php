@@ -53,7 +53,10 @@
                         @if($entry->note)
                             <div class="text-sm text-gray-500">📝 {{ $entry->note }}</div>
                         @endif
-                        <div class="text-sm text-gray-500">📅 {{ $entry->entry_date->format('d M Y') }}</div>
+                        <div class="text-sm text-gray-500">
+                            📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
+                            🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
+                        </div>
                     </div>
                     <div class="text-right shrink-0">
                         <div class="text-lg font-bold">

@@ -10,7 +10,9 @@ use App\Models\Investment;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Owner-managed commission periods.
@@ -51,11 +53,6 @@ class CommissionSettlementService
         ]);
     }
 
-    /**
-     * Close an open period: compute its profit and create settlements.
-     *
-     * @return array{profit: float, created: int}
-     */
     /**
      * Preview rows for closing: what each active partner would receive for
      * the given profit, using their rate RIGHT NOW (the same source the
@@ -144,6 +141,43 @@ class CommissionSettlementService
             ->sum('amount');
 
         return $sales - $purchase - $expense;
+    }
+
+    /**
+     * All pending (owner-unapproved) entries across the three entry types,
+     * with user + item/head eager-loaded. A cycle cannot be closed while
+     * any of these exist — only one cycle is open at a time, so every
+     * pending entry belongs to it.
+     *
+     * Each row is tagged with `type_label`, `type_icon` and
+     * `type_item_relation` (from the shared EntryTypes config) for display.
+     *
+     * @return Collection<int, Sale|Purchase|Expense>
+     */
+    public static function pendingEntries(): Collection
+    {
+        $entries = collect();
+
+        foreach (EntryTypes::all() as $config) {
+            /** @var class-string<Model> $modelClass */
+            $modelClass = $config['model'];
+
+            $rows = $modelClass::query()
+                ->where('status', EntryStatus::Pending->value)
+                ->with(['user', $config['item_relation']])
+                ->get()
+                ->each(function (Model $entry) use ($config): void {
+                    $entry->type_label = __('messages.'.$config['label']);
+                    $entry->type_icon = $config['icon'];
+                    $entry->type_item_relation = $config['item_relation'];
+                });
+
+            $entries = $entries->merge($rows);
+        }
+
+        return $entries
+            ->sortByDesc(fn (Model $entry) => $entry->entry_date->getTimestamp())
+            ->values();
     }
 
     /**

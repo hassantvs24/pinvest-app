@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Owner;
 
 use App\EntryStatus;
 use App\Http\Controllers\Controller;
+use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\Investment;
@@ -33,25 +34,48 @@ class ReportController extends Controller
     {
         [$from, $to] = $this->dateRange($request);
 
+        // A selected cycle always wins: its date range scopes the whole report.
+        $selectedCycle = $this->selectedCycle($request);
+
+        if ($selectedCycle) {
+            $from = $selectedCycle->opened_at->format('Y-m-d');
+            $to = ($selectedCycle->closed_at ?? Carbon::today())->format('Y-m-d');
+        }
+
         // Period summary + full-lifetime balance figures.
         $periodStats = BusinessStats::all(null, $from, $to);
         $lifetime = BusinessStats::all();
 
+        $settlements = CommissionSettlement::query()
+            ->with('user')
+            ->when(
+                $selectedCycle,
+                fn ($q) => $q->where('commission_period_id', $selectedCycle->id),
+                fn ($q) => $q->periodBetween($from, $to),
+            )
+            ->orderByDesc('period_start')
+            ->orderBy('user_id')
+            ->get();
+
         return view('owner.reports', [
             'from' => $from,
             'to' => $to,
+            'cycles' => CommissionPeriod::query()
+                ->orderByDesc('opened_at')
+                ->orderByDesc('id')
+                ->get(),
+            'selectedCycle' => $selectedCycle,
+            'openDays' => $selectedCycle
+                ? max(1, (int) $selectedCycle->opened_at->diffInDays($selectedCycle->closed_at ?? now()) + 1)
+                : 0,
+            'ownerShare' => $periodStats['sales'] - $periodStats['purchase'] - $periodStats['expense'] - $periodStats['commission'],
             'stats' => $periodStats,
             'lifetimeCashInHand' => $lifetime['cash_in_hand'],
             'lifetimeInvestment' => $lifetime['investment'],
             'partners' => $this->partnerRows($from, $to),
-            'months' => $this->monthlyRows(),
+            'months' => $selectedCycle ? null : $this->monthlyRows(),
             'investments' => $this->investmentRows($from, $to),
-            'settlements' => CommissionSettlement::query()
-                ->with('user')
-                ->periodBetween($from, $to)
-                ->orderByDesc('period_start')
-                ->orderBy('user_id')
-                ->get(),
+            'settlements' => $settlements,
             'withdrawals' => OwnerWithdrawal::query()
                 ->dateBetween($from, $to)
                 ->orderByDesc('withdrawn_at')
@@ -59,7 +83,25 @@ class ReportController extends Controller
             'salesByItem' => $this->entryRowsByItem(Sale::class, 'sale_item_id', 'saleItem', $from, $to),
             'purchasesByItem' => $this->entryRowsByItem(Purchase::class, 'purchase_item_id', 'purchaseItem', $from, $to),
             'expensesByHead' => $this->expenseRowsByHead($from, $to),
+            'salesDetails' => $this->entryDetailRows(Sale::class, $from, $to),
+            'purchaseDetails' => $this->entryDetailRows(Purchase::class, $from, $to),
+            'expenseDetails' => $this->entryDetailRows(Expense::class, $from, $to),
         ]);
+    }
+
+    /**
+     * Resolve the cycle selected via the ?cycle= filter (null when absent
+     * or not a real period — the caller then falls back to the date range).
+     */
+    private function selectedCycle(Request $request): ?CommissionPeriod
+    {
+        $cycleId = $request->query('cycle');
+
+        if (! is_numeric($cycleId)) {
+            return null;
+        }
+
+        return CommissionPeriod::query()->find((int) $cycleId);
     }
 
     /**
@@ -169,6 +211,23 @@ class ReportController extends Controller
             ])
             ->sortBy('name')
             ->values();
+    }
+
+    /**
+     * Individual confirmed entries in the period (newest first), for the
+     * per-cycle entry detail lists.
+     *
+     * @return Collection<int, Sale|Purchase|Expense>
+     */
+    private function entryDetailRows(string $entryModel, ?string $from, ?string $to): Collection
+    {
+        return $entryModel::query()
+            ->where('status', EntryStatus::Confirmed->value)
+            ->when($from, fn ($q) => $q->whereDate('entry_date', '>=', $from))
+            ->when($to, fn ($q) => $q->whereDate('entry_date', '<=', $to))
+            ->orderByDesc('entry_date')
+            ->orderByDesc('id')
+            ->get();
     }
 
     /**

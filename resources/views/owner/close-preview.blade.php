@@ -13,6 +13,34 @@
                 📅 {{ $period->opened_at->format('d M Y') }} → {{ $closedAt->format('d M Y') }}
             </p>
 
+            {{-- Blocking panel: unapproved entries must be resolved first --}}
+            @if($pendingEntries->isNotEmpty())
+                <div class="bg-yellow-50 border border-yellow-400 rounded-xl p-4 mb-4">
+                    <div class="font-bold text-yellow-900 mb-1">🚫 {{ __('messages.unapproved_entries') }} ({{ $pendingEntries->count() }})</div>
+                    <p class="text-sm text-yellow-800 mb-2">
+                        {{ trans_choice(__('messages.close_blocked_pending'), $pendingEntries->count(), ['count' => $pendingEntries->count()]) }}
+                    </p>
+                    <ul class="divide-y divide-yellow-200 text-sm">
+                        @foreach($pendingEntries as $entry)
+                            <li class="py-2 flex items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <div class="font-medium">
+                                        {{ $entry->type_icon }} {{ $entry->type_label }}
+                                        · {{ $entry->{$entry->type_item_relation}->name ?? '—' }}
+                                    </div>
+                                    <div class="text-xs text-gray-600">
+                                        👤 {{ $entry->user->name }}
+                                        · 📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
+                                        🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
+                                    </div>
+                                </div>
+                                <div class="font-bold shrink-0">৳{{ number_format((float) ($entry->amount ?? $entry->total), 2) }}</div>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             {{-- Profit --}}
             <div class="rounded-xl p-4 mb-4 {{ $profit >= 0 ? 'bg-green-50 border border-green-300' : 'bg-red-50 border border-red-300' }}">
                 <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>
@@ -49,14 +77,16 @@
                 </div>
             @endif
 
-            {{-- Confirm --}}
-            <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
-                @csrf
-                <input type="hidden" name="closed_at" value="{{ $closedAt->format('Y-m-d') }}">
-                <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl py-3">
-                    ✅ {{ __('messages.confirm_close') }}
-                </button>
-            </form>
+            {{-- Confirm (hidden while unapproved entries block the close) --}}
+            @if($pendingEntries->isEmpty())
+                <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
+                    @csrf
+                    <input type="hidden" name="closed_at" value="{{ $closedAt->format('Y-m-d') }}">
+                    <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl py-3">
+                        ✅ {{ __('messages.confirm_close') }}
+                    </button>
+                </form>
+            @endif
         </div>
     </div>
 @endsection

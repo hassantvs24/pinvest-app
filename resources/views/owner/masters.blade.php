@@ -53,6 +53,7 @@
                                 @endif
                             </div>
                             <div class="flex items-center gap-1 shrink-0">
+                                <button type="button" class="js-item-edit-toggle text-gray-400 hover:text-gray-600" title="{{ __('messages.edit') }}">✏️</button>
                                 <form method="POST" action="{{ route('owner.masters.toggle', ['group' => $group, 'id' => $item->id]) }}">
                                     @csrf @method('PATCH')
                                     <button type="submit" title="{{ $item->is_active ? __('messages.active') : __('messages.inactive') }}"
@@ -65,6 +66,18 @@
                                     <button type="submit" class="text-red-600 text-lg" title="{{ __('messages.delete') }}">🗑️</button>
                                 </form>
                             </div>
+                        </li>
+
+                        {{-- Inline rename form (hidden until the pencil is clicked) --}}
+                        <li class="js-item-edit-form hidden bg-gray-50 px-2 py-2 -mt-1">
+                            <form method="POST" action="{{ route('owner.masters.update', ['group' => $group, 'id' => $item->id]) }}" class="flex gap-2">
+                                @csrf @method('PATCH')
+                                <input type="text" name="name" maxlength="255" value="{{ $item->name }}" required
+                                       class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0">
+                                <button type="submit" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg px-3 py-2 text-sm shrink-0">
+                                    💾
+                                </button>
+                            </form>
                         </li>
                     @empty
                         <li class="py-4 text-center text-gray-500 text-sm">{{ __('messages.no_items') }}</li>

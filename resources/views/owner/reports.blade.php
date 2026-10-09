@@ -5,6 +5,18 @@
 @section('content')
     {{-- Date range filter + presets --}}
     <form method="GET" action="{{ route('owner.reports.index') }}" class="bg-white rounded-xl shadow p-4 mb-4 print:hidden">
+        <div class="mb-3">
+            <label class="block text-xs font-medium text-gray-500 mb-1">🔄 {{ __('messages.cycle') }}</label>
+            <select name="cycle" onchange="this.form.submit()" class="w-full border border-gray-300 rounded-lg px-3 py-3">
+                <option value="">{{ __('messages.all_cycles') }}</option>
+                @foreach($cycles as $cycle)
+                    <option value="{{ $cycle->id }}" @selected($selectedCycle?->id === $cycle->id)>
+                        {{ $cycle->label ?: $cycle->opened_at->format('d M Y') }}
+                        ({{ $cycle->opened_at->format('d M Y') }} – {{ $cycle->closed_at?->format('d M Y') ?? __('messages.status_open') }})
+                    </option>
+                @endforeach
+            </select>
+        </div>
         <div class="grid grid-cols-2 gap-3">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">📅 {{ __('messages.from_date') }}</label>
@@ -27,6 +39,30 @@
             </button>
         </div>
     </form>
+
+    {{-- Cycle meta --}}
+    @if($selectedCycle)
+        <div class="bg-white rounded-xl shadow p-4 mb-4 border-l-4 border-emerald-700">
+            <div class="flex items-center justify-between mb-1">
+                <div class="font-bold">🔄 {{ __('messages.cycle') }}: {{ $selectedCycle->label ?: $selectedCycle->opened_at->format('d M Y') }}</div>
+                @if($selectedCycle->status === 'open')
+                    <span class="text-xs font-bold text-green-700">🟢 {{ __('messages.status_open') }}</span>
+                @else
+                    <span class="text-xs font-bold text-slate-600">🔒 {{ __('messages.status_closed') }}</span>
+                @endif
+            </div>
+            <div class="text-sm text-gray-600">
+                📅 {{ $selectedCycle->opened_at->format('d M Y') }} – {{ $selectedCycle->closed_at?->format('d M Y') ?? now()->format('d M Y') }}
+                · {{ trans_choice(__('messages.period_days'), $openDays, ['count' => $openDays]) }}
+                @if($selectedCycle->opening_cash !== null)
+                    · 🏦 {{ __('messages.opening_cash') }}: ৳{{ number_format((float) $selectedCycle->opening_cash, 2) }}
+                @endif
+                @if($selectedCycle->note)
+                    · 💬 {{ $selectedCycle->note }}
+                @endif
+            </div>
+        </div>
+    @endif
 
     {{-- 1. Business summary for the period --}}
     <h2 class="font-bold text-lg mb-2">📊 {{ __('messages.business_summary') }}
@@ -63,6 +99,12 @@
             <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>
             <div class="text-2xl font-bold {{ $stats['net_profit'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
                 ৳{{ number_format($stats['net_profit'], 2) }}
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 {{ $ownerShare >= 0 ? 'border-emerald-700' : 'border-red-500' }}">
+            <div class="text-sm text-gray-500">👔 {{ __('messages.owner_share') }}</div>
+            <div class="text-2xl font-bold {{ $ownerShare >= 0 ? 'text-emerald-700' : 'text-red-600' }}">
+                ৳{{ number_format($ownerShare, 2) }}
             </div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
@@ -114,6 +156,25 @@
                 @endforeach
             </ul>
         @endif
+        <div class="border-t border-gray-100">
+            <div class="px-4 py-2 bg-gray-50 text-xs font-bold text-gray-500">🧾 {{ __('messages.entry_details') }}</div>
+            @if($salesDetails->isEmpty())
+                <div class="px-4 py-4 text-center text-gray-500 text-sm">💵 {{ __('messages.no_entries') }}</div>
+            @else
+                <ul class="divide-y divide-gray-100">
+                    @foreach($salesDetails as $entry)
+                        <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
+                            <div class="min-w-0">
+                                <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                {{ $entry->saleItem->name ?? '—' }}
+                                <span class="text-gray-500">× {{ $entry->quantity }}</span>
+                            </div>
+                            <div class="font-bold shrink-0">৳{{ number_format((float) $entry->total, 2) }}</div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
     </div>
 
     {{-- 4. Purchase report --}}
@@ -135,6 +196,25 @@
                 @endforeach
             </ul>
         @endif
+        <div class="border-t border-gray-100">
+            <div class="px-4 py-2 bg-gray-50 text-xs font-bold text-gray-500">🧾 {{ __('messages.entry_details') }}</div>
+            @if($purchaseDetails->isEmpty())
+                <div class="px-4 py-4 text-center text-gray-500 text-sm">🛒 {{ __('messages.no_entries') }}</div>
+            @else
+                <ul class="divide-y divide-gray-100">
+                    @foreach($purchaseDetails as $entry)
+                        <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
+                            <div class="min-w-0">
+                                <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                {{ $entry->purchaseItem->name ?? '—' }}
+                                <span class="text-gray-500">× {{ $entry->quantity }}</span>
+                            </div>
+                            <div class="font-bold shrink-0">৳{{ number_format((float) $entry->total, 2) }}</div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
     </div>
 
     {{-- 5. Expense report --}}
@@ -156,6 +236,24 @@
                 @endforeach
             </ul>
         @endif
+        <div class="border-t border-gray-100">
+            <div class="px-4 py-2 bg-gray-50 text-xs font-bold text-gray-500">🧾 {{ __('messages.entry_details') }}</div>
+            @if($expenseDetails->isEmpty())
+                <div class="px-4 py-4 text-center text-gray-500 text-sm">💸 {{ __('messages.no_entries') }}</div>
+            @else
+                <ul class="divide-y divide-gray-100">
+                    @foreach($expenseDetails as $entry)
+                        <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
+                            <div class="min-w-0">
+                                <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                {{ $entry->expenseHead->name ?? '—' }}
+                            </div>
+                            <div class="font-bold shrink-0">৳{{ number_format((float) $entry->amount, 2) }}</div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
     </div>
 
     {{-- 6. Partner & commission report --}}
@@ -250,7 +348,8 @@
         @endif
     </div>
 
-    {{-- 9. Monthly breakdown (last 6 months) --}}
+    {{-- 9. Monthly breakdown (last 6 months) — hidden for cycle-scoped reports --}}
+    @if($months)
     <h2 class="font-bold text-lg mb-2">🗓️ {{ __('messages.monthly_report') }}</h2>
     <div class="bg-white rounded-xl shadow overflow-hidden">
         <ul class="divide-y divide-gray-100">
@@ -270,6 +369,7 @@
             @endforeach
         </ul>
     </div>
+    @endif
 
     <style>
         @media print {

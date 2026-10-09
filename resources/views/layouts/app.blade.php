@@ -153,6 +153,11 @@
             $(document).on('click', '.js-edit-toggle', function () {
                 $(this).closest('.entry-card').find('.js-edit-form').toggle();
             });
+
+            // Toggle master item rename forms (the row right below the pencil)
+            $(document).on('click', '.js-item-edit-toggle', function () {
+                $(this).closest('li').next('.js-item-edit-form').toggle();
+            });
         });
     </script>
 </body>
