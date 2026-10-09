@@ -9,6 +9,8 @@ use App\Models\Item;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Support\EntryTypes;
+use App\Support\InventoryService;
+use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -73,10 +75,24 @@ class EntryController extends Controller
 
         $config = EntryTypes::config($type);
 
+        // Sales forms show how much of each item may still be sold
+        // (on hand minus pending reservations) as a live hint.
+        $available = [];
+        if ($type === 'sales') {
+            $reservations = InventoryService::pendingReservations();
+            foreach (InventoryService::stockRows(now(), true) as $row) {
+                $available[$row['item']->id] = ItemUnits::fromBase(
+                    max(0.0, $row['base_quantity'] - ($reservations[$row['item']->id] ?? 0.0)),
+                    $row['item']->unit,
+                );
+            }
+        }
+
         return view('entries.create', [
             'type' => $type,
             'config' => $config,
             'items' => Item::query()->active()->orderBy('name')->get(),
+            'available' => $available,
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -153,6 +169,18 @@ class EntryController extends Controller
             ]);
 
             $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+
+            $item = Item::query()->findOrFail($validated['head_id']);
+            $available = InventoryService::availableQuantity($item);
+
+            if (ItemUnits::toBase((float) $validated['quantity'], $item->unit) > $available + 1e-9) {
+                return back()->withInput()->withErrors([
+                    'quantity' => __('messages.sale_exceeds_stock', [
+                        'available' => rtrim(rtrim(number_format(ItemUnits::fromBase(max(0.0, $available), $item->unit), 2), '0'), '.'),
+                        'unit' => ItemUnits::label($item->unit),
+                    ]),
+                ]);
+            }
 
             Sale::query()->create([
                 'user_id' => $user->id,

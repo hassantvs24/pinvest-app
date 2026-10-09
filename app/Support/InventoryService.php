@@ -75,7 +75,7 @@ class InventoryService
      *
      * @return array<int, array{item: Item, quantity: float, base_quantity: float, avg_cost: float, value: float}>
      */
-    public static function stockRows(Carbon $asOf): array
+    public static function stockRows(Carbon $asOf, bool $includeEmpty = false): array
     {
         return array_values(array_filter(
             array_map(function (array $state): array {
@@ -89,8 +89,165 @@ class InventoryService
                     'value' => self::stateValue($state),
                 ];
             }, self::simulate(null, $asOf)['states']),
-            fn (array $row): bool => $row['base_quantity'] > 0.00001 || $row['value'] > 0.00001,
+            fn (array $row): bool => $includeEmpty || $row['base_quantity'] > 0.00001 || $row['value'] > 0.00001,
         ));
+    }
+
+    /**
+     * Stock (base quantity) currently reserved by pending sales and
+     * pending stock losses, keyed by item id. Pending entries do not
+     * move stock yet, but they hold it so two people cannot claim the
+     * same last unit twice.
+     *
+     * @return array<int, float>
+     */
+    public static function pendingReservations(): array
+    {
+        $reserved = Sale::query()->pending()->with('item')->get()
+            ->groupBy('item_id')
+            ->map(fn ($sales, $itemId): float => $sales
+                ->sum(fn (Sale $sale): float => ItemUnits::toBase((float) $sale->quantity, $sale->item->unit)));
+
+        StockLoss::query()->pending()->with('item')->get()
+            ->groupBy('item_id')
+            ->each(function ($losses, $itemId) use ($reserved): void {
+                $reserved[$itemId] = ($reserved[$itemId] ?? 0.0) + $losses
+                    ->sum(fn (StockLoss $loss): float => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit));
+            });
+
+        return $reserved->all();
+    }
+
+    /**
+     * How much of an item may still leave stock right now (sold or
+     * written off): confirmed stock on hand minus quantities reserved
+     * by other pending sales and pending stock losses.
+     */
+    public static function availableQuantity(Item $item, ?int $excludeSaleId = null, ?int $excludeLossId = null): float
+    {
+        $states = self::simulate(null, now())['states'];
+        $onHand = ($states[$item->id]['in_qty'] ?? 0.0) - ($states[$item->id]['out_qty'] ?? 0.0);
+        $reserved = Sale::query()->pending()
+            ->where('item_id', $item->id)
+            ->when($excludeSaleId !== null, fn ($query) => $query->where('id', '!=', $excludeSaleId))
+            ->with('item')->get()
+            ->sum(fn (Sale $sale): float => ItemUnits::toBase((float) $sale->quantity, $sale->item->unit));
+        $reserved += StockLoss::query()->pending()
+            ->where('item_id', $item->id)
+            ->when($excludeLossId !== null, fn ($query) => $query->where('id', '!=', $excludeLossId))
+            ->with('item')->get()
+            ->sum(fn (StockLoss $loss): float => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit));
+
+        return $onHand - $reserved;
+    }
+
+    /**
+     * Chronological movement ledger for one item, computed live from
+     * confirmed entries: purchases and production outputs add stock,
+     * sales, production components and stock losses remove it. Each row
+     * carries a running balance in the item's own unit. Pending sales
+     * are returned separately — they reserve stock but do not move it.
+     *
+     * @return array{rows: list<array{date: string, kind: string, direction: string, quantity: float, balance: float, note: string}>, pending: list<array{date: string, quantity: float, note: string}>}
+     */
+    public static function ledger(Item $item, Carbon $asOf): array
+    {
+        $events = collect();
+
+        Purchase::query()->confirmed()->where('item_id', $item->id)
+            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->each(fn (Purchase $purchase) => $events->push([
+                'sort' => $purchase->entry_date->format('Y-m-d').'|0|p'.$purchase->id,
+                'date' => $purchase->entry_date,
+                'kind' => 'purchase',
+                'direction' => 'in',
+                'quantity_base' => ItemUnits::toBase((float) $purchase->quantity, $item->unit),
+                'note' => self::ledgerNote($purchase->user?->name, $purchase->note),
+            ]));
+
+        Production::query()->confirmed()->whereDate('entry_date', '<=', $asOf)
+            ->where(function ($query) use ($item): void {
+                $query->whereHas('components', fn ($q) => $q->where('item_id', $item->id))
+                    ->orWhereHas('outputs', fn ($q) => $q->where('item_id', $item->id));
+            })
+            ->with(['components', 'outputs'])
+            ->get()
+            ->each(function (Production $production) use ($events, $item): void {
+                foreach ($production->components->where('item_id', $item->id) as $component) {
+                    $events->push([
+                        'sort' => $production->entry_date->format('Y-m-d').'|2|prc'.$production->id.'c'.$component->id,
+                        'date' => $production->entry_date,
+                        'kind' => 'production',
+                        'direction' => 'out',
+                        'quantity_base' => ItemUnits::toBase((float) $component->quantity, $item->unit),
+                        'note' => __('messages.ledger_production', ['id' => $production->id]),
+                    ]);
+                }
+                foreach ($production->outputs->where('item_id', $item->id) as $output) {
+                    $events->push([
+                        'sort' => $production->entry_date->format('Y-m-d').'|2|pro'.$production->id.'o'.$output->id,
+                        'date' => $production->entry_date,
+                        'kind' => 'production',
+                        'direction' => 'in',
+                        'quantity_base' => ItemUnits::toBase((float) $output->quantity, $item->unit),
+                        'note' => __('messages.ledger_production', ['id' => $production->id]),
+                    ]);
+                }
+            });
+
+        Sale::query()->confirmed()->where('item_id', $item->id)
+            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->each(fn (Sale $sale) => $events->push([
+                'sort' => $sale->entry_date->format('Y-m-d').'|3|s'.$sale->id,
+                'date' => $sale->entry_date,
+                'kind' => 'sale',
+                'direction' => 'out',
+                'quantity_base' => ItemUnits::toBase((float) $sale->quantity, $item->unit),
+                'note' => self::ledgerNote($sale->user?->name, $sale->note),
+            ]));
+
+        StockLoss::query()->confirmed()->where('item_id', $item->id)
+            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->each(fn (StockLoss $loss) => $events->push([
+                'sort' => $loss->entry_date->format('Y-m-d').'|4|l'.$loss->id,
+                'date' => $loss->entry_date,
+                'kind' => 'stock-loss',
+                'direction' => 'out',
+                'quantity_base' => ItemUnits::toBase((float) $loss->quantity, $item->unit),
+                'note' => self::ledgerNote($loss->user?->name, $loss->note),
+            ]));
+
+        $balance = 0.0;
+        $rows = $events->sortBy('sort')->values()->map(function (array $event) use (&$balance, $item): array {
+            $balance += $event['direction'] === 'in' ? $event['quantity_base'] : -$event['quantity_base'];
+
+            return [
+                'date' => $event['date'],
+                'kind' => $event['kind'],
+                'direction' => $event['direction'],
+                'quantity' => ItemUnits::fromBase($event['quantity_base'], $item->unit),
+                'balance' => ItemUnits::fromBase($balance, $item->unit),
+                'note' => $event['note'],
+            ];
+        })->all();
+
+        $pending = Sale::query()->pending()->where('item_id', $item->id)
+            ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
+            ->map(fn (Sale $sale): array => [
+                'date' => $sale->entry_date,
+                'quantity' => (float) $sale->quantity,
+                'note' => self::ledgerNote($sale->user?->name, $sale->note),
+            ])->all();
+
+        return ['rows' => $rows, 'pending' => $pending];
+    }
+
+    /**
+     * Ledger note: who made the entry, plus their note when present.
+     */
+    private static function ledgerNote(?string $userName, ?string $note): string
+    {
+        return trim(($userName ?? '').($note ? ' — '.$note : ''));
     }
 
     /**

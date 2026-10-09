@@ -119,6 +119,8 @@ it('scopes partner entries to their own user id', function (): void {
     $item = Item::factory()->create();
     CommissionPeriod::factory()->open()->create();
 
+    // Stock on hand so the sale passes the availability check.
+    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 100, 'status' => EntryStatus::Confirmed]);
     Sale::factory()->create(['user_id' => $other->id, 'item_id' => $item->id]);
 
     $this->actingAs($me)->post('/entries/sales', [
@@ -152,6 +154,7 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
     expect(Sale::count())->toBe(0);
 
     // Owner cannot confirm without an open cycle.
+    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 100, 'status' => EntryStatus::Confirmed]);
     $sale = Sale::factory()->create(['item_id' => $item->id, 'status' => EntryStatus::Pending]);
     $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}/confirm");
     expect($sale->fresh()->status)->toBe(EntryStatus::Pending);
@@ -166,6 +169,7 @@ it('lets the owner create entries that are auto-confirmed', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $item = Item::factory()->create();
     CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 10, 'status' => EntryStatus::Confirmed]);
 
     $this->actingAs($owner)->post('/entries/sales', [
         'head_id' => $item->id,
@@ -1649,6 +1653,7 @@ it('blocks closing while a stock loss is pending and rejects cleanly', function 
     $purchaseItem = Item::factory()->create(['name' => 'নষ্ট হওয়া কাঠ']);
 
     CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create(['item_id' => $purchaseItem->id, 'quantity' => 100, 'status' => EntryStatus::Confirmed]);
 
     $this->actingAs($partner)->post('/stock-losses', [
         'item_id' => $purchaseItem->id,

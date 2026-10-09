@@ -12,6 +12,7 @@ use App\Http\Controllers\Owner\PartnerController as OwnerPartnerController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
 use App\Http\Controllers\Owner\ProductionController as OwnerProductionController;
 use App\Http\Controllers\Owner\ReportController as OwnerReportController;
+use App\Http\Controllers\Owner\StockController as OwnerStockController;
 use App\Http\Controllers\Owner\StockLossController as OwnerStockLossController;
 use App\Http\Controllers\Owner\WithdrawalController as OwnerWithdrawalController;
 use App\Http\Controllers\PartnerCommissionController;
@@ -70,6 +71,10 @@ Route::middleware('auth')->group(function (): void {
     // Owner-only area.
     Route::prefix('owner')->name('owner.')->middleware('owner')->group(function (): void {
         Route::get('/reports', [OwnerReportController::class, 'index'])->name('reports.index');
+
+        // Live stock levels + per-item movement ledger.
+        Route::get('/stock', [OwnerStockController::class, 'index'])->name('stock.index');
+        Route::get('/stock/{item}', [OwnerStockController::class, 'show'])->name('stock.show');
 
         // Production runs (raw materials -> finished goods).
         Route::get('/productions', [OwnerProductionController::class, 'index'])->name('productions.index');

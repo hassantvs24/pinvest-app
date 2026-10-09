@@ -27,6 +27,7 @@
                         @foreach($items as $item)
                             <option value="{{ $item->id }}" data-price="{{ $type === 'sales' ? $item->default_price : '' }}"
                                     data-unit="{{ $config['has_unit'] ? \App\Support\ItemUnits::label($item->unit) : '' }}"
+                                    data-available="{{ $type === 'sales' ? ($available[$item->id] ?? 0) : '' }}"
                                     data-cost-type="{{ $type === 'expenses' ? $item->cost_type->value : '' }}"
                                     {{ old('head_id') == $item->id ? 'selected' : '' }}>
                                 {{ $item->name }}{{ $type === 'sales' ? ' (৳'.number_format((float) $item->default_price, 2).')' : '' }}{{ $config['has_unit'] ? ' ('.\App\Support\ItemUnits::label($item->unit).')' : '' }}
@@ -34,6 +35,10 @@
                         @endforeach
                     </select>
                 </div>
+
+                @if($type === 'sales')
+                    <p id="stock_hint" class="text-xs text-gray-600 -mt-2"></p>
+                @endif
 
                 {{-- Expense: optional product the cost belongs to (product-type heads only) --}}
                 @if($type === 'expenses')
@@ -107,6 +112,29 @@
             </form>
         </div>
     </div>
+
+    @if($type === 'sales')
+        <script>
+            $(function () {
+                // Live hint: how much of the selected item may still be sold.
+                function updateStockHint() {
+                    var selected = $('#head_id option:selected');
+                    var available = parseFloat(selected.data('available'));
+                    var unit = selected.data('unit') || '';
+                    var hint = $('#stock_hint');
+                    if (isNaN(available)) {
+                        hint.text('').removeClass('text-red-600 font-bold').addClass('text-gray-600');
+                        return;
+                    }
+                    var text = @json(__('messages.available_stock_hint')).replace(':available', available).replace(':unit', unit);
+                    hint.text('📦 ' + text);
+                    hint.toggleClass('text-red-600 font-bold', available <= 0);
+                }
+                $(document).on('change', '#head_id', updateStockHint);
+                updateStockHint();
+            });
+        </script>
+    @endif
 
     @if($type === 'expenses')
         <script>

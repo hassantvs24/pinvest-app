@@ -9,6 +9,8 @@ use App\Models\ExpenseHead;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\EntryTypes;
+use App\Support\InventoryService;
+use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -87,6 +89,30 @@ class EntryController extends Controller
     }
 
     /**
+     * Stock-overdraft error message when a sale no longer fits, or null
+     * when it does. Pending sales reserve stock, so available stock is
+     * on hand minus the other pending sales of the same item.
+     */
+    private function stockOverflowError(string $type, int $itemId, int $quantity, ?int $excludeSaleId = null): ?string
+    {
+        if ($type !== 'sales') {
+            return null;
+        }
+
+        $item = Item::query()->findOrFail($itemId);
+        $available = InventoryService::availableQuantity($item, $excludeSaleId);
+
+        if (ItemUnits::toBase((float) $quantity, $item->unit) <= $available + 1e-9) {
+            return null;
+        }
+
+        return __('messages.sale_exceeds_stock', [
+            'available' => rtrim(rtrim(number_format(ItemUnits::fromBase(max(0.0, $available), $item->unit), 2), '0'), '.'),
+            'unit' => ItemUnits::label($item->unit),
+        ]);
+    }
+
+    /**
      * Confirm a pending entry.
      */
     public function confirm(string $type, int $entry, Request $request): RedirectResponse
@@ -96,6 +122,11 @@ class EntryController extends Controller
         }
 
         $model = $this->findEntry($type, $entry);
+
+        $error = $this->stockOverflowError($type, (int) $model->item_id, (int) $model->quantity, (int) $model->id);
+        if ($error !== null) {
+            return back()->with('error', $error);
+        }
 
         $model->update([
             'status' => EntryStatus::Confirmed,
@@ -181,6 +212,11 @@ class EntryController extends Controller
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
+
+            $error = $this->stockOverflowError($type, (int) $validated['head_id'], (int) $validated['quantity'], (int) $model->id);
+            if ($error !== null) {
+                return back()->with('error', $error);
+            }
 
             $model->update([
                 'item_id' => $validated['head_id'],

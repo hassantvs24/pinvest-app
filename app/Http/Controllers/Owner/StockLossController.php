@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\StockLoss;
+use App\Support\InventoryService;
+use App\Support\ItemUnits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -42,6 +44,11 @@ class StockLossController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $error = $this->stockOverflowError((int) $validated['item_id'], (int) $validated['quantity']);
+        if ($error !== null) {
+            return back()->withInput()->withErrors(['quantity' => $error]);
+        }
+
         StockLoss::query()->create([
             'user_id' => $request->user()->id,
             'item_id' => $validated['item_id'],
@@ -56,10 +63,34 @@ class StockLossController extends Controller
         return back()->with('success', __('messages.stock_loss_saved'));
     }
 
+    /**
+     * Stock-overdraft error message when a loss no longer fits, or null
+     * when it does. Pending losses (like pending sales) reserve stock.
+     */
+    private function stockOverflowError(int $itemId, int $quantity, ?int $excludeLossId = null): ?string
+    {
+        $item = Item::query()->findOrFail($itemId);
+        $available = InventoryService::availableQuantity($item, excludeLossId: $excludeLossId);
+
+        if (ItemUnits::toBase((float) $quantity, $item->unit) <= $available + 1e-9) {
+            return null;
+        }
+
+        return __('messages.loss_exceeds_stock', [
+            'available' => rtrim(rtrim(number_format(ItemUnits::fromBase(max(0.0, $available), $item->unit), 2), '0'), '.'),
+            'unit' => ItemUnits::label($item->unit),
+        ]);
+    }
+
     public function confirm(StockLoss $stockLoss): RedirectResponse
     {
         abort_unless(CommissionPeriod::query()->open()->exists(), 409);
         abort_unless($stockLoss->status === EntryStatus::Pending, 409);
+
+        $error = $this->stockOverflowError((int) $stockLoss->item_id, (int) $stockLoss->quantity, (int) $stockLoss->id);
+        if ($error !== null) {
+            return back()->with('error', $error);
+        }
 
         $stockLoss->update([
             'status' => EntryStatus::Confirmed,
