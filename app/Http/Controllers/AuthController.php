@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\RegistrationAllow;
+use App\Models\User;
 use App\UserRole;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,7 +38,7 @@ class AuthController extends Controller
             ? preg_replace('/[\s\-+]/', '', $identifier)
             : $identifier;
 
-        $user = \App\Models\User::query()->where($field, $value)->first();
+        $user = User::query()->where($field, $value)->first();
 
         if (! $user || ! Auth::attempt(['email' => $user->email, 'password' => $credentials['password']])) {
             return back()
@@ -74,6 +76,8 @@ class AuthController extends Controller
 
     /**
      * Register a new partner. Owners can never self-register (seeder only).
+     * Only phone numbers / emails the owner has explicitly allowed may
+     * register, and each allowance works exactly once.
      */
     public function register(Request $request): RedirectResponse
     {
@@ -84,7 +88,26 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', Password::min(6)],
         ]);
 
-        $user = \App\Models\User::query()->create([
+        $normalizedPhone = preg_replace('/[\s\-+]/', '', $validated['phone']);
+        $email = $validated['email'] ?? null;
+
+        $allowance = RegistrationAllow::query()
+            ->unused()
+            ->where(function ($query) use ($normalizedPhone, $email): void {
+                $query->where('phone', $normalizedPhone);
+                if ($email) {
+                    $query->orWhere('email', $email);
+                }
+            })
+            ->first();
+
+        if (! $allowance) {
+            return back()
+                ->withInput($request->only('name', 'phone', 'email'))
+                ->withErrors(['phone' => __('messages.registration_not_allowed')]);
+        }
+
+        $user = User::query()->create([
             'name' => $validated['name'],
             'phone' => preg_replace('/[\s\-+]/', '', $validated['phone']),
             'email' => $validated['email'] ?? null,
@@ -93,6 +116,8 @@ class AuthController extends Controller
             'commission_rate' => 0,
             'is_active' => true,
         ]);
+
+        $allowance->markUsed();
 
         Auth::login($user);
         $request->session()->regenerate();

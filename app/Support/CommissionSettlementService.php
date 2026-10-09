@@ -1,0 +1,158 @@
+<?php
+
+namespace App\Support;
+
+use App\EntryStatus;
+use App\Models\CommissionPeriod;
+use App\Models\CommissionSettlement;
+use App\Models\Expense;
+use App\Models\Investment;
+use App\Models\Purchase;
+use App\Models\Sale;
+use App\Models\User;
+use Illuminate\Support\Carbon;
+
+/**
+ * Owner-managed commission periods.
+ *
+ * The owner OPENS a period (optionally recording opening cash and an
+ * opening investment) and later CLOSES it manually. At closing, the
+ * period profit (confirmed sales - purchases - expenses, by entry date)
+ * is computed and each partner's settlement is created:
+ *
+ *     settlement = period profit x partner commission rate %
+ *
+ * Periods with profit <= 0 produce no settlements (loss periods).
+ * One settlement per partner per period (unique guard) — closing twice
+ * is harmless.
+ */
+class CommissionSettlementService
+{
+    /**
+     * Open a new commission period. Optionally records an opening
+     * investment entry at the same time.
+     */
+    public static function openPeriod(?string $label, Carbon $openedAt, ?float $openingCash, ?float $investmentAmount, ?string $note): CommissionPeriod
+    {
+        if ($investmentAmount !== null && $investmentAmount > 0) {
+            Investment::query()->create([
+                'amount' => $investmentAmount,
+                'note' => __('messages.opening_investment_note', ['label' => $label ?? $openedAt->format('d M Y')]),
+                'invested_at' => $openedAt->toDateString(),
+            ]);
+        }
+
+        return CommissionPeriod::query()->create([
+            'label' => $label,
+            'opened_at' => $openedAt,
+            'opening_cash' => $openingCash,
+            'note' => $note,
+            'status' => 'open',
+        ]);
+    }
+
+    /**
+     * Close an open period: compute its profit and create settlements.
+     *
+     * @return array{profit: float, created: int}
+     */
+    public static function closePeriod(CommissionPeriod $period, Carbon $closedAt): array
+    {
+        $profit = self::periodProfit($period->opened_at, $closedAt);
+
+        $period->update([
+            'status' => 'closed',
+            'profit' => $profit,
+            'closed_at' => $closedAt,
+        ]);
+
+        $created = 0;
+
+        if ($profit > 0) {
+            foreach (User::query()->partners()->active()->where('commission_rate', '>', 0)->get() as $partner) {
+                $amount = round($profit * ((float) $partner->commission_rate) / 100, 2);
+
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $settlement = CommissionSettlement::query()->firstOrCreate(
+                    [
+                        'user_id' => $partner->id,
+                        'commission_period_id' => $period->id,
+                    ],
+                    [
+                        'period_start' => $period->opened_at->copy(),
+                        'period_end' => $closedAt->copy(),
+                        'business_profit' => $profit,
+                        'commission_rate' => $partner->commission_rate,
+                        'amount' => $amount,
+                        'status' => 'pending',
+                    ],
+                );
+
+                if ($settlement->wasRecentlyCreated) {
+                    $created++;
+                }
+            }
+        }
+
+        return ['profit' => $profit, 'created' => $created];
+    }
+
+    /**
+     * Confirmed-only net profit between two dates (by entry date).
+     */
+    public static function periodProfit(Carbon $start, Carbon $end): float
+    {
+        $sales = (float) Sale::query()
+            ->where('status', EntryStatus::Confirmed->value)
+            ->whereDate('entry_date', '>=', $start)
+            ->whereDate('entry_date', '<=', $end)
+            ->sum('total');
+
+        $purchase = (float) Purchase::query()
+            ->where('status', EntryStatus::Confirmed->value)
+            ->whereDate('entry_date', '>=', $start)
+            ->whereDate('entry_date', '<=', $end)
+            ->sum('total');
+
+        $expense = (float) Expense::query()
+            ->where('status', EntryStatus::Confirmed->value)
+            ->whereDate('entry_date', '>=', $start)
+            ->whereDate('entry_date', '<=', $end)
+            ->sum('amount');
+
+        return $sales - $purchase - $expense;
+    }
+
+    /**
+     * Pending commission due for a partner (sum of pending settlements).
+     */
+    public static function pendingDue(int $userId): float
+    {
+        return (float) CommissionSettlement::query()
+            ->pending()
+            ->where('user_id', $userId)
+            ->sum('amount');
+    }
+
+    /**
+     * Total commission earned by a partner (all settlements, any status).
+     */
+    public static function earned(int $userId, ?string $from = null, ?string $to = null): float
+    {
+        return (float) CommissionSettlement::query()
+            ->where('user_id', $userId)
+            ->periodBetween($from, $to)
+            ->sum('amount');
+    }
+
+    /**
+     * Sum of all active partners' commission rates (for the >100% hint).
+     */
+    public static function totalActiveRate(): float
+    {
+        return (float) User::query()->partners()->active()->sum('commission_rate');
+    }
+}

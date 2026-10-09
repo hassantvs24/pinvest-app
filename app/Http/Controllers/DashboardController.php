@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\EntryStatus;
 use App\Models\Expense;
+use App\Models\PayoutRequest;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\User;
 use App\Support\BusinessStats;
+use App\Support\CommissionSettlementService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -28,6 +30,7 @@ class DashboardController extends Controller
                     'purchases' => Purchase::query()->pending()->count(),
                     'sales' => Sale::query()->pending()->count(),
                 ],
+                'pendingPayoutRequests' => PayoutRequest::query()->pending()->count(),
                 'leaderboard' => User::query()
                     ->partners()
                     ->withCount(['sales as confirmed_sales_count' => fn ($q) => $q->where('status', EntryStatus::Confirmed->value)])
@@ -45,6 +48,7 @@ class DashboardController extends Controller
             'stats' => BusinessStats::all($user->id),
             'pendingCount' => $user->pendingEntriesCount(),
             'commissionRate' => (float) $user->commission_rate,
+            'pendingCommission' => CommissionSettlementService::pendingDue($user->id),
         ]);
     }
 }

@@ -5,8 +5,11 @@ namespace App\Http\Controllers\Owner;
 use App\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
+use App\Models\ExpenseHead;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -94,6 +97,13 @@ class EntryController extends Controller
             $query->where('user_id', $partnerId);
         }
 
+        // Active master items for the inline edit dropdowns.
+        $items = match ($type) {
+            'expenses' => ExpenseHead::query()->active()->orderBy('name')->get(),
+            'purchases' => PurchaseItem::query()->active()->orderBy('name')->get(),
+            default => SaleItem::query()->active()->orderBy('name')->get(),
+        };
+
         return view('owner.entries', [
             'type' => $type,
             'config' => $config,
@@ -101,6 +111,7 @@ class EntryController extends Controller
             'status' => $status,
             'partnerId' => $partnerId,
             'partners' => User::query()->partners()->orderBy('name')->get(),
+            'items' => $items,
         ]);
     }
 

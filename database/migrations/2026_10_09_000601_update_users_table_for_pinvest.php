@@ -12,6 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table): void {
+            // Phone-only partners have no email, so the column must be nullable.
+            $table->string('email')->nullable()->change();
             $table->string('phone')->unique()->after('email');
             $table->string('role')->default('partner')->after('phone');
             $table->decimal('commission_rate', 5, 2)->default(0)->after('role');
@@ -25,6 +27,7 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table): void {
             $table->dropUnique(['phone']);
             $table->dropColumn(['phone', 'role', 'commission_rate', 'preferred_language', 'is_active']);
+            $table->string('email')->nullable(false)->change();
         });
     }
 };
