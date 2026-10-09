@@ -46,4 +46,4 @@ php artisan migrate:fresh --seed
 
 ## ডকুমেন্টেশন
 
-- **[USER_MANUAL.md](USER_MANUAL.md)** — সম্পূর্ণ ব্যবহারবিধি (বাংলা): cycle system, entry, উৎপাদন, কমিশন-উত্তোলন, রিপোর্ট, সমস্যা-সমাধান
+- **[USER_MANUAL.md](USER_MANUAL.md)** — সম্পূর্ণ ব্যবহারবিধি (বাংলা): cycle system, entry, উৎপাদন, **হিসাবের নিয়ম (ধাপে ধাপে উদাহরণসহ — লাভ, কমিশন, COGS, নগদ)**, কমিশন-উত্তোলন, রিপোর্ট, সমস্যা-সমাধান
