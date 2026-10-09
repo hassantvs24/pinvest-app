@@ -8,6 +8,7 @@ use App\UserRole;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
 
@@ -40,11 +41,16 @@ class AuthController extends Controller
 
         $user = User::query()->where($field, $value)->first();
 
-        if (! $user || ! Auth::attempt(['email' => $user->email, 'password' => $credentials['password']])) {
+        // Verify against the FOUND user — never re-attempt by email:
+        // partners may have no email, and attempting with email = null
+        // would match the first null-email account (e.g. the owner).
+        if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             return back()
                 ->withInput($request->only('identifier'))
                 ->withErrors(['identifier' => __('messages.invalid_credentials')]);
         }
+
+        Auth::login($user);
 
         if (! $user->is_active) {
             Auth::logout();

@@ -1562,3 +1562,30 @@ it('shows section hints across owner and partner pages', function (): void {
     $this->actingAs($partner)->get('/productions')
         ->assertSee(__('messages.production_pending_hint'), escape: false);
 });
+
+it('logs a partner with no email into their own account, not the owners', function (): void {
+    // Owner and partner share the same default password and BOTH have
+    // a null email — the exact seeded setup that used to log the
+    // partner into the owner's account.
+    $owner = makeUser([
+        'role' => UserRole::Owner, 'email' => null, 'phone' => '01675870047',
+        'password' => '123456', 'preferred_language' => 'bn',
+    ]);
+    $riad = makeUser([
+        'email' => null, 'phone' => '01641196743', 'password' => '123456',
+        'preferred_language' => 'bn',
+    ]);
+
+    $this->post('/login', ['identifier' => '01641196743', 'password' => '123456'])
+        ->assertRedirect('/dashboard');
+
+    $this->assertAuthenticatedAs($riad);
+    $this->assertNotEquals($owner->id, auth()->id());
+
+    $this->post('/logout');
+
+    // Owner still logs in as themselves.
+    $this->post('/login', ['identifier' => '01675870047', 'password' => '123456'])
+        ->assertRedirect('/dashboard');
+    $this->assertAuthenticatedAs($owner);
+});
