@@ -39,16 +39,18 @@
                         <a href="{{ route('productions.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('productions.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏭 {{ __('messages.productions') }}</a>
                         <a href="{{ route('stock-losses.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('stock-losses.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📉 {{ __('messages.stock_losses') }}</a>
                     @endif
-                    <a href="{{ route('profile') }}" class="px-3 py-2 rounded {{ request()->routeIs('profile') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">👤 {{ __('messages.profile') }}</a>
                 </nav>
 
                 <div class="flex items-center gap-2">
-                    <span class="hidden sm:inline-flex items-center gap-1.5 text-sm">
-                        <x-avatar :user="auth()->user()" size="28" /> {{ auth()->user()->name }}
-                    </span>
-                    <span class="text-xs px-2 py-1 rounded-full {{ auth()->user()->isOwner() ? 'bg-amber-400 text-amber-900' : 'bg-emerald-500' }}">
-                        {{ auth()->user()->isOwner() ? __('messages.role_owner') : __('messages.role_partner') }}
-                    </span>
+                    {{-- Name + designation click through to the profile page --}}
+                    <a href="{{ route('profile') }}" title="{{ __('messages.profile') }}" class="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-emerald-600">
+                        <span class="hidden sm:inline-flex items-center gap-1.5 text-sm">
+                            <x-avatar :user="auth()->user()" size="28" /> {{ auth()->user()->name }}
+                        </span>
+                        <span class="text-xs px-2 py-1 rounded-full {{ auth()->user()->isOwner() ? 'bg-amber-400 text-amber-900' : 'bg-emerald-500' }}">
+                            {{ auth()->user()->isOwner() ? __('messages.role_owner') : __('messages.role_partner') }}
+                        </span>
+                    </a>
                     <form method="POST" action="{{ route('logout') }}">
                         @csrf
                         <button type="submit" title="{{ __('messages.logout') }}"
@@ -88,7 +90,7 @@
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg">
-        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-8' : 'grid-cols-5' }} text-center text-xs">
+        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-8' : 'grid-cols-4' }} text-center text-xs">
             <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                 <div class="text-xl">🏠</div>{{ __('messages.home') }}
             </a>
@@ -123,9 +125,6 @@
                 </a>
                 <a href="{{ route('stock-losses.index') }}" class="py-2 {{ request()->routeIs('stock-losses.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">📉</div>{{ __('messages.stock_losses') }}
-                </a>
-                <a href="{{ route('profile') }}" class="py-2 {{ request()->routeIs('profile') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
-                    <div class="text-xl">👤</div>{{ __('messages.profile') }}
                 </a>
             @endif
         </div>
