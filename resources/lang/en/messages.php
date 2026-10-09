@@ -218,6 +218,7 @@ return [
     'opening_cash' => 'Opening cash',
     'open_period' => 'Open new cycle',
     'open_period_hint' => 'Open a cycle — partners add sales/purchase/expense entries, then you close it to settle commissions on the total profit.',
+    'opening_money_hint' => 'Both only add to the cash-in-hand figure (no effect on profit or commission). Opening cash = money already sitting in the drawer; opening investment = new capital (creates an entry on the Investments page).',
     'close_period' => 'Close cycle',
     'close_period_hint' => 'On close: confirmed sales − purchase − expense (from the opening date to today) = profit/loss, and each partner gets profit × rate% as commission.',
     'period_label' => 'Cycle name',
