@@ -92,7 +92,7 @@
                     <div class="text-xl font-bold text-violet-700 shrink-0">৳{{ number_format((float) $request->amount, 2) }}</div>
                 </div>
                 <div class="flex gap-2 mt-3">
-                    <form method="POST" action="{{ route('owner.commissions.approve', ['request' => $request->id]) }}" class="js-confirm-update">
+                    <form method="POST" action="{{ route('owner.commissions.approve', ['request' => $request->id]) }}" class="js-confirm-approve">
                         @csrf @method('PATCH')
                         <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg px-4 py-2">
                             ✔️ {{ __('messages.approve_pay') }}

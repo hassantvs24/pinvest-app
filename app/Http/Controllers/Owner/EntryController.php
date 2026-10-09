@@ -8,6 +8,7 @@ use App\Models\CommissionPeriod;
 use App\Models\ExpenseHead;
 use App\Models\Item;
 use App\Models\User;
+use App\Support\BusinessStats;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
@@ -76,6 +77,9 @@ class EntryController extends Controller
             'partners' => User::query()->partners()->orderBy('name')->get(),
             'items' => $items,
             'allItems' => Item::query()->active()->orderBy('name')->get(),
+            // Cash position, so approving a purchase/expense can warn about
+            // an overdraw right in the confirmation dialog.
+            'cashInHand' => BusinessStats::all()['cash_in_hand'],
         ]);
     }
 
@@ -134,7 +138,22 @@ class EntryController extends Controller
             'confirmed_at' => now(),
         ]);
 
-        return back()->with('success', __('messages.entry_confirmed'));
+        $redirect = back()->with('success', __('messages.entry_confirmed'));
+
+        // Approving a purchase/expense spends cash — warn (never block)
+        // when it overdraws the balance; partners' requests stay free.
+        if (in_array($type, ['purchases', 'expenses'], true)) {
+            $cash = BusinessStats::all()['cash_in_hand'];
+            if ($cash < 0) {
+                $amount = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+                $redirect->with('warning', __('messages.cash_overdraw_warning', [
+                    'cash' => number_format($cash + $amount, 2),
+                    'short' => number_format($cash, 2),
+                ]));
+            }
+        }
+
+        return $redirect;
     }
 
     /**

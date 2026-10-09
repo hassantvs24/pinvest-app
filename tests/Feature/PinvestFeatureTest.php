@@ -165,6 +165,30 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
     expect($sale->fresh()->status)->toBe(EntryStatus::Confirmed);
 });
 
+it('lists only sellable items on the sale form', function (): void {
+    $partner = makeUser(['phone' => '01700000096']);
+    $inStock = Item::factory()->create(['name' => 'মজুদ আছে']);
+    $empty = Item::factory()->create(['name' => 'মজুদ শেষ']);
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create(['item_id' => $inStock->id, 'quantity' => 5, 'status' => EntryStatus::Confirmed]);
+
+    $this->actingAs($partner)->get('/entries/sales/create')
+        ->assertOk()
+        ->assertSee('মজুদ আছে')
+        ->assertDontSee('মজুদ শেষ');
+
+    // Purchase form still lists every item.
+    $this->actingAs($partner)->get('/entries/purchases/create')
+        ->assertOk()
+        ->assertSee('মজুদ শেষ');
+
+    // Once everything is reserved, the sale form says there is nothing to sell.
+    Sale::factory()->create(['item_id' => $inStock->id, 'quantity' => 5, 'status' => EntryStatus::Pending]);
+    $this->actingAs($partner)->get('/entries/sales/create')
+        ->assertOk()
+        ->assertSee(__('messages.no_sellable_items', [], 'bn'));
+});
+
 it('loads the expense create form with expense heads, not items', function (): void {
     $partner = makeUser(['phone' => '01700000098']);
     $item = Item::factory()->create(['name' => 'গোপন পণ্য']);
@@ -175,6 +199,55 @@ it('loads the expense create form with expense heads, not items', function (): v
         ->assertOk()
         ->assertSee('গোপন খাত')
         ->assertDontSee('গোপন পণ্য');
+});
+
+it('warns the owner on cash overdraw but still saves the entry', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = Item::factory()->create();
+    CommissionPeriod::factory()->open()->create();
+
+    // Owners see the cash position on the form; partners do not.
+    $this->actingAs($owner)->get('/entries/purchases/create')
+        ->assertOk()
+        ->assertSee(__('messages.current_cash', [], 'bn'));
+    $this->actingAs(makeUser(['phone' => '01700000093']))->get('/entries/purchases/create')
+        ->assertDontSee(__('messages.current_cash', [], 'bn'));
+
+    // No cash at all: a 10 × 100 purchase overdraws, but still saves.
+    $this->actingAs($owner)->post('/entries/purchases', [
+        'head_id' => $item->id,
+        'quantity' => 10,
+        'unit_price' => 100,
+        'entry_date' => now()->format('Y-m-d'),
+    ])->assertSessionHas('success')->assertSessionHas('warning');
+
+    expect(Purchase::query()->confirmed()->count())->toBe(1);
+});
+
+it('warns when approving a partner purchase that overdraws the cash', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = Item::factory()->create();
+    CommissionPeriod::factory()->open()->create();
+
+    $purchase = Purchase::factory()->create([
+        'item_id' => $item->id,
+        'quantity' => 10,
+        'unit_price' => 100,
+        'total' => 1000,
+        'status' => EntryStatus::Pending,
+    ]);
+
+    // The approval button carries the confirm class and the overdraw warning.
+    $this->actingAs($owner)->get('/owner/entries?type=purchases&status=pending')
+        ->assertOk()
+        ->assertSee('js-confirm-approve', escape: false)
+        ->assertSee('data-warning', escape: false);
+
+    $this->actingAs($owner)->patch("/owner/entries/purchases/{$purchase->id}/confirm")
+        ->assertSessionHas('success')
+        ->assertSessionHas('warning');
+
+    expect($purchase->fresh()->status)->toBe(EntryStatus::Confirmed);
 });
 
 it('lets the owner create entries that are auto-confirmed', function (): void {
@@ -1725,7 +1798,8 @@ it('reduces stock and profit when confirmed stock loss is recorded', function ()
         ->and($rowOf()['base_quantity'])->toBe(5.0);
 
     $this->actingAs($owner)->get('/owner/stock-losses')
-        ->assertSee(__('messages.stock_loss_pending_hint_owner'));
+        ->assertSee(__('messages.stock_loss_pending_hint_owner'))
+        ->assertSee('js-confirm-approve', escape: false);
 
     // Owner confirms → stock drops to 3, cycle profit drops by 2 × 100.
     $this->actingAs($owner)->patch("/owner/stock-losses/{$loss->id}/confirm")->assertRedirect();

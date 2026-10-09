@@ -38,6 +38,9 @@
 
                 @if($type === 'sales')
                     <p id="stock_hint" class="text-xs text-gray-600 -mt-2"></p>
+                    @if($items->isEmpty())
+                        <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 -mt-2">⚠️ {{ __('messages.no_sellable_items') }}</p>
+                    @endif
                 @endif
 
                 {{-- Expense: optional product the cost belongs to (product-type heads only) --}}
@@ -106,12 +109,46 @@
                     <textarea name="note" rows="2" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">{{ old('note') }}</textarea>
                 </div>
 
+                @if(auth()->user()->isOwner() && in_array($type, ['purchases', 'expenses'], true))
+                    <p class="text-xs text-gray-500">💵 {{ __('messages.current_cash') }}: ৳{{ number_format((float) $cashInHand, 2) }}</p>
+                    <p id="cash_overdraw_hint" class="hidden text-xs bg-red-50 border border-red-300 text-red-700 rounded-lg px-3 py-2"></p>
+                @endif
+
                 <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg rounded-xl py-3">
                     📩 {{ __('messages.submit_entry') }}
                 </button>
             </form>
         </div>
     </div>
+
+    @if(auth()->user()->isOwner() && in_array($type, ['purchases', 'expenses'], true))
+        <script>
+            $(function () {
+                // Warn the owner when an entry would overdraw the cash.
+                var cash = {{ (float) $cashInHand }};
+                function checkCashOverdraw() {
+                    var total = 0;
+                    @if($type === 'purchases')
+                        total = (parseFloat($('#quantity').val()) || 0) * (parseFloat($('#unit_price').val()) || 0);
+                    @else
+                        total = parseFloat($('#amount').val()) || 0;
+                    @endif
+                    var short = cash - total;
+                    var hint = $('#cash_overdraw_hint');
+                    if (short < 0) {
+                        var text = @json(__('messages.cash_overdraw_warning'))
+                            .replace(':cash', cash.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+                            .replace(':short', Math.abs(short).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                        hint.removeClass('hidden').text(text);
+                    } else {
+                        hint.addClass('hidden').text('');
+                    }
+                }
+                $(document).on('input', '#quantity, #unit_price, #amount', checkCashOverdraw);
+                checkCashOverdraw();
+            });
+        </script>
+    @endif
 
     @if($type === 'sales')
         <script>

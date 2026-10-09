@@ -118,7 +118,7 @@
                         </div>
                         <div class="flex items-center gap-1 shrink-0">
                             @if($pst === 'pending')
-                                <form method="POST" action="{{ route('owner.productions.confirm', ['production' => $production->id]) }}">
+                                <form method="POST" action="{{ route('owner.productions.confirm', ['production' => $production->id]) }}" class="js-confirm-approve">
                                     @csrf @method('PATCH')
                                     <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg px-3 py-2">✔️</button>
                                 </form>

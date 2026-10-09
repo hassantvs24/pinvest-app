@@ -163,6 +163,17 @@
                 return confirm(@json(__('messages.submit_confirm')));
             });
 
+            // Confirm popup before any approve/allow action; a data-warning
+            // (e.g. cash overdraw) is shown inside the same dialog.
+            $(document).on('submit', 'form.js-confirm-approve', function () {
+                var message = $(this).data('confirm') || @json(__('messages.approve_confirm'));
+                var warning = $(this).data('warning');
+                if (warning) {
+                    message += '\n\n' + warning;
+                }
+                return confirm(message);
+            });
+
             // Confirm popup before delete / reject / update
             $(document).on('submit', 'form.js-confirm-delete', function () {
                 return confirm(@json(__('messages.confirm_delete')));

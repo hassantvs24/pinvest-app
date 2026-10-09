@@ -8,6 +8,7 @@ use App\Models\Expense;
 use App\Models\Item;
 use App\Models\Purchase;
 use App\Models\Sale;
+use App\Support\BusinessStats;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
@@ -78,24 +79,27 @@ class EntryController extends Controller
         /** @var class-string<Model> $itemsClass */
         $itemsClass = $config['items'];
 
-        // Sales forms show how much of each item may still be sold
-        // (on hand minus pending reservations) as a live hint.
+        $items = $itemsClass::query()->active()->orderBy('name')->get();
+
+        // Sales forms only list items that can actually be sold right now
+        // (available > 0), with the amount as a live hint.
         $available = [];
         if ($type === 'sales') {
-            $reservations = InventoryService::pendingReservations();
-            foreach (InventoryService::stockRows(now(), true) as $row) {
-                $available[$row['item']->id] = ItemUnits::fromBase(
-                    max(0.0, $row['base_quantity'] - ($reservations[$row['item']->id] ?? 0.0)),
-                    $row['item']->unit,
-                );
-            }
+            $available = InventoryService::availableMap();
+            $items = $items
+                ->filter(fn (Item $item): bool => ($available[$item->id] ?? 0.0) > 0.00001)
+                ->values();
         }
 
         return view('entries.create', [
             'type' => $type,
             'config' => $config,
-            'items' => $itemsClass::query()->active()->orderBy('name')->get(),
+            'items' => $items,
             'available' => $available,
+            // Owners see their cash position so overspending warns upfront.
+            'cashInHand' => $request->user()->isOwner()
+                ? BusinessStats::all()['cash_in_hand']
+                : null,
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -198,11 +202,25 @@ class EntryController extends Controller
             ]);
         }
 
-        return redirect()
+        $redirect = redirect()
             ->route('entries.index', ['type' => $type])
             ->with(
                 $user->isOwner() ? 'success' : 'warning',
                 $user->isOwner() ? __('messages.saved_success') : __('messages.waiting_owner'),
             );
+
+        // The owner's own purchases/expenses may overdraw the cash —
+        // the entry still counts (credit buying), but warn right away.
+        if ($user->isOwner() && in_array($type, ['purchases', 'expenses'], true)) {
+            $cash = BusinessStats::all()['cash_in_hand'];
+            if ($cash < 0) {
+                $redirect->with('warning', __('messages.cash_overdraw_warning', [
+                    'cash' => number_format($cash + ($type === 'purchases' ? (float) $validated['quantity'] * (float) $validated['unit_price'] : (float) $validated['amount']), 2),
+                    'short' => number_format($cash, 2),
+                ]));
+            }
+        }
+
+        return $redirect;
     }
 }

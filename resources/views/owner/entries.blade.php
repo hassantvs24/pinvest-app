@@ -81,7 +81,20 @@
                 {{-- Actions --}}
                 <div class="flex flex-wrap gap-2 mt-3">
                     @if($st === 'pending')
-                        <form method="POST" action="{{ route('owner.entries.confirm', ['type' => $type, 'entry' => $entry->id]) }}">
+                        @php
+                            // Warn inside the approval dialog when confirming
+                            // this entry would overdraw the cash in hand.
+                            $approveWarning = null;
+                            if (in_array($type, ['purchases', 'expenses'], true)) {
+                                $entryCost = $type === 'purchases' ? (float) $entry->total : (float) $entry->amount;
+                                $projected = $cashInHand - $entryCost;
+                                if ($projected < 0) {
+                                    $approveWarning = __('messages.cash_overdraw_dialog', ['short' => number_format($projected, 2)]);
+                                }
+                            }
+                        @endphp
+                        <form method="POST" action="{{ route('owner.entries.confirm', ['type' => $type, 'entry' => $entry->id]) }}"
+                              class="js-confirm-approve"@if($approveWarning) data-warning="{{ $approveWarning }}"@endif>
                             @csrf @method('PATCH')
                             <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg px-3 py-2">✔️ {{ __('messages.confirm') }}</button>
                         </form>
