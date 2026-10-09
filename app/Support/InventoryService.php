@@ -2,10 +2,12 @@
 
 namespace App\Support;
 
+use App\EntryStatus;
 use App\Enums\ExpenseCostType;
 use App\Models\Expense;
 use App\Models\Item;
 use App\Models\Production;
+use App\Models\ProductionComponent;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\StockLoss;
@@ -116,16 +118,32 @@ class InventoryService
                     ->sum(fn (StockLoss $loss): float => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit));
             });
 
+        // Pending production runs reserve their raw materials too.
+        ProductionComponent::query()
+            ->whereHas('production', fn ($query) => $query->where('status', EntryStatus::Pending->value))
+            ->with('item')
+            ->get()
+            ->groupBy('item_id')
+            ->each(function ($components, $itemId) use ($reserved): void {
+                $reserved[$itemId] = ($reserved[$itemId] ?? 0.0) + $components
+                    ->sum(fn (ProductionComponent $component): float => ItemUnits::toBase((float) $component->quantity, $component->item->unit));
+            });
+
         return $reserved->all();
     }
 
     /**
-     * How much of an item may still leave stock right now (sold or
-     * written off): confirmed stock on hand minus quantities reserved
-     * by other pending sales and pending stock losses.
+     * How much of an item may still leave stock right now (sold,
+     * written off or consumed in production): confirmed stock on hand
+     * minus quantities reserved by other pending sales, pending stock
+     * losses and pending production components.
      */
-    public static function availableQuantity(Item $item, ?int $excludeSaleId = null, ?int $excludeLossId = null): float
-    {
+    public static function availableQuantity(
+        Item $item,
+        ?int $excludeSaleId = null,
+        ?int $excludeLossId = null,
+        ?int $excludeProductionId = null,
+    ): float {
         $states = self::simulate(null, now())['states'];
         $onHand = ($states[$item->id]['in_qty'] ?? 0.0) - ($states[$item->id]['out_qty'] ?? 0.0);
         $reserved = Sale::query()->pending()
@@ -138,8 +156,123 @@ class InventoryService
             ->when($excludeLossId !== null, fn ($query) => $query->where('id', '!=', $excludeLossId))
             ->with('item')->get()
             ->sum(fn (StockLoss $loss): float => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit));
+        $reserved += ProductionComponent::query()
+            ->where('item_id', $item->id)
+            ->whereHas('production', fn ($query) => $query->where('status', EntryStatus::Pending->value))
+            ->when($excludeProductionId !== null, fn ($query) => $query->where('production_id', '!=', $excludeProductionId))
+            ->with('item')->get()
+            ->sum(fn (ProductionComponent $component): float => ItemUnits::toBase((float) $component->quantity, $component->item->unit));
 
         return $onHand - $reserved;
+    }
+
+    /**
+     * Available-to-use quantity per item (on hand minus pending
+     * reservations), keyed by item id, in each item's own unit — for
+     * form hints.
+     *
+     * @return array<int, float>
+     */
+    public static function availableMap(): array
+    {
+        $reservations = self::pendingReservations();
+        $map = [];
+
+        foreach (self::stockRows(now(), true) as $row) {
+            $reserved = $reservations[$row['item']->id] ?? 0.0;
+            $map[$row['item']->id] = ItemUnits::fromBase(
+                max(0.0, $row['base_quantity'] - $reserved),
+                $row['item']->unit,
+            );
+        }
+
+        return $map;
+    }
+
+    /**
+     * The moving weighted-average cost of one unit of an item, in the
+     * item's own unit (0 when the item has no stock history yet — the
+     * same basis the COGS calculation uses).
+     */
+    public static function avgCostPerUnit(Item $item): float
+    {
+        $states = self::simulate(null, now())['states'];
+        $state = $states[$item->id] ?? null;
+
+        if ($state === null || $state['in_qty'] <= 0.0) {
+            return 0.0;
+        }
+
+        return self::stateAvgCost($state) * ItemUnits::toBase(1.0, $item->unit);
+    }
+
+    /**
+     * Validate a production run before it is stored or confirmed.
+     * Raw materials may not exceed what is available (pending runs
+     * reserve their materials), and the finished goods must be worth
+     * at least what the run consumes. Returns an error message or null.
+     *
+     * @param  array<int, array{item_id: int, quantity: int}>  $components
+     * @param  array<int, array{item_id: int, quantity: int}>  $outputs
+     */
+    public static function validateProduction(
+        array $components,
+        array $outputs,
+        float $extraCost,
+        ?int $excludeProductionId = null,
+    ): ?string {
+        // Rows are validated distinct, but aggregate defensively so the
+        // check stays correct for any caller.
+        $sumByItem = fn (array $rows): array => collect($rows)
+            ->groupBy('item_id')
+            ->map(fn ($group): float => (float) $group->sum('quantity'))
+            ->all();
+
+        $componentsByItem = $sumByItem($components);
+        $outputsByItem = $sumByItem($outputs);
+
+        // 1. Raw materials must fit the available stock.
+        foreach ($componentsByItem as $itemId => $quantity) {
+            $item = Item::query()->find($itemId);
+            if ($item === null) {
+                continue;
+            }
+            $available = self::availableQuantity($item, excludeProductionId: $excludeProductionId);
+
+            if (ItemUnits::toBase($quantity, $item->unit) > $available + 1e-9) {
+                return __('messages.production_component_exceeds_stock', [
+                    'item' => $item->name,
+                    'available' => rtrim(rtrim(number_format(ItemUnits::fromBase(max(0.0, $available), $item->unit), 2), '0'), '.'),
+                    'unit' => ItemUnits::label($item->unit),
+                ]);
+            }
+        }
+
+        // 2. The outputs must be worth at least the inputs.
+        $inputCost = $extraCost;
+        foreach ($componentsByItem as $itemId => $quantity) {
+            $item = Item::query()->find($itemId);
+            if ($item !== null) {
+                $inputCost += $quantity * self::avgCostPerUnit($item);
+            }
+        }
+
+        $outputValue = 0.0;
+        foreach ($outputsByItem as $itemId => $quantity) {
+            $item = Item::query()->find($itemId);
+            if ($item !== null) {
+                $outputValue += $quantity * (float) $item->default_price;
+            }
+        }
+
+        if ($outputValue + 0.01 < $inputCost) {
+            return __('messages.production_value_below_cost', [
+                'cost' => number_format($inputCost, 2),
+                'value' => number_format($outputValue, 2),
+            ]);
+        }
+
+        return null;
     }
 
     /**

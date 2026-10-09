@@ -6,6 +6,7 @@ use App\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\Production;
+use App\Support\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +34,7 @@ class ProductionController extends Controller
                 ->orderByDesc('id')
                 ->paginate(15),
             'items' => Item::query()->active()->orderBy('name')->get(),
+            'available' => InventoryService::availableMap(),
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -60,6 +62,15 @@ class ProductionController extends Controller
         ]);
 
         $this->guardCircularItems($validated);
+
+        $error = InventoryService::validateProduction(
+            $validated['components'] ?? [],
+            $validated['outputs'],
+            (float) ($validated['extra_cost'] ?? 0),
+        );
+        if ($error !== null) {
+            return back()->withInput()->with('error', $error);
+        }
 
         DB::transaction(function () use ($request, $validated): void {
             $production = Production::query()->create([

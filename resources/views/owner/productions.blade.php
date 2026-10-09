@@ -34,6 +34,7 @@
                     </button>
                     <p class="text-xs text-gray-500 mt-1">{{ __('messages.output_split_hint') }}</p>
                     <p class="text-xs text-gray-500 mt-1">⚖️ {{ __('messages.production_unit_hint') }}</p>
+                    <p class="text-xs text-gray-500 mt-1">💰 {{ __('messages.production_value_hint') }}</p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
@@ -55,10 +56,10 @@
                     <label class="block text-sm font-medium mb-1">🧵 {{ __('messages.input_items') }} ({{ __('messages.optional') }})</label>
                     <div id="component_rows" class="space-y-2">
                         <div class="component-row grid grid-cols-[1fr_110px_44px] gap-2">
-                            <select name="components[0][item_id]" required class="border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                            <select name="components[0][item_id]" required class="js-component-select border border-gray-300 rounded-lg px-3 py-3 bg-white">
                                 <option value="">{{ __('messages.item') }}</option>
                                 @foreach($items as $item)
-                                    <option value="{{ $item->id }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
+                                    <option value="{{ $item->id }}" data-available="{{ $available[$item->id] ?? 0 }}" data-unit="{{ \App\Support\ItemUnits::label($item->unit) }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
                             <input type="number" name="components[0][quantity]" min="1" step="1" required placeholder="{{ __('messages.quantity') }}"
@@ -71,6 +72,7 @@
                     </button>
                     <p class="text-xs text-gray-500 mt-1">⚖️ {{ __('messages.production_unit_hint') }}</p>
                     <p class="text-xs text-gray-500 mt-1">📦 {{ __('messages.production_stock_hint') }}</p>
+                    <p id="component_stock_hint" class="text-xs text-gray-600"></p>
                 </div>
 
                 <div>
@@ -177,6 +179,23 @@
                     $(this).closest('.component-row').remove();
                 }
             });
+
+            // Live hint: how much of the selected material is available.
+            function updateComponentHint() {
+                var selected = $('.js-component-select').first().find('option:selected');
+                var available = parseFloat(selected.data('available'));
+                var hint = $('#component_stock_hint');
+                if (isNaN(available) || available === undefined) {
+                    hint.text('');
+                    return;
+                }
+                var unit = $('.js-component-select').first().find('option:selected').data('unit') || '';
+                var text = @json(__('messages.available_stock_hint')).replace(':available', available).replace(':unit', unit);
+                hint.text('📦 ' + text);
+                hint.toggleClass('text-red-600 font-bold', available <= 0);
+            }
+            $(document).on('change', '.js-component-select', updateComponentHint);
+            updateComponentHint();
         });
     </script>
 @endsection

@@ -1362,9 +1362,14 @@ it('blocks closing the cycle while a production is pending', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000032']);
     $purchaseItem = Item::factory()->create();
-    $item = Item::factory()->create(['name' => 'Chips Premium']);
+    $item = Item::factory()->create(['name' => 'Chips Premium', 'default_price' => 1000]);
 
     CommissionPeriod::factory()->open()->create();
+    // Stock on hand so the production passes the availability check.
+    Purchase::factory()->create([
+        'item_id' => $purchaseItem->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now(),
+    ]);
     Sale::factory()->create([
         'item_id' => $item->id, 'quantity' => 1, 'unit_price' => 100, 'total' => 100,
         'status' => EntryStatus::Confirmed, 'entry_date' => now(),
@@ -1375,6 +1380,8 @@ it('blocks closing the cycle while a production is pending', function (): void {
         'outputs' => [['item_id' => $item->id, 'quantity' => 5]],
         'components' => [['item_id' => $purchaseItem->id, 'quantity' => 5]],
     ]);
+
+    expect(Production::query()->pending()->count())->toBe(1);
 
     $this->actingAs($owner)->get('/owner/commissions/close')
         ->assertOk()
