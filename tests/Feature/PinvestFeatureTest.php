@@ -165,6 +165,18 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
     expect($sale->fresh()->status)->toBe(EntryStatus::Confirmed);
 });
 
+it('loads the expense create form with expense heads, not items', function (): void {
+    $partner = makeUser(['phone' => '01700000098']);
+    $item = Item::factory()->create(['name' => 'গোপন পণ্য']);
+    $head = ExpenseHead::factory()->create(['name' => 'গোপন খাত']);
+    CommissionPeriod::factory()->open()->create();
+
+    $this->actingAs($partner)->get('/entries/expenses/create')
+        ->assertOk()
+        ->assertSee('গোপন খাত')
+        ->assertDontSee('গোপন পণ্য');
+});
+
 it('lets the owner create entries that are auto-confirmed', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $item = Item::factory()->create();

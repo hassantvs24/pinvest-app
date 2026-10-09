@@ -28,7 +28,7 @@
                             <option value="{{ $item->id }}" data-price="{{ $type === 'sales' ? $item->default_price : '' }}"
                                     data-unit="{{ $config['has_unit'] ? \App\Support\ItemUnits::label($item->unit) : '' }}"
                                     data-available="{{ $type === 'sales' ? ($available[$item->id] ?? 0) : '' }}"
-                                    data-cost-type="{{ $type === 'expenses' ? $item->cost_type->value : '' }}"
+                                    data-cost-type="{{ $type === 'expenses' ? ($item->cost_type?->value ?? '') : '' }}"
                                     {{ old('head_id') == $item->id ? 'selected' : '' }}>
                                 {{ $item->name }}{{ $type === 'sales' ? ' (৳'.number_format((float) $item->default_price, 2).')' : '' }}{{ $config['has_unit'] ? ' ('.\App\Support\ItemUnits::label($item->unit).')' : '' }}
                             </option>

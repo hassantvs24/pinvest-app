@@ -75,6 +75,9 @@ class EntryController extends Controller
 
         $config = EntryTypes::config($type);
 
+        /** @var class-string<Model> $itemsClass */
+        $itemsClass = $config['items'];
+
         // Sales forms show how much of each item may still be sold
         // (on hand minus pending reservations) as a live hint.
         $available = [];
@@ -91,7 +94,7 @@ class EntryController extends Controller
         return view('entries.create', [
             'type' => $type,
             'config' => $config,
-            'items' => Item::query()->active()->orderBy('name')->get(),
+            'items' => $itemsClass::query()->active()->orderBy('name')->get(),
             'available' => $available,
             'today' => now()->format('Y-m-d'),
         ]);
