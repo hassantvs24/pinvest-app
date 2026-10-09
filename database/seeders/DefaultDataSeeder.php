@@ -65,12 +65,14 @@ class DefaultDataSeeder extends Seeder
             ['পরিবহন ভাড়া', ExpenseCostType::Product],
             ['গাছ কাটা মজুরি', ExpenseCostType::Product],
             ['প্রসেসিং মজুরি', ExpenseCostType::Product],
-            ['জাসাই-বাসাই খরচ', ExpenseCostType::Product],
+            ['যাচাই-বাছাই খরচ', ExpenseCostType::Product],
             ['সোর্সিং ফি', ExpenseCostType::Product],
             ['প্যাকেজিং', ExpenseCostType::Product],
             ['মার্কেটিং', ExpenseCostType::Product],
             ['দোকান ভাড়া', ExpenseCostType::General],
             ['বিদ্যুৎ বিল', ExpenseCostType::General],
+            ['সরঞ্জাম', ExpenseCostType::General],
+            ['এন্টারটেইনমেন্ট', ExpenseCostType::General],
             ['অন্যান্য', ExpenseCostType::General],
         ] as [$name, $costType]) {
             ExpenseHead::query()->firstOrCreate(
@@ -83,9 +85,20 @@ class DefaultDataSeeder extends Seeder
         // in production — one weighted-average pool per item.
         foreach ([
             ['name' => 'অগর গাছ', 'unit' => 'pcs', 'default_price' => 0],
-            ['name' => 'উদ চিপস', 'unit' => 'gram', 'default_price' => 6000],
-            ['name' => 'আসারি', 'unit' => 'gram', 'default_price' => 300],
-            ['name' => 'উদ অয়েল', 'unit' => 'ml', 'default_price' => 15000],
+            ['name' => 'আগর টুকরা', 'unit' => 'pcs', 'default_price' => 2000],
+            ['name' => 'আগর বখুর', 'unit' => 'gram', 'default_price' => 5000],
+            ['name' => 'আগর মিক্স চিপস', 'unit' => 'gram', 'default_price' => 3500],
+            ['name' => 'উদ চিপস A+', 'unit' => 'gram', 'default_price' => 8000],
+            ['name' => 'উদ চিপস A', 'unit' => 'gram', 'default_price' => 6000],
+            ['name' => 'উদ চিপস B', 'unit' => 'gram', 'default_price' => 4500],
+            ['name' => 'উদ চিপস C', 'unit' => 'gram', 'default_price' => 3000],
+            ['name' => 'উদ তেল A+', 'unit' => 'ml', 'default_price' => 20000],
+            ['name' => 'উদ তেল A', 'unit' => 'ml', 'default_price' => 15000],
+            ['name' => 'উদ তেল B', 'unit' => 'ml', 'default_price' => 10000],
+            ['name' => 'উদ তেল C', 'unit' => 'ml', 'default_price' => 7000],
+            ['name' => 'আগর ডাস্ট', 'unit' => 'gram', 'default_price' => 300],
+            ['name' => 'আগর চারা', 'unit' => 'pcs', 'default_price' => 100],
+            ['name' => 'আগর বীজ', 'unit' => 'pcs', 'default_price' => 50],
         ] as $item) {
             Item::query()->firstOrCreate(
                 ['name' => $item['name']],

@@ -49,9 +49,12 @@ class DemoDataSeeder extends Seeder
         ]);
 
         $woodId = Item::query()->where('name', 'অগর গাছ')->value('id');
-        $oilId = Item::query()->where('name', 'উদ অয়েল')->value('id');
-        $chipsId = Item::query()->where('name', 'উদ চিপস')->value('id');
-        $scrapId = Item::query()->where('name', 'আসারি')->value('id');
+        $oilAId = Item::query()->where('name', 'উদ তেল A')->value('id');
+        $chipsAplusId = Item::query()->where('name', 'উদ চিপস A+')->value('id');
+        $chipsAId = Item::query()->where('name', 'উদ চিপস A')->value('id');
+        $chipsBId = Item::query()->where('name', 'উদ চিপস B')->value('id');
+        $chipsCId = Item::query()->where('name', 'উদ চিপস C')->value('id');
+        $scrapId = Item::query()->where('name', 'আগর ডাস্ট')->value('id');
         $transportId = ExpenseHead::query()->where('name', 'পরিবহন ভাড়া')->value('id');
         $labourId = ExpenseHead::query()->where('name', 'প্রসেসিং মজুরি')->value('id');
 
@@ -73,7 +76,7 @@ class DemoDataSeeder extends Seeder
                 // Loss month: sales below expenses.
                 Sale::query()->create([
                     'user_id' => $raju->id,
-                    'item_id' => $oilId,
+                    'item_id' => $oilAId,
                     'quantity' => 1,
                     'unit_price' => 15000,
                     'total' => 15000,
@@ -110,7 +113,7 @@ class DemoDataSeeder extends Seeder
                 ]);
                 Purchase::query()->create([
                     'user_id' => $sahel->id,
-                    'item_id' => $oilId,
+                    'item_id' => $oilAId,
                     'quantity' => 2,
                     'unit_price' => 11000,
                     'total' => 22000,
@@ -124,22 +127,25 @@ class DemoDataSeeder extends Seeder
                 $production = Production::query()->create([
                     'user_id' => $owner->id,
                     'extra_cost' => 3000,
-                    'note' => 'কাটাই + জাসাই-বাসাই',
+                    'note' => 'কাটাই + যাচাই-বাছাই',
                     'entry_date' => $mid,
                     'status' => EntryStatus::Confirmed,
                     'confirmed_by' => $owner->id,
                     'confirmed_at' => $mid,
                 ]);
                 $production->components()->create(['item_id' => $woodId, 'quantity' => 15 + $i]);
-                $production->outputs()->create(['item_id' => $chipsId, 'quantity' => 140 + $i]);
+                $production->outputs()->create(['item_id' => $chipsAplusId, 'quantity' => 40 + $i]);
+                $production->outputs()->create(['item_id' => $chipsAId, 'quantity' => 60]);
+                $production->outputs()->create(['item_id' => $chipsBId, 'quantity' => 25]);
+                $production->outputs()->create(['item_id' => $chipsCId, 'quantity' => 15]);
                 $production->outputs()->create(['item_id' => $scrapId, 'quantity' => 20]);
 
                 Sale::query()->create([
                     'user_id' => $raju->id,
-                    'item_id' => $chipsId,
-                    'quantity' => 30,
+                    'item_id' => $chipsAplusId,
+                    'quantity' => 20,
                     'unit_price' => 12000,
-                    'total' => 360000,
+                    'total' => 240000,
                     'note' => 'প্রিমিয়াম চিপস',
                     'entry_date' => $mid->copy()->addDay(),
                     'status' => EntryStatus::Confirmed,
@@ -148,7 +154,7 @@ class DemoDataSeeder extends Seeder
                 ]);
                 Sale::query()->create([
                     'user_id' => $raju->id,
-                    'item_id' => $chipsId,
+                    'item_id' => $chipsAId,
                     'quantity' => 40,
                     'unit_price' => 6000,
                     'total' => 240000,
@@ -160,7 +166,7 @@ class DemoDataSeeder extends Seeder
                 ]);
                 Sale::query()->create([
                     'user_id' => $riad->id,
-                    'item_id' => $oilId,
+                    'item_id' => $oilAId,
                     'quantity' => 1,
                     'unit_price' => 15000,
                     'total' => 15000,
@@ -173,10 +179,11 @@ class DemoDataSeeder extends Seeder
 
                 // A little shrinkage every month so the stock-loss
                 // reports, ledger and cost flows are demoable. Chips
-                // stock always outgrows this (output 140+, sales 70).
+                // stock always outgrows this (each grade produces more
+                // than is sold/lost).
                 StockLoss::query()->create([
                     'user_id' => $sahel->id,
-                    'item_id' => $chipsId,
+                    'item_id' => $chipsCId,
                     'quantity' => 2 + ($i % 3),
                     'note' => $i % 2 === 0 ? 'গুদামে পচন' : 'প্যাকেট ভেঙে গেছে',
                     'entry_date' => $mid->copy()->addDays(3),
@@ -263,7 +270,7 @@ class DemoDataSeeder extends Seeder
         // Pending stock loss so the owner can try the confirm/reject flow.
         StockLoss::query()->create([
             'user_id' => $raju->id,
-            'item_id' => $chipsId,
+            'item_id' => $chipsCId,
             'quantity' => 5,
             'note' => 'ডেমো মজুদ ক্ষতি (পানি লেগে নষ্ট)',
             'entry_date' => now()->subDay(),

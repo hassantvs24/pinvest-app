@@ -90,6 +90,17 @@
                                 @csrf @method('PATCH')
                                 <input type="text" name="name" maxlength="255" value="{{ $item->name }}" required
                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                @if($section['has_price'])
+                                    @php $priceLocked = $group === 'items' && $priceLockedIds->contains($item->id); @endphp
+                                    <input type="number" name="default_price" step="0.01" min="0" value="{{ (float) $item->default_price }}"
+                                           {{ $priceLocked ? 'readonly' : 'required' }}
+                                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm {{ $priceLocked ? 'bg-gray-100 text-gray-500' : '' }}">
+                                    @if($priceLocked)
+                                        <p class="text-xs text-red-600">🔒 {{ __('messages.price_locked_in_production') }}</p>
+                                    @else
+                                        <p class="text-xs text-gray-500">💡 {{ __('messages.price_edit_hint') }}</p>
+                                    @endif
+                                @endif
                                 @if($section['has_cost_type'])
                                     <select name="cost_type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
                                         <option value="general" {{ ! $item->cost_type?->addsToStock() ? 'selected' : '' }}>{{ __('messages.cost_type_general') }}</option>

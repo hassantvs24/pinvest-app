@@ -360,7 +360,9 @@ return [
     // Cautions (⚠️)
     'warn_expense_double_count' => 'Product costs join stock and are costed when sold — entering the same cost again as production labour counts it twice.',
     'warn_sale_unlinked' => 'Selling an item with no purchase or production history counts its cost as 0 — profit looks inflated.',
-    'warn_unit_locked' => 'Only the name can be changed later — the unit and default price cannot. Make sure both are correct before saving.',
+    'warn_unit_locked' => 'The name can be changed later, and the price too (only for items not used in production) — but the unit cannot. Make sure the unit is correct before saving.',
+    'price_edit_hint' => 'The new price is only used to pre-fill future sales; all past records stay unchanged.',
+    'price_locked_in_production' => 'This item is a production output — its price cannot change because the cost split relies on it.',
 
     // Stock losses
     'stock_loss' => 'Stock loss',

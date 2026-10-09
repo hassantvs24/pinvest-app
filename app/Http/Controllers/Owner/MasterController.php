@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Item;
+use App\Models\ProductionOutput;
 use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -65,6 +66,9 @@ class MasterController extends Controller
         return view('owner.masters', [
             'expenseHeads' => ExpenseHead::query()->orderBy('name')->get(),
             'items' => Item::query()->orderBy('name')->get(),
+            // Items used as a production output keep their price locked
+            // (cost split references default_price).
+            'priceLockedIds' => ProductionOutput::query()->distinct()->pluck('item_id'),
         ]);
     }
 
@@ -138,7 +142,7 @@ class MasterController extends Controller
 
         $item = $modelClass::query()->findOrFail($id);
 
-        $validated = $request->validate([
+        $rules = [
             'name' => [
                 'required',
                 'string',
@@ -146,12 +150,34 @@ class MasterController extends Controller
                 Rule::unique($item->getTable(), 'name')->ignore($item->id),
             ],
             'cost_type' => ['nullable', Rule::enum(ExpenseCostType::class)],
-        ]);
+        ];
+        if ($config['has_price']) {
+            $rules['default_price'] = ['nullable', 'numeric', 'min:0'];
+        }
+
+        $validated = $request->validate($rules);
+
+        // Price edits are only safe for items never used as a production
+        // output: their sale prices are stored per sale and their average
+        // cost comes from purchases only, so nothing historical can shift.
+        // Production outputs split cost by default_price, so their price
+        // stays locked.
+        if (
+            $config['has_price']
+            && isset($validated['default_price'])
+            && (float) $validated['default_price'] !== (float) $item->default_price
+            && ProductionOutput::query()->where('item_id', $item->id)->exists()
+        ) {
+            return back()->with('error', __('messages.price_locked_in_production'));
+        }
 
         $payload = ['name' => $validated['name']];
 
         if ($config['has_cost_type']) {
             $payload['cost_type'] = $validated['cost_type'] ?? $item->cost_type;
+        }
+        if ($config['has_price']) {
+            $payload['default_price'] = $validated['default_price'] ?? $item->default_price;
         }
 
         $item->update($payload);

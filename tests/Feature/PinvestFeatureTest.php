@@ -639,6 +639,35 @@ it('lets the owner rename master items, even when entries reference them', funct
     $this->actingAs($owner)->get('/owner/masters')->assertSee('ভ্যান ভাড়া');
 });
 
+it('lets the owner edit an item price when it is not a production output', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = Item::factory()->create(['name' => 'দামি জিনিস', 'default_price' => 100]);
+    Sale::factory()->create(['item_id' => $item->id, 'unit_price' => 100, 'total' => 500, 'status' => EntryStatus::Confirmed]);
+
+    $this->actingAs($owner)->patch("/owner/masters/items/{$item->id}", [
+        'name' => 'দামি জিনিস',
+        'default_price' => 250,
+    ])->assertRedirect();
+
+    // The price updates, but the past sale keeps the price it was sold at.
+    expect((float) $item->fresh()->default_price)->toBe(250.0)
+        ->and((float) Sale::sole()->unit_price)->toBe(100.0);
+});
+
+it('blocks price changes for items used as production outputs', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = Item::factory()->create(['name' => 'উৎপাদিত জিনিস', 'default_price' => 100]);
+    $production = Production::factory()->create();
+    $production->outputs()->create(['item_id' => $item->id, 'quantity' => 2]);
+
+    $this->actingAs($owner)->patch("/owner/masters/items/{$item->id}", [
+        'name' => 'উৎপাদিত জিনিস',
+        'default_price' => 250,
+    ])->assertRedirect();
+
+    expect((float) $item->fresh()->default_price)->toBe(100.0);
+});
+
 it('prevents duplicate master item names within a group', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     ExpenseHead::factory()->create(['name' => 'Transport']);
@@ -1508,9 +1537,18 @@ it('seeds permanent Bangla defaults with accounts, masters and links', function 
 
     // Bangla masters.
     expect(ExpenseHead::query()->count())->toBeGreaterThanOrEqual(8)
+        ->and(ExpenseHead::query()->where('name', 'সরঞ্জাম')->exists())->toBeTrue()
+        ->and(ExpenseHead::query()->where('name', 'এন্টারটেইনমেন্ট')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'অগর গাছ')->exists())->toBeTrue()
-        ->and(Item::query()->where('name', 'উদ চিপস')->exists())->toBeTrue()
-        ->and(Item::query()->where('name', 'উদ অয়েল')->exists())->toBeTrue();
+        ->and(Item::query()->where('name', 'আগর বখুর')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'আগর টুকরা')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'আগর বীজ')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'আগর চারা')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'আগর মিক্স চিপস')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'উদ চিপস A+')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'উদ চিপস C')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'উদ তেল A')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'উদ তেল C')->exists())->toBeTrue();
 
     // Re-running the default seeder creates no duplicates.
     $heads = ExpenseHead::query()->count();
