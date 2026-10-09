@@ -164,7 +164,6 @@ return [
     'purchase_report' => 'ক্রয় রিপোর্ট',
     'expense_report' => 'খরচ রিপোর্ট',
     'partner_commission_report' => 'পার্টনার ও কমিশন রিপোর্ট',
-    'monthly_report' => 'মাসিক রিপোর্ট',
     'commission_earned' => 'অর্জিত কমিশন',
     'commission_paid' => 'পরিশোধিত কমিশন',
     'commission_due' => 'বাকি কমিশন',
@@ -211,6 +210,7 @@ return [
     'payout_history_hint' => 'পার্টনারের রিকোয়েস্ট approve করলেই payout এখানে অটো যুক্ত হয় — ম্যানুয়ালি লেখা লাগে না।',
 
     // Owner-managed commission cycles
+    'estimated_hint' => '(আনুমানিক)',
     'cycle' => 'সাইকেল',
     'all_cycles' => 'সব সাইকেল (নিজের রেঞ্জ)',
     'status_open' => 'খোলা',

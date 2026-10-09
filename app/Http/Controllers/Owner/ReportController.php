@@ -73,7 +73,6 @@ class ReportController extends Controller
             'lifetimeCashInHand' => $lifetime['cash_in_hand'],
             'lifetimeInvestment' => $lifetime['investment'],
             'partners' => $this->partnerRows($from, $to),
-            'months' => $selectedCycle ? null : $this->monthlyRows(),
             'investments' => $this->investmentRows($from, $to),
             'settlements' => $settlements,
             'withdrawals' => OwnerWithdrawal::query()
@@ -228,58 +227,5 @@ class ReportController extends Controller
             ->orderByDesc('entry_date')
             ->orderByDesc('id')
             ->get();
-    }
-
-    /**
-     * Monthly breakdown for the last 6 calendar months from confirmed
-     * entries, grouped in PHP (portable across database engines).
-     *
-     * @return Collection<int, array{key: string, label: string, sales: float, purchase: float, expense: float, commission: float, net_profit: float}>
-     */
-    private function monthlyRows(): Collection
-    {
-        $start = Carbon::now()->startOfMonth()->subMonths(5);
-
-        $group = fn (Collection $rows, string $valueField): Collection => $rows
-            ->where('status', EntryStatus::Confirmed->value)
-            ->filter(fn ($row) => Carbon::parse($row->entry_date)->gte($start))
-            ->groupBy(fn ($row) => Carbon::parse($row->entry_date)->format('Y-m'))
-            ->map(fn (Collection $g) => (float) $g->sum($valueField));
-
-        $sales = $group(Sale::query()->select('entry_date', 'status', 'total')->get(), 'total');
-        $purchase = $group(Purchase::query()->select('entry_date', 'status', 'total')->get(), 'total');
-        $expense = $group(Expense::query()->select('entry_date', 'status', 'amount')->get(), 'amount');
-
-        // Commission distributed per month, from settlements whose period
-        // starts in that month (settlement-based, not per-sale estimate).
-        $commissionByMonth = CommissionSettlement::query()
-            ->get()
-            ->filter(fn ($row) => Carbon::parse($row->period_start)->gte($start))
-            ->groupBy(fn ($row) => Carbon::parse($row->period_start)->format('Y-m'))
-            ->map(fn (Collection $g) => (float) $g->sum('amount'));
-
-        $rows = collect();
-        for ($i = 5; $i >= 0; $i--) {
-            $month = Carbon::now()->startOfMonth()->subMonths($i);
-            $key = $month->format('Y-m');
-
-            $s = (float) ($sales[$key] ?? 0);
-            $p = (float) ($purchase[$key] ?? 0);
-            $e = (float) ($expense[$key] ?? 0);
-            $c = (float) ($commissionByMonth[$key] ?? 0);
-
-            $rows->push([
-                'key' => $key,
-                'label' => $month->format('M Y'),
-                'sales' => $s,
-                'purchase' => $p,
-                'expense' => $e,
-                'commission' => $c,
-                'net_profit' => $s - $p - $e,
-                'owner_share' => $s - $p - $e - $c,
-            ]);
-        }
-
-        return $rows;
     }
 }

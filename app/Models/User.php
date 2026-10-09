@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\EntryStatus;
 use App\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -109,5 +108,21 @@ class User extends Authenticatable
     public function confirmedSalesTotal(): float
     {
         return (float) $this->sales()->confirmed()->sum('total');
+    }
+
+    /**
+     * Total confirmed purchase amount (for the partner leaderboard).
+     */
+    public function confirmedPurchasesTotal(): float
+    {
+        return (float) $this->purchases()->confirmed()->sum('total');
+    }
+
+    /**
+     * Total confirmed expense amount (for the partner leaderboard).
+     */
+    public function confirmedExpensesTotal(): float
+    {
+        return (float) $this->expenses()->confirmed()->sum('amount');
     }
 }

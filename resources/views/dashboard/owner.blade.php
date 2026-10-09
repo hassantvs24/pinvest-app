@@ -94,7 +94,9 @@
             <div class="text-2xl font-bold">৳{{ number_format($stats['sales'], 2) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-violet-600">
-            <div class="text-sm text-gray-500">🤝 {{ __('messages.total_commission') }}</div>
+            <div class="text-sm text-gray-500">
+                🤝 {{ __('messages.total_commission') }}{{ $commissionEstimated ? ' '.__('messages.estimated_hint') : '' }}
+            </div>
             <div class="text-2xl font-bold">৳{{ number_format($stats['commission'], 2) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-slate-600">
@@ -109,7 +111,7 @@
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">🏦 {{ __('messages.cash_in_hand') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['cash_in_hand'], 2) }}</div>
+            <div class="text-2xl font-bold">৳{{ number_format($cashInHand, 2) }}</div>
         </div>
     </div>
 
@@ -121,14 +123,17 @@
         @else
             <ul class="divide-y divide-gray-100">
                 @foreach($leaderboard as $partner)
-                    <li class="px-4 py-3 flex items-center justify-between">
-                        <div>
-                            <div class="font-medium">{{ $partner['name'] }}</div>
-                            <div class="text-xs text-violet-600">🤝 {{ $partner['commission_rate'] }}%</div>
+                    <li class="px-4 py-3">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <div class="font-medium truncate">{{ $partner['name'] }}</div>
+                            <div class="text-xl font-bold text-violet-600 shrink-0">{{ $partner['commission_rate'] }}%</div>
                         </div>
-                        <div class="text-right">
-                            <div class="font-bold">৳{{ number_format($partner['total_sales'], 2) }}</div>
-                            <div class="text-xs text-gray-500">💵 {{ __('messages.total_sales') }}</div>
+                        <div class="text-xs text-gray-500">
+                            💵 {{ __('messages.total_sales') }} ৳{{ number_format($partner['total_sales'], 2) }}
+                            · 🛒 {{ __('messages.total_purchase') }} ৳{{ number_format($partner['total_purchase'], 2) }}
+                            · 💸 {{ __('messages.total_expense') }} ৳{{ number_format($partner['total_expense'], 2) }}
+                            · 🤝 {{ __('messages.total_commission') }}{{ $commissionEstimated ? ' '.__('messages.estimated_hint') : '' }}:
+                            ৳{{ number_format($partner['commission'], 2) }}
                         </div>
                     </li>
                 @endforeach

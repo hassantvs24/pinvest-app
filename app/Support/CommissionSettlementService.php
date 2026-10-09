@@ -181,6 +181,24 @@ class CommissionSettlementService
     }
 
     /**
+     * Confirmed profit of the running (open) cycle so far,
+     * from its opening date up to today.
+     */
+    public static function runningProfit(CommissionPeriod $period): float
+    {
+        return self::periodProfit($period->opened_at, Carbon::today());
+    }
+
+    /**
+     * Estimated commission for a rate % on a (running) profit — 0 on loss.
+     * Used for the dashboards while a cycle is still open.
+     */
+    public static function estimateCommission(float $profit, float $rate): float
+    {
+        return $profit > 0 ? round($profit * $rate / 100, 2) : 0.0;
+    }
+
+    /**
      * Pending commission due for a partner (sum of pending settlements).
      */
     public static function pendingDue(int $userId): float

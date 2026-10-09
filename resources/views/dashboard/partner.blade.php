@@ -52,7 +52,9 @@
             <div class="text-2xl font-bold">৳{{ number_format($stats['sales'], 2) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-violet-600">
-            <div class="text-sm text-gray-500">🤝 {{ __('messages.my_commission') }}</div>
+            <div class="text-sm text-gray-500">
+                🤝 {{ __('messages.my_commission') }}{{ $commissionEstimated ? ' '.__('messages.estimated_hint') : '' }}
+            </div>
             <div class="text-2xl font-bold">৳{{ number_format($stats['commission'], 2) }}</div>
             <div class="text-xs text-gray-500">{{ $commissionRate }}% · ⏳ {{ __('messages.commission_due') }}:
                 <a href="{{ route('commissions.index') }}" class="font-bold text-orange-600 underline">

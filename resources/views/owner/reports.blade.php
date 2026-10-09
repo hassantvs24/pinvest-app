@@ -348,29 +348,6 @@
         @endif
     </div>
 
-    {{-- 9. Monthly breakdown (last 6 months) — hidden for cycle-scoped reports --}}
-    @if($months)
-    <h2 class="font-bold text-lg mb-2">🗓️ {{ __('messages.monthly_report') }}</h2>
-    <div class="bg-white rounded-xl shadow overflow-hidden">
-        <ul class="divide-y divide-gray-100">
-            @foreach($months as $month)
-                <li class="px-4 py-3 flex items-center justify-between gap-2">
-                    <div class="font-medium">{{ $month['label'] }}</div>
-                    <div class="text-right">
-                        <div class="font-bold">৳{{ number_format($month['sales'], 2) }}</div>
-                        <div class="text-xs {{ $month['net_profit'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                            📈 {{ __('messages.net_profit') }}: ৳{{ number_format($month['net_profit'], 2) }}
-                        </div>
-                        <div class="text-xs {{ $month['owner_share'] >= 0 ? 'text-emerald-700' : 'text-red-600' }}">
-                            👔 {{ __('messages.owner_share') }}: ৳{{ number_format($month['owner_share'], 2) }}
-                        </div>
-                    </div>
-                </li>
-            @endforeach
-        </ul>
-    </div>
-    @endif
-
     <style>
         @media print {
             header, nav, .print\:hidden { display: none !important; }

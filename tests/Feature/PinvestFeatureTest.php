@@ -8,6 +8,7 @@ use App\Models\ExpenseHead;
 use App\Models\Investment;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
+use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\RegistrationAllow;
 use App\Models\Sale;
@@ -171,6 +172,107 @@ it('lets the owner create entries that are auto-confirmed', function (): void {
     expect($sale->status)->toBe(EntryStatus::Confirmed)
         ->and($sale->confirmed_by)->toBe($owner->id)
         ->and($sale->user_id)->toBe($owner->id);
+});
+
+it('scopes the owner dashboard to the running cycle with estimated commissions', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000017']);
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
+    $item = SaleItem::factory()->create();
+    $purchaseItem = PurchaseItem::factory()->create();
+    $head = ExpenseHead::factory()->create();
+
+    // Inside the running cycle: sale 400, purchase 200, expense 50.
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'quantity' => 1, 'unit_price' => 400, 'total' => 400,
+        'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
+    ]);
+    Purchase::factory()->create([
+        'user_id' => $partner->id, 'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 1, 'unit_price' => 200, 'total' => 200,
+        'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
+    ]);
+    Expense::factory()->create([
+        'user_id' => $partner->id, 'expense_head_id' => $head->id,
+        'amount' => 50,
+        'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
+    ]);
+
+    // Before the cycle opened — must NOT appear.
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'quantity' => 1, 'unit_price' => 100, 'total' => 100,
+        'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
+    ]);
+    Purchase::factory()->create([
+        'user_id' => $partner->id, 'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 1, 'unit_price' => 999, 'total' => 999,
+        'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
+    ]);
+    Expense::factory()->create([
+        'user_id' => $partner->id, 'expense_head_id' => $head->id,
+        'amount' => 888,
+        'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
+    ]);
+
+    $this->actingAs($owner)
+        ->get('/dashboard')
+        ->assertOk()
+        // Leaderboard + cards show only the running cycle's figures.
+        ->assertSee('৳400.00')
+        ->assertSee('৳200.00')
+        ->assertSee('৳50.00')
+        ->assertDontSee('৳100.00')
+        ->assertDontSee('৳999.00')
+        ->assertDontSee('৳888.00')
+        // Leaderboard shows the estimated commission value (profit 150 x
+        // 10% = 15) and the highlighted rate.
+        ->assertSee('৳15.00')
+        ->assertSee('10%');
+});
+
+it('scopes the partner dashboard to the running cycle', function (): void {
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000018']);
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
+    $item = SaleItem::factory()->create();
+
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'quantity' => 1, 'unit_price' => 400, 'total' => 400,
+        'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
+    ]);
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'quantity' => 1, 'unit_price' => 100, 'total' => 100,
+        'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
+    ]);
+
+    $this->actingAs($partner)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('৳400.00')
+        ->assertDontSee('৳100.00')
+        ->assertSee('৳40.00')
+        ->assertSee(__('messages.estimated_hint'));
+});
+
+it('shows each partner lifetime earned commission and rate on the leaderboard when no cycle is open', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000019']);
+    $period = CommissionPeriod::factory()->create();
+
+    CommissionSettlement::factory()->paid()->create([
+        'user_id' => $partner->id,
+        'commission_period_id' => $period->id,
+        'amount' => 30,
+    ]);
+
+    $this->actingAs($owner)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertSee('৳30.00')
+        ->assertSee('10%');
 });
 
 it('shows the open cycle on both dashboards and the close summary before closing', function (): void {
@@ -352,6 +454,9 @@ it('shows owner reports with date filtering and guards them from partners', func
         ->assertDontSee('৳100.00');
 
     $this->actingAs($partner)->get('/owner/reports')->assertForbidden();
+
+    // The monthly section was removed — reports are cycle-based only.
+    $this->actingAs($owner)->get('/owner/reports')->assertDontSee('monthly_report');
 });
 
 it('scopes the owner report to a selected cycle and shows cycle meta', function (): void {
@@ -393,7 +498,7 @@ it('scopes the owner report to a selected cycle and shows cycle meta', function 
         ->assertSee('৳400.00')
         ->assertDontSee('৳999.00')
         ->assertSee(__('messages.owner_share'))
-        ->assertDontSee(__('messages.monthly_report'));
+        ->assertDontSee('monthly_report');
 
     // The cycle wins over conflicting from/to filters.
     $this->actingAs($owner)

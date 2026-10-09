@@ -8,7 +8,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">🔀 {{ __('messages.type') }}</label>
-                <select name="type" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                <select name="type" onchange="this.form.submit()" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
                     @foreach(['expenses', 'purchases', 'sales'] as $t)
                         <option value="{{ $t }}" {{ $type === $t ? 'selected' : '' }}>{{ __('messages.'.$t) }}</option>
                     @endforeach
@@ -16,7 +16,7 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">👥 {{ __('messages.partner') }}</label>
-                <select name="partner_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                <select name="partner_id" onchange="this.form.submit()" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
                     <option value="0">{{ __('messages.all') }}</option>
                     @foreach($partners as $partner)
                         <option value="{{ $partner->id }}" {{ $partnerId === $partner->id ? 'selected' : '' }}>{{ $partner->name }}</option>
@@ -25,16 +25,13 @@
             </div>
             <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">🏷️ {{ __('messages.status') }}</label>
-                <select name="status" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                <select name="status" onchange="this.form.submit()" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
                     @foreach(['all', 'pending', 'confirmed', 'rejected'] as $s)
                         <option value="{{ $s }}" {{ $status === $s ? 'selected' : '' }}>{{ __('messages.'.$s) }}</option>
                     @endforeach
                 </select>
             </div>
         </div>
-        <button type="submit" class="mt-3 w-full sm:w-auto bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg px-6 py-3">
-            🔍 {{ __('messages.filter') }}
-        </button>
     </form>
 
     {{-- Entry cards --}}

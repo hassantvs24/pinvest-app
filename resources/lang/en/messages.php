@@ -164,7 +164,6 @@ return [
     'purchase_report' => 'Purchase Report',
     'expense_report' => 'Expense Report',
     'partner_commission_report' => 'Partner & Commission Report',
-    'monthly_report' => 'Monthly Report',
     'commission_earned' => 'Commission earned',
     'commission_paid' => 'Commission paid',
     'commission_due' => 'Commission due',
@@ -211,6 +210,7 @@ return [
     'payout_history_hint' => 'Payouts appear here automatically when you approve a partner\'s request — nothing to enter manually.',
 
     // Owner-managed commission cycles
+    'estimated_hint' => '(estimated)',
     'cycle' => 'Cycle',
     'all_cycles' => 'All cycles (custom range)',
     'status_open' => 'Open',
