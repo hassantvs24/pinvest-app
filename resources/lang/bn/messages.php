@@ -1,0 +1,146 @@
+<?php
+
+/**
+ * Bangla translations — default language of the app.
+ */
+return [
+    // Navigation
+    'home' => 'হোম',
+    'dashboard' => 'ড্যাশবোর্ড',
+    'my_entries' => 'আমার এন্ট্রি',
+    'entries' => 'এন্ট্রি',
+    'entry' => 'এন্ট্রি',
+    'masters' => 'মাস্টার',
+    'partners' => 'পার্টনার',
+    'profile' => 'প্রোফাইল',
+    'leaderboard' => 'পার্টনার তালিকা',
+
+    // Auth
+    'login' => 'লগইন',
+    'register' => 'রেজিস্টার',
+    'create_account' => 'নতুন অ্যাকাউন্ট খুলুন',
+    'logout' => 'লগআউট',
+    'email_or_phone' => 'ইমেইল অথবা মোবাইল নম্বর',
+    'mobile_number' => 'মোবাইল নম্বর',
+    'email' => 'ইমেইল',
+    'password' => 'পাসওয়ার্ড',
+    'confirm_password' => 'পাসওয়ার্ড নিশ্চিত করুন',
+    'name' => 'নাম',
+    'already_have_account' => 'অ্যাকাউন্ট আছে? লগইন করুন',
+    'no_account' => 'অ্যাকাউন্ট নেই? রেজিস্টার করুন',
+    'invalid_credentials' => 'ভুল তথ্য দেওয়া হয়েছে',
+    'inactive_account' => 'আপনার অ্যাকাউন্ট বন্ধ আছে',
+
+    // Language
+    'select_language' => 'আপনার ভাষা নির্বাচন করুন',
+    'language' => 'ভাষা',
+    'change_language' => 'ভাষা পরিবর্তন',
+    'language_updated' => 'ভাষা সংরক্ষণ করা হয়েছে',
+
+    // Buttons / actions
+    'add_sale' => 'বিক্রি যোগ করুন',
+    'add_purchase' => 'ক্রয় যোগ করুন',
+    'add_expense' => 'খরচ যোগ করুন',
+    'add_investment' => 'বিনিয়োগ যোগ করুন',
+    'add_payout' => 'পেমেন্ট যোগ করুন',
+    'submit_entry' => 'এন্ট্রি জমা দিন',
+    'confirm' => 'নিশ্চিত করুন',
+    'reject' => 'বাতিল করুন',
+    'delete' => 'মুছুন',
+    'edit' => 'এডিট',
+    'save' => 'সংরক্ষণ',
+    'back' => 'পেছনে',
+    'new_partner' => 'নতুন পার্টনার',
+    'add_item' => 'যোগ করুন',
+    'item_name' => 'নাম',
+    'default_price' => 'ডিফল্ট দাম',
+    'active' => 'সক্রিয়',
+    'inactive' => 'নিষ্ক্রিয়',
+
+    // Status
+    'status' => 'স্ট্যাটাস',
+    'pending' => 'অপেক্ষমাণ',
+    'confirmed' => 'নিশ্চিত',
+    'rejected' => 'বাতিল',
+    'all' => 'সব',
+    'type' => 'ধরন',
+    'filter' => 'ফিল্টার',
+    'select_option' => '-- নির্বাচন করুন --',
+    'waiting_owner' => 'Owner এর নিশ্চিতকরণের অপেক্ষায়',
+
+    // Field labels
+    'amount' => 'টাকার পরিমাণ (৳)',
+    'quantity' => 'পরিমাণ',
+    'unit_price' => 'একক দাম (৳)',
+    'total' => 'মোট',
+    'date' => 'তারিখ',
+    'note' => 'নোট',
+    'expense_head' => 'খরচের খাত',
+    'purchase_item' => 'ক্রয়ের আইটেম',
+    'sale_item' => 'বিক্রির আইটেম',
+    'item' => 'আইটেম',
+    'partner' => 'পার্টনার',
+    'phone' => 'মোবাইল নম্বর',
+    'commission_rate' => 'কমিশন হার (%)',
+
+    // Summary cards
+    'total_investment' => 'মোট বিনিয়োগ',
+    'total_purchase' => 'মোট ক্রয়',
+    'total_expense' => 'মোট খরচ',
+    'total_sales' => 'মোট বিক্রি',
+    'total_commission' => 'মোট কমিশন',
+    'total_payout' => 'মোট পেমেন্ট',
+    'net_profit' => 'নিট লাভ',
+    'cash_in_hand' => 'হাতে নগদ',
+    'my_sales' => 'আমার বিক্রি',
+    'my_commission' => 'আমার কমিশন',
+    'my_purchase' => 'আমার ক্রয়',
+    'my_expense' => 'আমার খরচ',
+    'your_commission' => 'আপনার কমিশন',
+    'commission' => 'কমিশন',
+    'summary' => 'সারসংক্ষেপ',
+    'pending_entries' => 'অপেক্ষমাণ এন্ট্রি',
+    'pending_confirmations' => 'নিশ্চিতকরণ বাকি',
+
+    // Master sections
+    'expense_heads' => 'খরচের খাত',
+    'purchase_items' => 'ক্রয়ের আইটেম',
+    'sale_items' => 'বিক্রির আইটেম',
+
+    // Flash messages
+    'saved_success' => 'সফলভাবে সংরক্ষণ হয়েছে',
+    'entry_confirmed' => 'এন্ট্রি নিশ্চিত হয়েছে',
+    'entry_rejected' => 'এন্ট্রি বাতিল করা হয়েছে',
+    'entry_deleted' => 'এন্ট্রি মুছে ফেলা হয়েছে',
+    'entry_updated' => 'এন্ট্রি হালনাগাদ হয়েছে',
+    'item_added' => 'নতুন আইটেম যোগ হয়েছে',
+    'item_deleted' => 'আইটেম মুছে ফেলা হয়েছে',
+    'cannot_delete_in_use' => 'এই আইটেম ব্যবহার করা হয়েছে, তাই মুছা যাবে না',
+    'partner_added' => 'নতুন পার্টনার যোগ হয়েছে',
+    'partner_updated' => 'পার্টনারের তথ্য হালনাগাদ হয়েছে',
+    'partner_deleted' => 'পার্টনার মুছে ফেলা হয়েছে',
+    'investment_added' => 'বিনিয়োগ যোগ হয়েছে',
+    'payout_added' => 'পেমেন্ট যোগ হয়েছে',
+    'error_occurred' => 'কিছু একটা ভুল হয়েছে',
+
+    // Confirmations
+    'are_you_sure' => 'আপনি কি নিশ্চিত?',
+    'submit_confirm' => 'আপনি কি নিশ্চিত এই এন্ট্রি জমা দিতে চান?',
+    'confirm_delete' => 'এটি স্থায়ীভাবে মুছে যাবে। আপনি কি নিশ্চিত?',
+    'confirm_reject' => 'আপনি কি এই এন্ট্রি বাতিল করতে চান?',
+    'confirm_update' => 'আপনি কি পরিবর্তন সংরক্ষণ করতে চান?',
+
+    // Misc
+    'no_entries' => 'কোনো এন্ট্রি নেই',
+    'no_partners' => 'কোনো পার্টনার নেই',
+    'no_items' => 'কোনো আইটেম নেই',
+    'role_owner' => 'মালিক',
+    'role_partner' => 'পার্টনার',
+    'actions' => 'অ্যাকশন',
+    'recent_pending' => 'নতুন অপেক্ষমাণ এন্ট্রি',
+    'forbidden' => 'আপনার এই পেজ দেখার অনুমতি নেই',
+    'back_home' => 'হোমে ফিরে যান',
+    'optional' => '(ঐচ্ছিক)',
+    'entry_history' => 'এন্ট্রি তালিকা',
+    'quick_add' => 'দ্রুত যোগ করুন',
+];

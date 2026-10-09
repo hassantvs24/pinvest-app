@@ -1,0 +1,146 @@
+<?php
+
+/**
+ * English translations.
+ */
+return [
+    // Navigation
+    'home' => 'Home',
+    'dashboard' => 'Dashboard',
+    'my_entries' => 'My Entries',
+    'entries' => 'Entries',
+    'entry' => 'Entry',
+    'masters' => 'Masters',
+    'partners' => 'Partners',
+    'profile' => 'Profile',
+    'leaderboard' => 'Partner Leaderboard',
+
+    // Auth
+    'login' => 'Login',
+    'register' => 'Register',
+    'create_account' => 'Create new account',
+    'logout' => 'Logout',
+    'email_or_phone' => 'Email or mobile number',
+    'mobile_number' => 'Mobile number',
+    'email' => 'Email',
+    'password' => 'Password',
+    'confirm_password' => 'Confirm password',
+    'name' => 'Name',
+    'already_have_account' => 'Have an account? Login',
+    'no_account' => 'No account? Register',
+    'invalid_credentials' => 'Invalid credentials',
+    'inactive_account' => 'Your account is disabled',
+
+    // Language
+    'select_language' => 'Choose your language',
+    'language' => 'Language',
+    'change_language' => 'Change language',
+    'language_updated' => 'Language saved',
+
+    // Buttons / actions
+    'add_sale' => 'Add Sale',
+    'add_purchase' => 'Add Purchase',
+    'add_expense' => 'Add Expense',
+    'add_investment' => 'Add Investment',
+    'add_payout' => 'Add Payout',
+    'submit_entry' => 'Submit Entry',
+    'confirm' => 'Confirm',
+    'reject' => 'Reject',
+    'delete' => 'Delete',
+    'edit' => 'Edit',
+    'save' => 'Save',
+    'back' => 'Back',
+    'new_partner' => 'New Partner',
+    'add_item' => 'Add',
+    'item_name' => 'Name',
+    'default_price' => 'Default price',
+    'active' => 'Active',
+    'inactive' => 'Inactive',
+
+    // Status
+    'status' => 'Status',
+    'pending' => 'Pending',
+    'confirmed' => 'Confirmed',
+    'rejected' => 'Rejected',
+    'all' => 'All',
+    'type' => 'Type',
+    'filter' => 'Filter',
+    'select_option' => '-- Select --',
+    'waiting_owner' => 'Waiting for Owner confirmation',
+
+    // Field labels
+    'amount' => 'Amount (৳)',
+    'quantity' => 'Quantity',
+    'unit_price' => 'Unit price (৳)',
+    'total' => 'Total',
+    'date' => 'Date',
+    'note' => 'Note',
+    'expense_head' => 'Expense head',
+    'purchase_item' => 'Purchase item',
+    'sale_item' => 'Sale item',
+    'item' => 'Item',
+    'partner' => 'Partner',
+    'phone' => 'Mobile number',
+    'commission_rate' => 'Commission rate (%)',
+
+    // Summary cards
+    'total_investment' => 'Total Investment',
+    'total_purchase' => 'Total Purchase',
+    'total_expense' => 'Total Expense',
+    'total_sales' => 'Total Sales',
+    'total_commission' => 'Total Commission',
+    'total_payout' => 'Total Payout',
+    'net_profit' => 'Net Profit',
+    'cash_in_hand' => 'Cash in Hand',
+    'my_sales' => 'My Sales',
+    'my_commission' => 'My Commission',
+    'my_purchase' => 'My Purchase',
+    'my_expense' => 'My Expense',
+    'your_commission' => 'Your Commission',
+    'commission' => 'Commission',
+    'summary' => 'Summary',
+    'pending_entries' => 'Pending entries',
+    'pending_confirmations' => 'Pending confirmations',
+
+    // Master sections
+    'expense_heads' => 'Expense Heads',
+    'purchase_items' => 'Purchase Items',
+    'sale_items' => 'Sale Items',
+
+    // Flash messages
+    'saved_success' => 'Saved successfully',
+    'entry_confirmed' => 'Entry confirmed',
+    'entry_rejected' => 'Entry rejected',
+    'entry_deleted' => 'Entry deleted',
+    'entry_updated' => 'Entry updated',
+    'item_added' => 'New item added',
+    'item_deleted' => 'Item deleted',
+    'cannot_delete_in_use' => 'This item is in use and cannot be deleted',
+    'partner_added' => 'New partner added',
+    'partner_updated' => 'Partner updated',
+    'partner_deleted' => 'Partner deleted',
+    'investment_added' => 'Investment added',
+    'payout_added' => 'Payout added',
+    'error_occurred' => 'Something went wrong',
+
+    // Confirmations
+    'are_you_sure' => 'Are you sure?',
+    'submit_confirm' => 'Are you sure you want to submit this entry?',
+    'confirm_delete' => 'This will be permanently deleted. Are you sure?',
+    'confirm_reject' => 'Do you want to reject this entry?',
+    'confirm_update' => 'Do you want to save the changes?',
+
+    // Misc
+    'no_entries' => 'No entries yet',
+    'no_partners' => 'No partners yet',
+    'no_items' => 'No items yet',
+    'role_owner' => 'Owner',
+    'role_partner' => 'Partner',
+    'actions' => 'Actions',
+    'recent_pending' => 'New pending entries',
+    'forbidden' => 'You are not allowed to view this page',
+    'back_home' => 'Back to home',
+    'optional' => '(optional)',
+    'entry_history' => 'Entry history',
+    'quick_add' => 'Quick add',
+];
