@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Owner;
 
 use App\EntryStatus;
 use App\Http\Controllers\Controller;
+use App\Models\CommissionPeriod;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Purchase;
@@ -116,10 +117,23 @@ class EntryController extends Controller
     }
 
     /**
+     * Whether a commission cycle is currently open (entries can only be
+     * acted on while one is open).
+     */
+    private function cycleOpen(): bool
+    {
+        return CommissionPeriod::query()->open()->exists();
+    }
+
+    /**
      * Confirm a pending entry.
      */
     public function confirm(string $type, int $entry, Request $request): RedirectResponse
     {
+        if (! $this->cycleOpen()) {
+            return back()->with('warning', __('messages.confirm_blocked_no_period'));
+        }
+
         $model = $this->findEntry($type, $entry);
 
         $model->update([
@@ -137,6 +151,10 @@ class EntryController extends Controller
      */
     public function reject(string $type, int $entry, Request $request): RedirectResponse
     {
+        if (! $this->cycleOpen()) {
+            return back()->with('warning', __('messages.confirm_blocked_no_period'));
+        }
+
         $model = $this->findEntry($type, $entry);
 
         $model->update([
@@ -154,6 +172,10 @@ class EntryController extends Controller
      */
     public function update(string $type, int $entry, Request $request): RedirectResponse
     {
+        if (! $this->cycleOpen()) {
+            return back()->with('warning', __('messages.confirm_blocked_no_period'));
+        }
+
         $config = $this->typeConfig($type);
         $model = $this->findEntry($type, $entry);
 
@@ -197,14 +219,11 @@ class EntryController extends Controller
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $total = round($validated['quantity'] * $validated['unit_price'], 2);
-
             $model->update([
                 'sale_item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
-                'total' => $total,
-                'commission_amount' => round($total * ((float) $model->commission_rate) / 100, 2),
+                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'entry_date' => $validated['entry_date'],
                 'note' => $validated['note'] ?? null,
             ]);

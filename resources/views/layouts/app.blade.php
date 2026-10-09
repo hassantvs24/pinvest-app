@@ -114,21 +114,24 @@
                 var price = parseFloat($('#unit_price').val()) || 0;
                 var total = qty * price;
                 $('#total_display').val(total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-                var rate = parseFloat($('#commission_rate').val()) || 0;
-                var commission = total * rate / 100;
-                $('#commission_preview').text(commission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
             }
             $(document).on('input', '#quantity, #unit_price', recalcTotal);
             recalcTotal();
 
-            // Sale entry: auto-fill unit price from the selected item's default price
-            $(document).on('change', '#head_id[data-autofill-price="1"]', function () {
-                var price = $(this).find('option:selected').data('price');
+            // Item selected: auto-fill sale price + show the item's unit
+            $(document).on('change', '#head_id', function () {
+                var selected = $(this).find('option:selected');
+                var unit = selected.data('unit');
+                if (unit !== undefined) {
+                    $('#unit_label').text(unit);
+                }
+                var price = selected.data('price');
                 if (price) {
                     $('#unit_price').val(price);
                     recalcTotal();
                 }
             });
+            $('#head_id').trigger('change');
 
             // Confirm popup before submitting any entry form
             $(document).on('submit', 'form.js-confirm-submit', function () {

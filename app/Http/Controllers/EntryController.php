@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\EntryStatus;
+use App\Models\CommissionPeriod;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Purchase;
@@ -15,15 +16,17 @@ use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Partner-side entry management. Partners can only create and view
- * their OWN entries — never edit or delete.
+ * Entry management (partners AND the owner). Partners create their own
+ * entries as "pending"; the owner's entries are auto-confirmed since the
+ * owner is the approver. Nothing can be entered while no commission
+ * cycle is open.
  */
 class EntryController extends Controller
 {
     /**
      * Allowed entry types => configuration.
      *
-     * @return array<string, array{model: class-string<Model>, items: class-string<Model>|null, item_relation: string|null, label: string, route: string, icon: string, color: string, has_quantity: bool, has_unit_price: bool, has_head: bool}
+     * @return array<string, array{model: class-string<Model>, items: class-string<Model>|null, item_relation: string|null, label: string, icon: string, has_quantity: bool, has_unit: bool, has_head: bool}
      */
     private function types(): array
     {
@@ -33,11 +36,9 @@ class EntryController extends Controller
                 'items' => ExpenseHead::class,
                 'item_relation' => 'expenseHead',
                 'label' => 'expenses',
-                
                 'icon' => '💸',
-                'color' => 'rose',
                 'has_quantity' => false,
-                'has_unit_price' => false,
+                'has_unit' => false,
                 'has_head' => true,
             ],
             'purchases' => [
@@ -45,11 +46,9 @@ class EntryController extends Controller
                 'items' => PurchaseItem::class,
                 'item_relation' => 'purchaseItem',
                 'label' => 'purchases',
-                
                 'icon' => '🛒',
-                'color' => 'orange',
                 'has_quantity' => true,
-                'has_unit_price' => true,
+                'has_unit' => true,
                 'has_head' => false,
             ],
             'sales' => [
@@ -57,11 +56,9 @@ class EntryController extends Controller
                 'items' => SaleItem::class,
                 'item_relation' => 'saleItem',
                 'label' => 'sales',
-                
                 'icon' => '💰',
-                'color' => 'blue',
                 'has_quantity' => true,
-                'has_unit_price' => true,
+                'has_unit' => true,
                 'has_head' => false,
             ],
         ];
@@ -70,7 +67,7 @@ class EntryController extends Controller
     /**
      * Resolve a type key into its config or abort 404.
      *
-     * @return array{model: class-string<Model>, items: class-string<Model>|null, item_relation: string|null, label: string, route: string, icon: string, color: string, has_quantity: bool, has_unit_price: bool, has_head: bool}
+     * @return array{model: class-string<Model>, items: class-string<Model>|null, item_relation: string|null, label: string, icon: string, has_quantity: bool, has_unit: bool, has_head: bool}
      */
     private function typeConfig(string $type): array
     {
@@ -80,7 +77,15 @@ class EntryController extends Controller
     }
 
     /**
-     * List the partner's own entries with a status filter tab.
+     * The currently open commission cycle, if any.
+     */
+    private function openPeriod(): ?CommissionPeriod
+    {
+        return CommissionPeriod::query()->open()->latest('id')->first();
+    }
+
+    /**
+     * List the user's own entries with a status filter tab.
      */
     public function index(string $type, Request $request): View
     {
@@ -110,9 +115,16 @@ class EntryController extends Controller
 
     /**
      * Show the entry form (dropdowns from active master data only).
+     * Blocked while no cycle is open.
      */
-    public function create(string $type, Request $request): View
+    public function create(string $type, Request $request): View|RedirectResponse
     {
+        if (! $this->openPeriod()) {
+            return redirect()
+                ->route('entries.index', ['type' => $type])
+                ->with('warning', __('messages.entry_blocked_no_period'));
+        }
+
         $config = $this->typeConfig($type);
 
         /** @var class-string<Model>|null $itemsClass */
@@ -122,19 +134,27 @@ class EntryController extends Controller
             'type' => $type,
             'config' => $config,
             'items' => $itemsClass::query()->active()->orderBy('name')->get(),
-            'commissionRate' => (float) $request->user()->commission_rate,
             'today' => now()->format('Y-m-d'),
         ]);
     }
 
     /**
-     * Store a new entry as "pending". Commission is always calculated
-     * server-side from the partner's saved rate.
+     * Store a new entry. Partners' entries are "pending" awaiting the
+     * owner; the owner's own entries are auto-confirmed. Blocked while
+     * no cycle is open.
      */
     public function store(string $type, Request $request): RedirectResponse
     {
+        if (! $this->openPeriod()) {
+            return back()->with('warning', __('messages.entry_blocked_no_period'));
+        }
+
         $config = $this->typeConfig($type);
         $user = $request->user();
+        $status = $user->isOwner() ? EntryStatus::Confirmed : EntryStatus::Pending;
+        $confirmed = $user->isOwner()
+            ? ['confirmed_by' => $user->id, 'confirmed_at' => now()]
+            : ['confirmed_by' => null, 'confirmed_at' => null];
 
         if ($type === 'expenses') {
             $validated = $request->validate([
@@ -150,7 +170,8 @@ class EntryController extends Controller
                 'amount' => $validated['amount'],
                 'note' => $validated['note'] ?? null,
                 'entry_date' => $validated['entry_date'],
-                'status' => EntryStatus::Pending,
+                'status' => $status,
+                ...$confirmed,
             ]);
         } elseif ($type === 'purchases') {
             $validated = $request->validate([
@@ -169,7 +190,8 @@ class EntryController extends Controller
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'note' => $validated['note'] ?? null,
                 'entry_date' => $validated['entry_date'],
-                'status' => EntryStatus::Pending,
+                'status' => $status,
+                ...$confirmed,
             ]);
         } else {
             $validated = $request->validate([
@@ -180,25 +202,24 @@ class EntryController extends Controller
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $total = round($validated['quantity'] * $validated['unit_price'], 2);
-            $commissionRate = (float) $user->commission_rate;
-
             Sale::query()->create([
                 'user_id' => $user->id,
                 'sale_item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
-                'total' => $total,
-                'commission_rate' => $commissionRate,
-                'commission_amount' => round($total * $commissionRate / 100, 2),
+                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'note' => $validated['note'] ?? null,
                 'entry_date' => $validated['entry_date'],
-                'status' => EntryStatus::Pending,
+                'status' => $status,
+                ...$confirmed,
             ]);
         }
 
         return redirect()
             ->route('entries.index', ['type' => $type])
-            ->with('warning', __('messages.waiting_owner'));
+            ->with(
+                $user->isOwner() ? 'success' : 'warning',
+                $user->isOwner() ? __('messages.saved_success') : __('messages.waiting_owner'),
+            );
     }
 }

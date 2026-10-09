@@ -40,18 +40,13 @@
                         <div class="font-bold">{{ $entry->{$config['item_relation']}->name ?? '—' }}</div>
                         @if($type !== 'expenses')
                             <div class="text-sm text-gray-500">
-                                {{ $entry->quantity }} × ৳{{ number_format((float) $entry->unit_price, 2) }}
+                                {{ $entry->quantity }} {{ \App\Support\ItemUnits::label($entry->{$config['item_relation']}->unit ?? null) }} × ৳{{ number_format((float) $entry->unit_price, 2) }}
                             </div>
                         @endif
                         @if($entry->note)
                             <div class="text-sm text-gray-500">📝 {{ $entry->note }}</div>
                         @endif
                         <div class="text-sm text-gray-500">📅 {{ $entry->entry_date->format('d M Y') }}</div>
-                        @if($type === 'sales' && $entry->status->value === 'confirmed')
-                            <div class="text-sm text-violet-600">🤝 {{ __('messages.your_commission') }} {{ __('messages.approx_label') }}:
-                                ৳{{ number_format((float) $entry->commission_amount, 2) }}
-                            </div>
-                        @endif
                     </div>
                     <div class="text-right shrink-0">
                         <div class="text-lg font-bold">

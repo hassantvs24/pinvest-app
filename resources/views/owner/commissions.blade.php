@@ -32,13 +32,10 @@
                 @endif
             </ul>
 
-            <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
-                @csrf
-                <input type="hidden" name="closed_at" value="{{ $today }}">
-                <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl py-3">
-                    🔒 {{ __('messages.close_period') }} ({{ __('messages.today') }}: {{ \Illuminate\Support\Carbon::parse($today)->format('d M Y') }})
-                </button>
-            </form>
+            <a href="{{ route('owner.commissions.close_preview') }}"
+               class="block w-full bg-emerald-700 hover:bg-emerald-800 text-white text-center font-bold rounded-xl py-3">
+                🔒 {{ __('messages.close_period') }}
+            </a>
             <p class="text-xs text-gray-500 mt-2">💡 {{ __('messages.close_period_hint') }}</p>
         </div>
     @else
@@ -157,7 +154,7 @@
                 <div>
                     <div class="font-bold">👤 {{ $settlement->user->name }}</div>
                     <div class="text-sm text-gray-500">
-                        📅 {{ $settlement->period_start->format('d M') }} – {{ $settlement->period_end->format('d M Y') }}
+                        🗓️ {{ $settlement->period?->label ?: $settlement->period_start->format('d M').' – '.$settlement->period_end->format('d M Y') }}
                         · 📈 ৳{{ number_format((float) $settlement->business_profit, 2) }}
                         · 🤝 {{ $settlement->commission_rate }}%
                     </div>

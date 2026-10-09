@@ -36,8 +36,6 @@ return new class extends Migration
             $table->unsignedInteger('quantity');
             $table->decimal('unit_price', 12, 2);
             $table->decimal('total', 12, 2);
-            $table->decimal('commission_rate', 5, 2)->default(0);
-            $table->decimal('commission_amount', 12, 2)->default(0);
             $table->text('note')->nullable();
             $table->date('entry_date');
             $table->string('status')->default('pending');

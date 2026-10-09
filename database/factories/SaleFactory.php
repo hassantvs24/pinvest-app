@@ -25,8 +25,6 @@ class SaleFactory extends Factory
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total' => $total,
-            'commission_rate' => 0,
-            'commission_amount' => 0,
             'note' => fake()->optional()->sentence(),
             'entry_date' => now(),
             'status' => EntryStatus::Pending,

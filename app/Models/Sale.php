@@ -3,16 +3,17 @@
 namespace App\Models;
 
 use App\EntryStatus;
+use Database\Factories\SaleFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'sale_item_id', 'quantity', 'unit_price', 'total', 'commission_rate', 'commission_amount', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
+#[Fillable(['user_id', 'sale_item_id', 'quantity', 'unit_price', 'total', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
 class Sale extends Model
 {
-    /** @use HasFactory<\Database\Factories\SaleFactory> */
+    /** @use HasFactory<SaleFactory> */
     use HasFactory;
 
     /**
@@ -24,8 +25,6 @@ class Sale extends Model
             'quantity' => 'integer',
             'unit_price' => 'decimal:2',
             'total' => 'decimal:2',
-            'commission_rate' => 'decimal:2',
-            'commission_amount' => 'decimal:2',
             'entry_date' => 'date',
             'status' => EntryStatus::class,
             'confirmed_at' => 'datetime',

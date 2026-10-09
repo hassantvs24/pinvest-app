@@ -65,17 +65,10 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('settings', function (Blueprint $table): void {
-            $table->id();
-            $table->string('key')->unique();
-            $table->string('value')->nullable();
-            $table->timestamps();
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('settings');
         Schema::dropIfExists('commission_periods');
         Schema::dropIfExists('owner_withdrawals');
         Schema::dropIfExists('payout_requests');

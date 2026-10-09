@@ -13,6 +13,7 @@ use App\Models\Sale;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
+use App\Support\ItemUnits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -140,6 +141,7 @@ class ReportController extends Controller
             ->groupBy($fk)
             ->map(fn (Collection $group) => [
                 'name' => $group->first()->{$relation}->name ?? '—',
+                'unit' => ItemUnits::label($group->first()->{$relation}->unit ?? null),
                 'quantity' => (int) $group->sum('quantity'),
                 'total' => (float) $group->sum('total'),
             ])

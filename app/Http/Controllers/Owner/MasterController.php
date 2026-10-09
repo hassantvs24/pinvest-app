@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExpenseHead;
 use App\Models\PurchaseItem;
 use App\Models\SaleItem;
+use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +21,7 @@ class MasterController extends Controller
     /**
      * Allowed master groups => configuration.
      *
-     * @return array<string, array{model: class-string<Model>, has_price: bool, relation: string}>
+     * @return array<string, array{model: class-string<Model>, has_price: bool, has_unit: bool, relation: string}>
      */
     private function groups(): array
     {
@@ -28,23 +29,26 @@ class MasterController extends Controller
             'expense-heads' => [
                 'model' => ExpenseHead::class,
                 'has_price' => false,
+                'has_unit' => false,
                 'relation' => 'expenses',
             ],
             'purchase-items' => [
                 'model' => PurchaseItem::class,
                 'has_price' => false,
+                'has_unit' => true,
                 'relation' => 'purchases',
             ],
             'sale-items' => [
                 'model' => SaleItem::class,
                 'has_price' => true,
+                'has_unit' => true,
                 'relation' => 'sales',
             ],
         ];
     }
 
     /**
-     * @return array{model: class-string<Model>, has_price: bool, relation: string}
+     * @return array{model: class-string<Model>, has_price: bool, has_unit: bool, relation: string}
      */
     private function groupConfig(string $group): array
     {
@@ -77,6 +81,9 @@ class MasterController extends Controller
         if ($config['has_price']) {
             $rules['default_price'] = ['required', 'numeric', 'min:0'];
         }
+        if ($config['has_unit']) {
+            $rules['unit'] = ['required', ItemUnits::rule()];
+        }
 
         $validated = $request->validate($rules);
 
@@ -86,6 +93,7 @@ class MasterController extends Controller
         $modelClass::query()->create([
             'name' => $validated['name'],
             'default_price' => $config['has_price'] ? $validated['default_price'] : null,
+            'unit' => $config['has_unit'] ? $validated['unit'] : 'pcs',
         ]);
 
         return back()->with('success', __('messages.item_added'));

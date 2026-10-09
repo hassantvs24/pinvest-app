@@ -14,6 +14,7 @@ class PurchaseItemFactory extends Factory
     {
         return [
             'name' => fake()->unique()->word(),
+            'unit' => 'pcs',
             'is_active' => true,
         ];
     }

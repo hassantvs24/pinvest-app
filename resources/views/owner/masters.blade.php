@@ -5,9 +5,9 @@
 @section('content')
     @php
         $sections = [
-            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false],
-            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false],
-            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true],
+            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false],
+            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false, 'has_unit' => true],
+            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true, 'has_unit' => true],
         ];
     @endphp
 
@@ -25,6 +25,13 @@
                         <input type="number" name="default_price" placeholder="{{ __('messages.default_price') }} (৳)" step="0.01" min="0" required
                                class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2">
                     @endif
+                    @if($section['has_unit'])
+                        <select name="unit" class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2 bg-white">
+                            @foreach(\App\Support\ItemUnits::options() as $value => $label)
+                                <option value="{{ $value }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    @endif
                     <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg py-3">
                         ➕ {{ __('messages.add_item') }}
                     </button>
@@ -40,6 +47,9 @@
                                 </div>
                                 @if($section['has_price'])
                                     <div class="text-xs text-gray-500">৳{{ number_format((float) $item->default_price, 2) }}</div>
+                                @endif
+                                @if($section['has_unit'])
+                                    <div class="text-xs text-emerald-700">⚖️ {{ \App\Support\ItemUnits::label($item->unit) }}</div>
                                 @endif
                             </div>
                             <div class="flex items-center gap-1 shrink-0">

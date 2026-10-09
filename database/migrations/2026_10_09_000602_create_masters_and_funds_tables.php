@@ -21,6 +21,7 @@ return new class extends Migration
         Schema::create('purchase_items', function (Blueprint $table): void {
             $table->id();
             $table->string('name');
+            $table->string('unit')->default('pcs'); // kg, gram, tola, pcs, ml
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
@@ -29,6 +30,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->decimal('default_price', 10, 2)->default(0);
+            $table->string('unit')->default('pcs'); // kg, gram, tola, pcs, ml
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
@@ -58,5 +60,6 @@ return new class extends Migration
         Schema::dropIfExists('sale_items');
         Schema::dropIfExists('purchase_items');
         Schema::dropIfExists('expense_heads');
+        // unit column drops with the tables
     }
 };

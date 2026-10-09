@@ -85,6 +85,7 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/commissions', [OwnerCommissionController::class, 'index'])->name('commissions.index');
         Route::post('/commissions/open', [OwnerCommissionController::class, 'openPeriod'])->name('commissions.open');
+        Route::get('/commissions/close', [OwnerCommissionController::class, 'closePreview'])->name('commissions.close_preview');
         Route::post('/commissions/close', [OwnerCommissionController::class, 'closePeriod'])->name('commissions.close');
         Route::patch('/commissions/requests/{request}/approve', [OwnerCommissionController::class, 'approveRequest'])->name('commissions.approve');
         Route::patch('/commissions/requests/{request}/reject', [OwnerCommissionController::class, 'rejectRequest'])->name('commissions.reject');

@@ -16,15 +16,16 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Owner-only: commission periods (open/close), payout requests and
- * settlements. The owner opens a period with opening cash/investment and
- * closes it manually; profit and commissions are computed at closing.
+ * Owner-only: commission cycles (open/close), payout requests and
+ * settlements. The owner opens a cycle with opening cash/investment and
+ * closes it manually; at closing, cycle profit × each partner's rate
+ * becomes that partner's commission (rate taken at closing time).
  */
 class CommissionController extends Controller
 {
     /**
-     * Show the open period (or the open form), pending payout requests,
-     * closed periods and settlements.
+     * Show the open cycle (or the open form), pending payout requests,
+     * closed cycles and settlements.
      */
     public function index(): View
     {
@@ -32,7 +33,7 @@ class CommissionController extends Controller
 
         return view('owner.commissions', [
             'openPeriod' => $openPeriod,
-            'openDays' => $openPeriod ? max(1, $openPeriod->opened_at->diffInDays(now()) + 1) : 0,
+            'openDays' => $openPeriod ? max(1, (int) $openPeriod->opened_at->diffInDays(now()) + 1) : 0,
             'requests' => PayoutRequest::query()->with('user')->pending()->latest('id')->get(),
             'closedPeriods' => CommissionPeriod::query()->closed()
                 ->withCount('settlements')
@@ -40,7 +41,7 @@ class CommissionController extends Controller
                 ->orderByDesc('id')
                 ->get(),
             'settlements' => CommissionSettlement::query()
-                ->with('user')
+                ->with(['user', 'period'])
                 ->orderByDesc('period_start')
                 ->orderByDesc('id')
                 ->paginate(15),
@@ -51,8 +52,8 @@ class CommissionController extends Controller
     }
 
     /**
-     * Open a new commission period (only one open at a time). Optionally
-     * records opening cash and an opening investment entry.
+     * Open a new cycle (only one open at a time). Optionally records
+     * opening cash and an opening investment entry.
      */
     public function openPeriod(Request $request): RedirectResponse
     {
@@ -78,8 +79,35 @@ class CommissionController extends Controller
     }
 
     /**
-     * Close the open period: profit/loss is computed and settlements are
-     * created per partner (profit x rate). Idempotent per period.
+     * Close summary (preview): shows cycle profit/loss and exactly what
+     * each partner will receive — nothing is written to the database.
+     */
+    public function closePreview(): View|RedirectResponse
+    {
+        $period = CommissionPeriod::query()->open()->latest('id')->first();
+
+        if (! $period) {
+            return redirect()->route('owner.commissions.index');
+        }
+
+        $closedAt = Carbon::today();
+        $profit = CommissionSettlementService::periodProfit($period->opened_at, $closedAt);
+        $rows = CommissionSettlementService::settlementRows($profit);
+        $totalCommission = array_sum(array_column($rows, 'amount'));
+
+        return view('owner.close-preview', [
+            'period' => $period,
+            'closedAt' => $closedAt,
+            'profit' => $profit,
+            'rows' => $rows,
+            'totalCommission' => $totalCommission,
+            'ownerShare' => $profit - $totalCommission,
+        ]);
+    }
+
+    /**
+     * Close the open cycle: profit/loss is computed and settlements are
+     * created per partner (profit × rate). Idempotent per cycle.
      */
     public function closePeriod(Request $request): RedirectResponse
     {
@@ -92,15 +120,19 @@ class CommissionController extends Controller
         $result = CommissionSettlementService::closePeriod($period, Carbon::parse($validated['closed_at']));
 
         if ($result['profit'] <= 0) {
-            return back()->with('warning', __('messages.period_closed_loss', [
-                'profit' => number_format($result['profit'], 2),
-            ]));
+            return redirect()
+                ->route('owner.commissions.index')
+                ->with('warning', __('messages.period_closed_loss', [
+                    'profit' => number_format($result['profit'], 2),
+                ]));
         }
 
-        return back()->with('success', __('messages.period_closed_profit', [
-            'profit' => number_format($result['profit'], 2),
-            'count' => $result['created'],
-        ]));
+        return redirect()
+            ->route('owner.commissions.index')
+            ->with('success', __('messages.period_closed_profit', [
+                'profit' => number_format($result['profit'], 2),
+                'count' => $result['created'],
+            ]));
     }
 
     /**

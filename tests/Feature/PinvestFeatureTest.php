@@ -8,12 +8,14 @@ use App\Models\ExpenseHead;
 use App\Models\Investment;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
+use App\Models\PurchaseItem;
 use App\Models\RegistrationAllow;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
+use App\Support\ItemUnits;
 use App\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -87,6 +89,7 @@ it('scopes partner entries to their own user id', function (): void {
     $me = makeUser(['commission_rate' => 5]);
     $other = makeUser(['phone' => '01700000003']);
     $item = SaleItem::factory()->create();
+    CommissionPeriod::factory()->open()->create();
 
     Sale::factory()->create(['user_id' => $other->id, 'sale_item_id' => $item->id]);
 
@@ -102,8 +105,121 @@ it('scopes partner entries to their own user id', function (): void {
     $sale = Sale::where('user_id', $me->id)->sole();
     expect($sale->user_id)->toBe($me->id)
         ->and($sale->status)->toBe(EntryStatus::Pending)
-        ->and((float) $sale->total)->toBe(1000.0)
-        ->and((float) $sale->commission_amount)->toBe(50.0);
+        ->and((float) $sale->total)->toBe(1000.0);
+});
+
+it('blocks entry creation and confirmation without an open cycle', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000002']);
+    $item = SaleItem::factory()->create();
+
+    // Partner form + store are blocked.
+    $this->actingAs($partner)->get('/entries/sales/create')->assertRedirect();
+    $this->actingAs($partner)->post('/entries/sales', [
+        'head_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 100,
+        'entry_date' => now()->format('Y-m-d'),
+    ]);
+    expect(Sale::count())->toBe(0);
+
+    // Owner cannot confirm without an open cycle.
+    $sale = Sale::factory()->create(['sale_item_id' => $item->id, 'status' => EntryStatus::Pending]);
+    $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}/confirm");
+    expect($sale->fresh()->status)->toBe(EntryStatus::Pending);
+
+    // Opening a cycle unblocks both.
+    CommissionPeriod::factory()->open()->create();
+    $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}/confirm");
+    expect($sale->fresh()->status)->toBe(EntryStatus::Confirmed);
+});
+
+it('lets the owner create entries that are auto-confirmed', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = SaleItem::factory()->create();
+    CommissionPeriod::factory()->open()->create();
+
+    $this->actingAs($owner)->post('/entries/sales', [
+        'head_id' => $item->id,
+        'quantity' => 3,
+        'unit_price' => 200,
+        'entry_date' => now()->format('Y-m-d'),
+    ])->assertRedirect();
+
+    $sale = Sale::sole();
+    expect($sale->status)->toBe(EntryStatus::Confirmed)
+        ->and($sale->confirmed_by)->toBe($owner->id)
+        ->and($sale->user_id)->toBe($owner->id);
+});
+
+it('shows the open cycle on both dashboards and the close summary before closing', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000012']);
+    $item = SaleItem::factory()->create();
+    $period = CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
+
+    // Profit 100 → partner 10% = 10.
+    Sale::factory()->create([
+        'sale_item_id' => $item->id, 'total' => 100,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    // Both dashboards show the running cycle.
+    $this->actingAs($owner)->get('/dashboard')
+        ->assertOk()
+        ->assertSee(__('messages.current_period'))
+        ->assertSee(__('messages.add_sale'));
+    $this->actingAs($partner)->get('/dashboard')
+        ->assertOk()
+        ->assertSee(__('messages.current_period'));
+
+    // Close summary shows profit and expected commission per partner.
+    $this->actingAs($owner)->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee('৳100.00')
+        ->assertSee('৳10.00')
+        ->assertSee(__('messages.owner_share'));
+
+    // Confirming the close creates matching settlements.
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+    expect($period->fresh()->status)->toBe('closed')
+        ->and((float) CommissionSettlement::sole()->amount)->toBe(10.0);
+
+    // Partner now sees the last cycle commission on the dashboard.
+    $this->actingAs($partner)->get('/dashboard')
+        ->assertOk()
+        ->assertSee(__('messages.last_cycle_commission'));
+});
+
+it('uses the partner rate at closing time and ignores sales shares', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $a = makeUser(['commission_rate' => 10, 'phone' => '01700000013']);
+    $b = makeUser(['commission_rate' => 20, 'phone' => '01700000014']);
+    $item = SaleItem::factory()->create();
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(5)]);
+
+    // Partner A sells 10x more than B — must NOT affect commissions.
+    Sale::factory()->create([
+        'user_id' => $a->id, 'sale_item_id' => $item->id, 'total' => 900,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+    Sale::factory()->create([
+        'user_id' => $b->id, 'sale_item_id' => $item->id, 'total' => 100,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+
+    // Rate changed AFTER the cycle opened — closing uses the new rate.
+    $a->update(['commission_rate' => 15]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    // Profit = 1000. A: 15% = 150 (not 10%), B: 20% = 200. No sales-share math.
+    expect((float) CommissionSettlement::where('user_id', $a->id)->sole()->amount)->toBe(150.0)
+        ->and((float) CommissionSettlement::where('user_id', $b->id)->sole()->amount)->toBe(200.0);
 });
 
 it('shows owner reports with date filtering and guards them from partners', function (): void {
@@ -117,8 +233,6 @@ it('shows owner reports with date filtering and guards them from partners', func
         'quantity' => 1,
         'unit_price' => 100,
         'total' => 100,
-        'commission_rate' => 5,
-        'commission_amount' => 5,
         'entry_date' => now()->subMonths(8),
         'status' => EntryStatus::Confirmed,
     ]);
@@ -129,8 +243,6 @@ it('shows owner reports with date filtering and guards them from partners', func
         'quantity' => 1,
         'unit_price' => 400,
         'total' => 400,
-        'commission_rate' => 5,
-        'commission_amount' => 20,
         'entry_date' => now(),
         'status' => EntryStatus::Confirmed,
     ]);
@@ -165,6 +277,25 @@ it('shows commission due per partner on the report (pending settlements)', funct
         ->assertOk()
         ->assertSee('৳100.00') // pending due
         ->assertSee('৳150.00'); // total earned
+});
+
+it('stores item units and rejects invalid ones', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+
+    $this->actingAs($owner)->post('/owner/masters/purchase-items', [
+        'name' => 'Gold',
+        'unit' => 'tola',
+    ])->assertRedirect();
+
+    expect(PurchaseItem::sole()->unit)->toBe('tola');
+
+    $this->actingAs($owner)->post('/owner/masters/purchase-items', [
+        'name' => 'Milk',
+        'unit' => 'litre',
+    ])->assertSessionHasErrors(['unit']);
+
+    // Unit label renders translated in entry forms.
+    expect(ItemUnits::label('kg'))->toBe(__('messages.unit_kg'));
 });
 
 it('rejects registration when the phone is not allow-listed', function (): void {
@@ -215,8 +346,6 @@ it('computes business stats from confirmed entries and commission settlements', 
         'quantity' => 2,
         'unit_price' => 500,
         'total' => 1000,
-        'commission_rate' => 5,
-        'commission_amount' => 50,
         'status' => EntryStatus::Confirmed,
     ]);
 

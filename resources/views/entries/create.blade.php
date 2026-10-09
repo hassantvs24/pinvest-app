@@ -18,13 +18,13 @@
                         {{ __('messages.'.($type === 'expenses' ? 'expense_head' : ($type === 'purchases' ? 'purchase_item' : 'sale_item'))) }}
                     </label>
                     <select id="head_id" name="head_id" required
-                            {{ $type === 'sales' ? 'data-autofill-price="1"' : '' }}
                             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         <option value="">{{ __('messages.select_option') }}</option>
                         @foreach($items as $item)
                             <option value="{{ $item->id }}" data-price="{{ $type === 'sales' ? $item->default_price : '' }}"
+                                    data-unit="{{ $config['has_unit'] ? \App\Support\ItemUnits::label($item->unit) : '' }}"
                                     {{ old('head_id') == $item->id ? 'selected' : '' }}>
-                                {{ $item->name }}{{ $type === 'sales' ? ' (৳'.number_format((float) $item->default_price, 2).')' : '' }}
+                                {{ $item->name }}{{ $type === 'sales' ? ' (৳'.number_format((float) $item->default_price, 2).')' : '' }}{{ $config['has_unit'] ? ' ('.\App\Support\ItemUnits::label($item->unit).')' : '' }}
                             </option>
                         @endforeach
                     </select>
@@ -43,7 +43,7 @@
                 @if($config['has_quantity'])
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }}</label>
+                            <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }} <span id="unit_label" class="text-emerald-700 font-bold"></span></label>
                             <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="1" step="1" required
                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         </div>
@@ -58,15 +58,6 @@
                         <label class="block text-sm font-medium mb-1">{{ __('messages.total') }}</label>
                         <input type="text" id="total_display" readonly
                                class="w-full border border-gray-200 rounded-lg px-4 py-3 text-lg bg-gray-100 font-bold">
-                    </div>
-                @endif
-
-                {{-- Sale: commission preview (server still recalculates on submit) --}}
-                @if($type === 'sales')
-                    <input type="hidden" id="commission_rate" value="{{ $commissionRate }}">
-                    <div class="bg-violet-50 border border-violet-200 text-violet-800 rounded-lg px-4 py-3 text-sm">
-                        🤝 {{ __('messages.your_commission') }} {{ __('messages.approx_label') }} ({{ $commissionRate }}%) =
-                        ৳<span id="commission_preview">0.00</span>
                     </div>
                 @endif
 

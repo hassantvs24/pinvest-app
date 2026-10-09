@@ -56,6 +56,34 @@ class CommissionSettlementService
      *
      * @return array{profit: float, created: int}
      */
+    /**
+     * Preview rows for closing: what each active partner would receive for
+     * the given profit, using their rate RIGHT NOW (the same source the
+     * actual close uses, so preview and result always match).
+     *
+     * @return array<int, array{user: User, rate: float, amount: float}>
+     */
+    public static function settlementRows(float $profit): array
+    {
+        if ($profit <= 0) {
+            return [];
+        }
+
+        $rows = [];
+
+        foreach (User::query()->partners()->active()->where('commission_rate', '>', 0)->get() as $partner) {
+            $amount = round($profit * ((float) $partner->commission_rate) / 100, 2);
+
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $rows[] = ['user' => $partner, 'rate' => (float) $partner->commission_rate, 'amount' => $amount];
+        }
+
+        return $rows;
+    }
+
     public static function closePeriod(CommissionPeriod $period, Carbon $closedAt): array
     {
         $profit = self::periodProfit($period->opened_at, $closedAt);
@@ -68,32 +96,24 @@ class CommissionSettlementService
 
         $created = 0;
 
-        if ($profit > 0) {
-            foreach (User::query()->partners()->active()->where('commission_rate', '>', 0)->get() as $partner) {
-                $amount = round($profit * ((float) $partner->commission_rate) / 100, 2);
+        foreach (self::settlementRows($profit) as $row) {
+            $settlement = CommissionSettlement::query()->firstOrCreate(
+                [
+                    'user_id' => $row['user']->id,
+                    'commission_period_id' => $period->id,
+                ],
+                [
+                    'period_start' => $period->opened_at->copy(),
+                    'period_end' => $closedAt->copy(),
+                    'business_profit' => $profit,
+                    'commission_rate' => $row['rate'],
+                    'amount' => $row['amount'],
+                    'status' => 'pending',
+                ],
+            );
 
-                if ($amount <= 0) {
-                    continue;
-                }
-
-                $settlement = CommissionSettlement::query()->firstOrCreate(
-                    [
-                        'user_id' => $partner->id,
-                        'commission_period_id' => $period->id,
-                    ],
-                    [
-                        'period_start' => $period->opened_at->copy(),
-                        'period_end' => $closedAt->copy(),
-                        'business_profit' => $profit,
-                        'commission_rate' => $partner->commission_rate,
-                        'amount' => $amount,
-                        'status' => 'pending',
-                    ],
-                );
-
-                if ($settlement->wasRecentlyCreated) {
-                    $created++;
-                }
+            if ($settlement->wasRecentlyCreated) {
+                $created++;
             }
         }
 

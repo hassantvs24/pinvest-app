@@ -36,7 +36,7 @@
             <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between gap-2">
                 <div>
                     <div class="font-medium">
-                        📅 {{ $settlement->period_start->format('d M Y') }} – {{ $settlement->period_end->format('d M Y') }}
+                        🗓️ {{ $settlement->period?->label ?: $settlement->period_start->format('d M Y').' – '.$settlement->period_end->format('d M Y') }}
                     </div>
                     <div class="text-sm text-gray-500">
                         📈 {{ __('messages.period_profit') }}: ৳{{ number_format((float) $settlement->business_profit, 2) }}

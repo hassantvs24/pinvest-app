@@ -108,7 +108,7 @@
             <ul class="divide-y divide-gray-100">
                 @foreach($salesByItem as $row)
                     <li class="px-4 py-2 flex items-center justify-between gap-2 text-sm">
-                        <div>{{ $row['name'] }} <span class="text-gray-500">× {{ $row['quantity'] }}</span></div>
+                        <div>{{ $row['name'] }} <span class="text-gray-500">{{ $row['quantity'] }} {{ $row['unit'] }}</span></div>
                         <div class="font-bold shrink-0">৳{{ number_format($row['total'], 2) }}</div>
                     </li>
                 @endforeach
@@ -129,7 +129,7 @@
             <ul class="divide-y divide-gray-100">
                 @foreach($purchasesByItem as $row)
                     <li class="px-4 py-2 flex items-center justify-between gap-2 text-sm">
-                        <div>{{ $row['name'] }} <span class="text-gray-500">× {{ $row['quantity'] }}</span></div>
+                        <div>{{ $row['name'] }} <span class="text-gray-500">{{ $row['quantity'] }} {{ $row['unit'] }}</span></div>
                         <div class="font-bold shrink-0">৳{{ number_format($row['total'], 2) }}</div>
                     </li>
                 @endforeach

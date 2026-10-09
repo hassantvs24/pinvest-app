@@ -15,6 +15,7 @@ class SaleItemFactory extends Factory
         return [
             'name' => fake()->unique()->word(),
             'default_price' => fake()->randomFloat(2, 50, 2000),
+            'unit' => 'pcs',
             'is_active' => true,
         ];
     }

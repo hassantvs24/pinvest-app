@@ -23,6 +23,7 @@ class PartnerCommissionController extends Controller
 
         return view('commissions.index', [
             'settlements' => CommissionSettlement::query()
+                ->with('period')
                 ->where('user_id', $user->id)
                 ->orderByDesc('period_start')
                 ->paginate(15),
