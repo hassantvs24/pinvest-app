@@ -823,3 +823,29 @@ it('records owner profit withdrawals and reduces cash in hand', function (): voi
     $this->actingAs(makeUser())->get('/owner/withdrawals')->assertForbidden();
     $this->actingAs(makeUser())->get('/owner/commissions')->assertForbidden();
 });
+
+it('lets a user change their password from the profile', function (): void {
+    $user = makeUser(['email' => 'a@b.com', 'phone' => '01700000001', 'password' => 'secret123']);
+
+    $this->actingAs($user)->get('/profile')->assertOk()->assertSee(__('messages.change_password', [], 'bn'));
+
+    $this->actingAs($user)->patch('/profile/password', [
+        'current_password' => 'secret123',
+        'password' => 'newsecret456',
+        'password_confirmation' => 'newsecret456',
+    ])->assertRedirect('/profile')->assertSessionHas('success');
+
+    expect(Hash::check('newsecret456', $user->fresh()->password))->toBeTrue();
+});
+
+it('rejects a password change with a wrong current password', function (): void {
+    $user = makeUser(['password' => 'secret123']);
+
+    $this->actingAs($user)->from('/profile')->patch('/profile/password', [
+        'current_password' => 'wrongpass',
+        'password' => 'newsecret456',
+        'password_confirmation' => 'newsecret456',
+    ])->assertSessionHasErrors('current_password');
+
+    expect(Hash::check('secret123', $user->fresh()->password))->toBeTrue();
+});

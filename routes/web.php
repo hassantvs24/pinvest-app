@@ -44,6 +44,7 @@ Route::middleware('auth')->group(function (): void {
 
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
+    Route::patch('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password');
 
     // Partner commissions + payout request.
     Route::get('/my-commissions', [PartnerCommissionController::class, 'index'])->name('commissions.index');

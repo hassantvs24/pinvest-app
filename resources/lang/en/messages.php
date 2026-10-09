@@ -270,4 +270,10 @@ return [
     // Pagination
     'previous' => 'Previous',
     'next' => 'Next',
+
+    // Password change
+    'change_password' => 'Change password',
+    'current_password' => 'Current password',
+    'new_password' => 'New password',
+    'password_updated' => 'Password updated successfully',
 ];

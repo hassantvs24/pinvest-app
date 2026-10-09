@@ -270,4 +270,10 @@ return [
     // Pagination
     'previous' => 'পূর্ববর্তী',
     'next' => 'পরবর্তী',
+
+    // Password change
+    'change_password' => 'পাসওয়ার্ড বদলান',
+    'current_password' => 'বর্তমান পাসওয়ার্ড',
+    'new_password' => 'নতুন পাসওয়ার্ড',
+    'password_updated' => 'পাসওয়ার্ড সফলভাবে বদলানো হয়েছে',
 ];
