@@ -1,0 +1,11 @@
+# Laravel application lives in public/. Preferred server setup is to point
+# the vhost DocumentRoot at public/ — this file is the stopgap for hosts
+# whose DocumentRoot is the project root: it disables the directory
+# listing and forwards every request into public/.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine on
+    RewriteRule ^$ public/ [L]
+    RewriteRule (.*) public/$1 [L]
+</IfModule>
