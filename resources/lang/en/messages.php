@@ -297,6 +297,22 @@ return [
     'avg_cost' => 'Avg. cost',
     'incompatible_units' => 'Units do not match — sale and purchase item units must be of the same kind',
     'warn_unlinked_sale_items' => 'These items are not linked to any purchase item, so their cost counts as 0: :items',
-    'warn_negative_stock' => 'More sold than purchased for: :items',
+    'warn_negative_stock' => 'More used/sold than purchased for: :items',
+    'warn_negative_finished_stock' => 'More sold than produced for: :items',
     'warn_unallocated_product_expense' => '৳:amount of product cost could not be allocated to any item (no purchases)',
+
+    // Production
+    'productions' => 'Production',
+    'add_production' => 'Add production',
+    'production_hint' => 'Record finished goods made from raw materials + labour. Cost is computed automatically at sale time.',
+    'finished_good' => 'Finished good',
+    'finished_goods' => 'Finished goods',
+    'raw_materials' => 'Raw materials',
+    'extra_cost' => 'Extra cost (labour)',
+    'add_material' => 'Add more material',
+    'add_output' => 'Add more output',
+    'output_split_hint' => 'When a run yields several goods, cost is split automatically — higher-priced goods carry a higher cost share (e.g. melting gold plus scrap).',
+    'remove' => 'Remove',
+    'production_saved' => 'Production recorded',
+    'production_deleted' => 'Production deleted',
 ];

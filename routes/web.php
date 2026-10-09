@@ -10,6 +10,7 @@ use App\Http\Controllers\Owner\InvestmentController as OwnerInvestmentController
 use App\Http\Controllers\Owner\MasterController as OwnerMasterController;
 use App\Http\Controllers\Owner\PartnerController as OwnerPartnerController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
+use App\Http\Controllers\Owner\ProductionController;
 use App\Http\Controllers\Owner\ReportController as OwnerReportController;
 use App\Http\Controllers\Owner\WithdrawalController as OwnerWithdrawalController;
 use App\Http\Controllers\PartnerCommissionController;
@@ -58,6 +59,11 @@ Route::middleware('auth')->group(function (): void {
     // Owner-only area.
     Route::prefix('owner')->name('owner.')->middleware('owner')->group(function (): void {
         Route::get('/reports', [OwnerReportController::class, 'index'])->name('reports.index');
+
+        // Production runs (raw materials -> finished goods).
+        Route::get('/productions', [ProductionController::class, 'index'])->name('productions.index');
+        Route::post('/productions', [ProductionController::class, 'store'])->name('productions.store');
+        Route::delete('/productions/{production}', [ProductionController::class, 'destroy'])->name('productions.destroy');
         Route::post('/allowances', [OwnerPartnerController::class, 'storeAllowance'])->name('allowances.store');
         Route::delete('/allowances/{allowance}', [OwnerPartnerController::class, 'destroyAllowance'])->name('allowances.destroy');
 

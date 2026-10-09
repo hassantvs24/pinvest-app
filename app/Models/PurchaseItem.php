@@ -27,4 +27,12 @@ class PurchaseItem extends Model
     {
         return $this->hasMany(Purchase::class);
     }
+
+    /**
+     * Raw-material lines of production runs that consumed this item.
+     */
+    public function productionComponents(): HasMany
+    {
+        return $this->hasMany(ProductionComponent::class);
+    }
 }

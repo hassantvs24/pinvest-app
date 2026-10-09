@@ -9,6 +9,7 @@ use App\Models\ExpenseHead;
 use App\Models\Investment;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
+use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\PurchaseItem;
 use App\Models\RegistrationAllow;
@@ -1014,4 +1015,188 @@ it('shows stock value on the owner dashboard and reports', function (): void {
         ->assertSee(__('messages.stock_report'))
         ->assertSee('Silver bar')
         ->assertSee('৳500.00');
+});
+
+it('tracks production from raw materials and costs the sale at the finished good average', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000021']);
+
+    $cotton = PurchaseItem::factory()->create(['unit' => 'kg']);
+    $button = PurchaseItem::factory()->create(['unit' => 'pcs']);
+    $zip = PurchaseItem::factory()->create(['unit' => 'pcs']);
+    $panjabi = SaleItem::factory()->create(['unit' => 'pcs']); // no purchase link
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(6)->format('Y-m-d'),
+    ]);
+
+    // Raw materials: cotton 5kg @ 200, buttons 10 @ 5, zips 10 @ 8.
+    Purchase::factory()->create(['purchase_item_id' => $cotton->id, 'quantity' => 5, 'unit_price' => 200, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+    Purchase::factory()->create(['purchase_item_id' => $button->id, 'quantity' => 10, 'unit_price' => 5, 'total' => 50, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+    Purchase::factory()->create(['purchase_item_id' => $zip->id, 'quantity' => 10, 'unit_price' => 8, 'total' => 80, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+
+    // Produce 10 panjabis: all the cotton + buttons + zips + ৳500 labour.
+    $this->actingAs($owner)->post('/owner/productions', [
+        'extra_cost' => 500,
+        'entry_date' => now()->subDays(2)->format('Y-m-d'),
+        'outputs' => [
+            ['sale_item_id' => $panjabi->id, 'quantity' => 10],
+        ],
+        'components' => [
+            ['purchase_item_id' => $cotton->id, 'quantity' => 5],
+            ['purchase_item_id' => $button->id, 'quantity' => 10],
+            ['purchase_item_id' => $zip->id, 'quantity' => 10],
+        ],
+    ])->assertRedirect()->assertSessionHas('success');
+
+    // Materials fully consumed; finished stock: 10 @ (1630/10) = 163 each.
+    $rows = InventoryService::stockRows(now());
+    expect($rows['materials'])->toBe([])
+        ->and($rows['finished'][0]['item']->id)->toBe($panjabi->id)
+        ->and($rows['finished'][0]['base_quantity'])->toBe(10.0)
+        ->and($rows['finished'][0]['avg_cost'])->toBe(163.0);
+
+    // Sell 6 @ 300 → COGS 6 x 163 = 978; profit = 1800 - 978 = 822.
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $panjabi->id,
+        'quantity' => 6, 'unit_price' => 300, 'total' => 1800,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    expect(InventoryService::cogs(now()->subDays(6), now()))->toBe(978.0)
+        ->and(InventoryService::stockValue(now()))->toBe(652.0); // 4 x 163
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    expect((float) CommissionPeriod::sole()->profit)->toBe(822.0);
+});
+
+it('guards master items that are linked or used in production from deletion', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+
+    // Purchase item linked from a sale item (no purchases yet).
+    $linkedPurchase = PurchaseItem::factory()->create();
+    SaleItem::factory()->create(['purchase_item_id' => $linkedPurchase->id]);
+
+    $this->actingAs($owner)->delete("/owner/masters/purchase-items/{$linkedPurchase->id}")
+        ->assertSessionHas('error');
+    expect($linkedPurchase->fresh())->not->toBeNull();
+
+    // Purchase item consumed by a production run.
+    $component = PurchaseItem::factory()->create();
+    $production = Production::factory()->create();
+    $production->components()->create(['purchase_item_id' => $component->id, 'quantity' => 1]);
+    $this->actingAs($owner)->delete("/owner/masters/purchase-items/{$component->id}")
+        ->assertSessionHas('error');
+    expect($component->fresh())->not->toBeNull();
+
+    // Sale item that has a production run.
+    $producedItem = SaleItem::factory()->create();
+    $production = Production::factory()->create();
+    $production->outputs()->create(['sale_item_id' => $producedItem->id, 'quantity' => 1]);
+
+    $this->actingAs($owner)->delete("/owner/masters/sale-items/{$producedItem->id}")
+        ->assertSessionHas('error');
+    expect($producedItem->fresh())->not->toBeNull();
+});
+
+it('restricts the productions page to the owner', function (): void {
+    makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000022']);
+
+    $this->actingAs($partner)->get('/owner/productions')->assertForbidden();
+
+    $this->actingAs(User::where('email', 'owner@x.com')->first())
+        ->get('/owner/productions')
+        ->assertOk()
+        ->assertSee(__('messages.add_production'));
+});
+
+it('warns when more is sold than produced of a manufactured item', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create(['name' => 'Orna']);
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(3)->format('Y-m-d'),
+    ]);
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 50, 'total' => 500,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+    $production = Production::factory()->create(['extra_cost' => 0, 'entry_date' => now()->subDay()]);
+    $production->outputs()->create(['sale_item_id' => $item->id, 'quantity' => 5]);
+    $production->components()->create(['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]);
+    Sale::factory()->create([
+        'sale_item_id' => $item->id,
+        'quantity' => 7, 'unit_price' => 100, 'total' => 700,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now(),
+    ]);
+
+    $this->actingAs($owner)->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.warn_negative_finished_stock', ['items' => 'Orna']));
+});
+
+it('splits one purchased item into several goods and costs each sale fairly', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000023']);
+
+    // Buy one old ornament for ৳80,000; melting costs ৳2,000 labour.
+    $ornament = PurchaseItem::factory()->create(['unit' => 'pcs']);
+    $gold = SaleItem::factory()->create(['unit' => 'gram', 'default_price' => 12000]);
+    $scrap = SaleItem::factory()->create(['unit' => 'gram', 'default_price' => 500]);
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(4)->format('Y-m-d'),
+    ]);
+    Purchase::factory()->create([
+        'purchase_item_id' => $ornament->id,
+        'quantity' => 1, 'unit_price' => 80000, 'total' => 80000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+    ]);
+
+    // Melt it: 8g pure gold + 3g scrap come out.
+    $this->actingAs($owner)->post('/owner/productions', [
+        'extra_cost' => 2000,
+        'entry_date' => now()->subDays(2)->format('Y-m-d'),
+        'outputs' => [
+            ['sale_item_id' => $gold->id, 'quantity' => 8],
+            ['sale_item_id' => $scrap->id, 'quantity' => 3],
+        ],
+        'components' => [
+            ['purchase_item_id' => $ornament->id, 'quantity' => 1],
+        ],
+    ])->assertRedirect()->assertSessionHas('success');
+
+    // Material fully consumed; finished stock holds both outputs.
+    $rows = InventoryService::stockRows(now());
+    expect($rows['materials'])->toBe([])
+        ->and($rows['finished'])->toHaveCount(2);
+
+    // Sell everything: gold 8g @ 12000, scrap 3g @ 500.
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $gold->id,
+        'quantity' => 8, 'unit_price' => 12000, 'total' => 96000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $scrap->id,
+        'quantity' => 3, 'unit_price' => 500, 'total' => 1500,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    // Total cost must equal the pool (80000 + 2000), however the split
+    // falls; revenue 97500 - 82000 = 15500 profit.
+    expect(InventoryService::cogs(now()->subDays(4), now()))->toBe(82000.0)
+        ->and(InventoryService::stockValue(now()))->toBe(0.0);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    expect((float) CommissionPeriod::sole()->profit)->toBe(15500.0);
 });

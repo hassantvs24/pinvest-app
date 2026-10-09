@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Owner;
 use App\Enums\ExpenseCostType;
 use App\Http\Controllers\Controller;
 use App\Models\ExpenseHead;
+use App\Models\Production;
+use App\Models\ProductionComponent;
+use App\Models\ProductionOutput;
 use App\Models\PurchaseItem;
 use App\Models\SaleItem;
 use App\Support\ItemUnits;
@@ -212,7 +215,10 @@ class MasterController extends Controller
 
     /**
      * Hard delete a master item — blocked (with a clear message) while
-     * any entry still references it, to protect historical totals.
+     * any entry still references it, to protect historical totals and
+     * stock links. Purchase items are additionally guarded by sale-item
+     * links and production components (losing those would silently
+     * break COGS); sale items by production runs.
      */
     public function destroy(string $group, int $id): RedirectResponse
     {
@@ -223,12 +229,29 @@ class MasterController extends Controller
 
         $item = $modelClass::query()->findOrFail($id);
 
-        if ($item->{$config['relation']}()->exists()) {
+        if ($item->{$config['relation']}()->exists() || $this->isReferencedElsewhere($group, $item)) {
             return back()->with('error', __('messages.cannot_delete_in_use'));
         }
 
         $item->delete();
 
         return back()->with('success', __('messages.item_deleted'));
+    }
+
+    /**
+     * Extra delete guards beyond the group's own entries.
+     */
+    private function isReferencedElsewhere(string $group, Model $item): bool
+    {
+        if ($group === 'purchase-items') {
+            return SaleItem::query()->where('purchase_item_id', $item->id)->exists()
+                || ProductionComponent::query()->where('purchase_item_id', $item->id)->exists();
+        }
+
+        if ($group === 'sale-items') {
+            return ProductionOutput::query()->where('sale_item_id', $item->id)->exists();
+        }
+
+        return false;
     }
 }
