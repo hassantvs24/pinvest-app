@@ -123,6 +123,7 @@
 
             {{-- Confirm (hidden while unapproved entries block the close) --}}
             @if($pendingEntries->isEmpty())
+                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-4">💡 {{ __('messages.close_preview_hint') }}</p>
                 <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
                     @csrf
                     <input type="hidden" name="closed_at" value="{{ $closedAt->format('Y-m-d') }}">

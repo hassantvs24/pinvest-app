@@ -1112,7 +1112,7 @@ it('tracks production from raw materials and costs the sale at the finished good
     $cotton = Item::factory()->create(['unit' => 'kg']);
     $button = Item::factory()->create(['unit' => 'pcs']);
     $zip = Item::factory()->create(['unit' => 'pcs']);
-    $panjabi = Item::factory()->create(['unit' => 'pcs']); // no purchase link
+    $panjabi = Item::factory()->create(['unit' => 'pcs', 'default_price' => 300]); // no purchase link
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(6)->format('Y-m-d'),
@@ -1868,6 +1868,10 @@ it('does not double-count entries when a cycle is reopened the same day', functi
     Sale::factory()->create(['user_id' => $partner->id, 'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 200, 'total' => 2000, 'status' => EntryStatus::Confirmed, 'entry_date' => today()]);
 
     // Close cycle A today — today's sale counts in A only.
+    $this->actingAs($owner)->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.close_preview_hint'));
+
     $this->actingAs($owner)->post('/owner/commissions/close', [
         'closed_at' => now()->format('Y-m-d'),
     ])->assertRedirect();

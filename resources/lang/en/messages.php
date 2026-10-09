@@ -221,6 +221,7 @@ return [
     'opening_money_hint' => 'Both only add to the cash-in-hand figure (no effect on profit or commission). Opening cash = money already sitting in the drawer; opening investment = new capital (creates an entry on the Investments page).',
     'close_period' => 'Close cycle',
     'close_period_hint' => 'On close: confirmed sales − purchase − expense (from the opening date to today) = profit/loss, and each partner gets profit × rate% as commission.',
+    'close_preview_hint' => 'Entries dated on the closing day count in this cycle — reopening a new cycle the same day will not count them again. Once closed, the cycle is locked (no edit/delete), so fix any wrong entries before closing.',
     'period_label' => 'Cycle name',
     'period_label_placeholder' => 'e.g. October session',
     'opening_date' => 'Opening date',
