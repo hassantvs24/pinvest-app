@@ -266,4 +266,8 @@ return [
 
     // Master item rename
     'item_renamed' => 'আইটেমের নাম বদলানো হয়েছে',
+
+    // Pagination
+    'previous' => 'পূর্ববর্তী',
+    'next' => 'পরবর্তী',
 ];

@@ -266,4 +266,8 @@ return [
 
     // Master item rename
     'item_renamed' => 'Item renamed',
+
+    // Pagination
+    'previous' => 'Previous',
+    'next' => 'Next',
 ];
