@@ -8,6 +8,12 @@
         <div class="text-2xl font-bold">৳{{ number_format($total, 2) }}</div>
     </div>
 
+    <div class="bg-white rounded-xl shadow p-4 mb-4 border-l-4 border-emerald-700">
+        <div class="text-sm text-gray-500">💵 {{ __('messages.cash_in_hand') }}</div>
+        <div class="text-2xl font-bold text-emerald-700">৳{{ number_format($cashInHand, 2) }}</div>
+        <p class="text-xs text-gray-500 mt-1">{{ __('messages.withdrawal_cash_hint') }}</p>
+    </div>
+
     {{-- Withdraw form --}}
     <div class="bg-white rounded-xl shadow p-4 mb-4">
         <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.withdrawal_hint') }}</p>

@@ -60,12 +60,12 @@
     @endif
 
     {{-- Pending confirmations alert --}}
-    @php $totalPending = $pending['expenses'] + $pending['purchases'] + $pending['sales']; @endphp
+    @php $totalPending = $pending['expenses'] + $pending['purchases'] + $pending['sales'] + $pending['productions']; @endphp
     @if($totalPending > 0)
         <a href="{{ route('owner.entries.index', ['status' => 'pending']) }}"
            class="block bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 mt-3">
             ⏳ {{ __('messages.pending_confirmations') }} —
-            💸 {{ $pending['expenses'] }} · 🛒 {{ $pending['purchases'] }} · 💰 {{ $pending['sales'] }}
+            💸 {{ $pending['expenses'] }} · 🛒 {{ $pending['purchases'] }} · 💰 {{ $pending['sales'] }} · 🏭 {{ $pending['productions'] }}
         </a>
     @endif
     @if($pendingPayoutRequests > 0)
@@ -120,6 +120,11 @@
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">🏦 {{ __('messages.cash_in_hand') }}</div>
             <div class="text-2xl font-bold">৳{{ number_format($cashInHand, 2) }}</div>
+            <p class="text-xs text-gray-500 mt-1">{{ __('messages.cash_pool_hint') }}</p>
+            <a href="{{ route('owner.investments.index') }}"
+               class="inline-block mt-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-3 py-1.5">
+                ➕ {{ __('messages.add_cash') }}
+            </a>
         </div>
     </div>
 
@@ -133,7 +138,7 @@
                 @foreach($leaderboard as $partner)
                     <li class="px-4 py-3">
                         <div class="flex items-center justify-between gap-2 mb-1">
-                            <div class="font-medium truncate">{{ $partner['name'] }}</div>
+                            <div class="font-medium truncate inline-flex items-center gap-1.5"><x-avatar :user="$partner['user']" size="24" /> {{ $partner['name'] }}</div>
                             <div class="text-xl font-bold text-violet-600 shrink-0">{{ $partner['commission_rate'] }}%</div>
                         </div>
                         <div class="text-xs text-gray-500">

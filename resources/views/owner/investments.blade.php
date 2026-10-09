@@ -10,6 +10,7 @@
 
     {{-- Add investment form --}}
     <div class="bg-white rounded-xl shadow p-4 mb-4">
+        <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.investment_cash_hint') }}</p>
         <form method="POST" action="{{ route('owner.investments.store') }}" class="space-y-3">
             @csrf
             <div>

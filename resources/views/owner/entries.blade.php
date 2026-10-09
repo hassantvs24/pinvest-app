@@ -41,7 +41,7 @@
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="font-bold">{{ $entry->{$config['relations'][1]}->name ?? '—' }}</div>
-                        <div class="text-sm text-gray-500">👤 {{ $entry->user->name }}</div>
+                        <div class="text-sm text-gray-500 inline-flex items-center gap-1.5"><x-avatar :user="$entry->user" size="22" /> {{ $entry->user->name }}</div>
                         @if($type !== 'expenses')
                             <div class="text-sm text-gray-500">
                                 {{ $entry->quantity }} {{ \App\Support\ItemUnits::label($entry->{$config['relations'][1]}->unit ?? null) }} × ৳{{ number_format((float) $entry->unit_price, 2) }}

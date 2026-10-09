@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -18,11 +17,6 @@ class ProductionOutput extends Model
         return [
             'quantity' => 'integer',
         ];
-    }
-
-    public function scopeForSaleItem(Builder $query, int $saleItemId): Builder
-    {
-        return $query->where('sale_item_id', $saleItemId);
     }
 
     public function production(): BelongsTo

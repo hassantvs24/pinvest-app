@@ -84,7 +84,7 @@
             <div class="bg-white rounded-xl shadow p-4">
                 <div class="flex items-center justify-between gap-2">
                     <div>
-                        <div class="font-bold">👤 {{ $request->user->name }}</div>
+                        <div class="font-bold inline-flex items-center gap-1.5"><x-avatar :user="$request->user" size="24" /> {{ $request->user->name }}</div>
                         <div class="text-sm text-gray-500">📅 {{ $request->created_at->format('d M Y') }}</div>
                     </div>
                     <div class="text-xl font-bold text-violet-700 shrink-0">৳{{ number_format((float) $request->amount, 2) }}</div>
@@ -112,7 +112,13 @@
     </div>
 
     {{-- 3. Closed periods --}}
-    <h2 class="font-bold text-lg mb-2">📦 {{ __('messages.period_history') }}</h2>
+    <div class="flex items-center justify-between mb-2">
+        <h2 class="font-bold text-lg">📦 {{ __('messages.period_history') }}</h2>
+        <a href="{{ route('owner.withdrawals.index') }}"
+           class="bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg px-3 py-2">
+            🏦 {{ __('messages.withdraw_profit') }}
+        </a>
+    </div>
     <div class="space-y-3 mb-6">
         @forelse($closedPeriods as $period)
             <div class="bg-white rounded-xl shadow p-4">
@@ -152,7 +158,7 @@
         @forelse($settlements as $settlement)
             <div class="bg-white rounded-xl shadow p-4 flex items-center justify-between gap-2">
                 <div>
-                    <div class="font-bold">👤 {{ $settlement->user->name }}</div>
+                    <div class="font-bold inline-flex items-center gap-1.5"><x-avatar :user="$settlement->user" size="22" /> {{ $settlement->user->name }}</div>
                     <div class="text-sm text-gray-500">
                         🗓️ {{ $settlement->period?->label ?: $settlement->period_start->format('d M').' – '.$settlement->period_end->format('d M Y') }}
                         · 📈 ৳{{ number_format((float) $settlement->business_profit, 2) }}

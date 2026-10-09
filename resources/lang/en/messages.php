@@ -315,4 +315,10 @@ return [
     'remove' => 'Remove',
     'production_saved' => 'Production recorded',
     'production_deleted' => 'Production deleted',
+    'labour_double_count_hint' => 'If labour is entered here, do NOT enter it again as an expense entry (it would count twice).',
+    'withdrawal_exceeds_cash' => 'Cash in hand is ৳:cash — you cannot withdraw more than that',
+    'withdrawal_cash_hint' => 'You cannot withdraw more than this — cash never goes below zero after a withdrawal.',
+    'add_cash' => 'Add cash',
+    'cash_pool_hint' => 'Sales money and investments share one cash pool; expenses/purchases are paid from it.',
+    'investment_cash_hint' => 'Add money here when cash runs low for expenses — "cash in hand" increases.',
 ];

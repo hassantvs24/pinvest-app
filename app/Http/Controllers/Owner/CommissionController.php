@@ -61,7 +61,7 @@ class CommissionController extends Controller
 
         $validated = $request->validate([
             'label' => ['nullable', 'string', 'max:255'],
-            'opened_at' => ['required', 'date'],
+            'opened_at' => ['required', 'date', 'before_or_equal:today'],
             'opening_cash' => ['nullable', 'numeric', 'min:0'],
             'investment_amount' => ['nullable', 'numeric', 'min:0.01'],
             'note' => ['nullable', 'string', 'max:1000'],

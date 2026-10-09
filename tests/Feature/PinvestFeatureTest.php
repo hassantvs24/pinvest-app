@@ -7,6 +7,7 @@ use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Investment;
+use App\Models\OwnerWithdrawal;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
 use App\Models\Production;
@@ -22,6 +23,8 @@ use App\Support\DateFormats;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
 use App\UserRole;
+use Database\Seeders\DefaultDataSeeder;
+use Database\Seeders\DemoDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -1199,4 +1202,316 @@ it('splits one purchased item into several goods and costs each sale fairly', fu
     ]);
 
     expect((float) CommissionPeriod::sole()->profit)->toBe(15500.0);
+});
+
+it('redirects guests from the root to the login page', function (): void {
+    $this->get('/')->assertRedirect('/login');
+});
+
+it('keeps partner productions pending until the owner confirms them', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000030']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create();
+
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    // Partner records a production run → pending.
+    $this->actingAs($partner)->post('/productions', [
+        'entry_date' => now()->format('Y-m-d'),
+        'outputs' => [['sale_item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]],
+    ])->assertRedirect()->assertSessionHas('warning');
+
+    $production = Production::sole();
+    expect($production->status)->toBe(EntryStatus::Pending);
+
+    // Pending: no finished stock, material stock untouched.
+    $rows = InventoryService::stockRows(now());
+    expect($rows['finished'])->toBe([])
+        ->and($rows['materials'][0]['base_quantity'] ?? 0)->toBe(10.0);
+
+    // Owner confirms → stock moves.
+    $this->actingAs($owner)->patch("/owner/productions/{$production->id}/confirm")
+        ->assertRedirect();
+
+    $rows = InventoryService::stockRows(now());
+    expect($production->fresh()->status)->toBe(EntryStatus::Confirmed)
+        ->and($rows['materials'][0]['base_quantity'])->toBe(5.0)
+        ->and($rows['finished'][0]['base_quantity'])->toBe(5.0);
+});
+
+it('rejected productions never count in stock', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000031']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create();
+
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    $this->actingAs($partner)->post('/productions', [
+        'entry_date' => now()->format('Y-m-d'),
+        'outputs' => [['sale_item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]],
+    ]);
+
+    $production = Production::sole();
+
+    $this->actingAs($owner)->patch("/owner/productions/{$production->id}/reject")->assertRedirect();
+
+    $rows = InventoryService::stockRows(now());
+    expect($rows['finished'])->toBe([])
+        ->and($rows['materials'][0]['base_quantity'])->toBe(10.0);
+});
+
+it('blocks closing the cycle while a production is pending', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000032']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create(['name' => 'Chips Premium']);
+
+    CommissionPeriod::factory()->open()->create();
+    Sale::factory()->create([
+        'sale_item_id' => $item->id, 'quantity' => 1, 'unit_price' => 100, 'total' => 100,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now(),
+    ]);
+
+    $this->actingAs($partner)->post('/productions', [
+        'entry_date' => now()->format('Y-m-d'),
+        'outputs' => [['sale_item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]],
+    ]);
+
+    $this->actingAs($owner)->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.unapproved_entries'))
+        ->assertSee('Chips Premium')
+        ->assertDontSee(__('messages.confirm_close'));
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ])->assertRedirect();
+
+    expect(CommissionPeriod::sole()->status)->toBe('open')
+        ->and(CommissionSettlement::count())->toBe(0);
+});
+
+it('counts opening cash and production labour in cash in hand', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create();
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(3)->format('Y-m-d'),
+        'opening_cash' => 5000,
+    ]);
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+
+    $production = Production::factory()->create([
+        'user_id' => $owner->id, 'extra_cost' => 300,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDay(),
+    ]);
+    $production->outputs()->create(['sale_item_id' => $item->id, 'quantity' => 5]);
+    $production->components()->create(['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]);
+
+    // cash = opening 5000 - purchase 1000 - labour 300
+    expect(BusinessStats::all()['cash_in_hand'])->toBe(3700.0)
+        ->and(BusinessStats::all()['opening_cash'])->toBe(5000.0);
+});
+
+it('rejects opening a cycle with a future date', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->addDays(2)->format('Y-m-d'),
+    ])->assertSessionHasErrors('opened_at');
+
+    expect(CommissionPeriod::count())->toBe(0);
+});
+
+it('rejects withdrawing more than the cash in hand', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    Investment::factory()->create(['amount' => 1000, 'invested_at' => now()]);
+
+    $this->actingAs($owner)->post('/owner/withdrawals', [
+        'amount' => 1500,
+        'withdrawn_at' => now()->format('Y-m-d'),
+    ])->assertSessionHasErrors('amount');
+
+    $this->actingAs($owner)->post('/owner/withdrawals', [
+        'amount' => 800,
+        'withdrawn_at' => now()->format('Y-m-d'),
+    ])->assertRedirect();
+
+    expect(OwnerWithdrawal::count())->toBe(1)
+        ->and(BusinessStats::all()['cash_in_hand'])->toBe(200.0);
+});
+
+it('lets the partner see and use the productions page', function (): void {
+    $partner = makeUser(['phone' => '01700000033']);
+
+    $this->actingAs($partner)->get('/productions')
+        ->assertOk()
+        ->assertSee(__('messages.add_production'));
+});
+
+it('runs the full business lifecycle across cycles with payout', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000034']);
+    $wood = PurchaseItem::factory()->create(['unit' => 'pcs']);
+    $chips = SaleItem::factory()->create(['unit' => 'pcs', 'purchase_item_id' => $wood->id]);
+    $generalHead = ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::General]);
+
+    // Cycle 1: invest, buy 10 wood, sell 5 as chips.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(20)->format('Y-m-d'),
+    ]);
+    Investment::factory()->create(['amount' => 5000, 'invested_at' => now()->subDays(20)]);
+    Purchase::factory()->create([
+        'purchase_item_id' => $wood->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(15),
+    ]);
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $chips->id,
+        'quantity' => 5, 'unit_price' => 300, 'total' => 1500,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(12),
+    ]);
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->subDays(11)->format('Y-m-d'),
+    ]);
+
+    // Profit 1 = 1500 - 500 (COGS) = 1000 → settlement 100.
+    expect((float) CommissionPeriod::orderBy('id')->first()->profit)->toBe(1000.0)
+        ->and((float) CommissionSettlement::orderBy('id')->first()->amount)->toBe(100.0);
+
+    // Cycle 2: re-invest mid-cycle, sell the leftover 5 wood, one general expense.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(10)->format('Y-m-d'),
+    ]);
+    Investment::factory()->create(['amount' => 2000, 'invested_at' => now()->subDays(8)]);
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'sale_item_id' => $chips->id,
+        'quantity' => 5, 'unit_price' => 320, 'total' => 1600,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5),
+    ]);
+    Expense::factory()->create([
+        'user_id' => $partner->id, 'expense_head_id' => $generalHead->id,
+        'amount' => 100, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4),
+    ]);
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    // Profit 2 = 1600 - 500 (COGS, carried stock) - 100 = 1000 → settlement 100.
+    expect((float) CommissionPeriod::orderByDesc('id')->first()->profit)->toBe(1000.0);
+
+    // Partner requests payout of the full pending due (200).
+    expect(CommissionSettlementService::pendingDue($partner->id))->toBe(200.0);
+    $this->actingAs($partner)->post('/my-commissions/request')->assertRedirect();
+    $requestId = PayoutRequest::sole()->id;
+
+    $this->actingAs($owner)->patch("/owner/commissions/requests/{$requestId}/approve")->assertRedirect();
+
+    expect(CommissionSettlement::where('status', 'paid')->count())->toBe(2)
+        ->and((float) Payout::sole()->amount)->toBe(200.0);
+
+    // Cash: 5000 + 2000 invested + 3100 sales - 1000 purchases
+    //       - 100 expense - 200 payout.
+    expect(BusinessStats::all()['cash_in_hand'])->toBe(8800.0);
+});
+
+it('seeds a consistent demo state with an open cycle owning the pending entries', function (): void {
+    $this->seed();
+
+    expect(CommissionPeriod::query()->open()->count())->toBe(1)
+        ->and(Expense::query()->pending()->count())->toBe(1)
+        ->and(Purchase::query()->pending()->count())->toBe(1);
+});
+
+it('shows the add-cash link and hint on the owner dashboard cash card', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+
+    $this->actingAs($owner)->get('/dashboard')
+        ->assertOk()
+        ->assertSee(__('messages.add_cash'))
+        ->assertSee(__('messages.cash_pool_hint'))
+        ->assertSee(route('owner.investments.index'));
+});
+
+it('seeds permanent Bangla defaults with accounts, masters and links', function (): void {
+    $this->seed(DefaultDataSeeder::class);
+
+    // Owner + the three real partners.
+    expect(User::query()->where('phone', '01675870047')->where('role', UserRole::Owner)->exists())->toBeTrue()
+        ->and(User::query()->where('phone', '01747666533')->exists())->toBeTrue()
+        ->and(User::query()->where('phone', '01705752545')->exists())->toBeTrue()
+        ->and(User::query()->where('phone', '01641196743')->exists())->toBeTrue();
+
+    // Bangla masters.
+    expect(ExpenseHead::query()->count())->toBeGreaterThanOrEqual(8)
+        ->and(PurchaseItem::query()->where('name', 'অগর গাছ')->exists())->toBeTrue()
+        ->and(SaleItem::query()->where('name', 'উদ চিপস — প্রিমিয়াম')->exists())->toBeTrue();
+
+    // Oil sale items are linked for direct resale.
+    $gradeA = SaleItem::query()->where('name', 'উদ অয়েল — গ্রেড A')->first();
+    expect($gradeA->purchaseItem?->name)->toBe('উদ অয়েল');
+
+    // Re-running the default seeder creates no duplicates.
+    $heads = ExpenseHead::query()->count();
+    $this->seed(DefaultDataSeeder::class);
+    expect(ExpenseHead::query()->count())->toBe($heads)
+        ->and(User::query()->count())->toBe(4);
+});
+
+it('only seeds demo data on a database without any commission period', function (): void {
+    $this->seed(DefaultDataSeeder::class);
+
+    // Empty of cycles → demo runs.
+    $this->seed(DemoDataSeeder::class);
+    expect(CommissionPeriod::query()->count())->toBe(11); // 10 closed + 1 demo open
+
+    // Cycles now exist → demo is skipped, no duplicates.
+    $this->seed(DemoDataSeeder::class);
+    expect(CommissionPeriod::query()->count())->toBe(11);
+});
+
+it('serves the app with a local icon, local jQuery and per-request styling', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+
+    $response = $this->actingAs($owner)->get('/dashboard');
+
+    $response->assertOk()
+        ->assertSee('icon.svg', escape: false)
+        ->assertDontSee('code.jquery.com', escape: false)
+        ->assertSee('js/jquery.min.js', escape: false);
+
+    expect(file_exists(public_path('icon.svg')))->toBeTrue()
+        ->and(file_exists(public_path('js/jquery.min.js')))->toBeTrue();
+});
+
+it('renders per-user avatars with distinct colors and name initials', function (): void {
+    $a = makeUser(['name' => 'রাজু', 'phone' => '01700000040']);
+    $b = makeUser(['name' => 'Sahel', 'phone' => '01700000041']);
+
+    $htmlA = view('components.avatar', ['user' => $a, 'size' => 32])->render();
+    $htmlB = view('components.avatar', ['user' => $b, 'size' => 32])->render();
+
+    expect($htmlA)->toContain('>র</text>')
+        ->and($htmlB)->toContain('>S</text>')
+        ->and($htmlA)->not->toBe($htmlB); // different id → different color
 });

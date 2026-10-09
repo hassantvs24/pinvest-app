@@ -31,10 +31,13 @@ return new class extends Migration
             .'SELECT id, sale_item_id, quantity, created_at, updated_at FROM productions'
         );
 
+        // Order matters across drivers: drop the foreign key first (MySQL
+        // blocks dropping an index a FK needs), then the composite index
+        // (SQLite blocks dropping a column an index covers), then columns.
         Schema::table('productions', function (Blueprint $table): void {
+            $table->dropForeign(['sale_item_id']);
             $table->dropIndex('productions_sale_item_id_entry_date_index');
-            $table->dropConstrainedForeignId('sale_item_id');
-            $table->dropColumn('quantity');
+            $table->dropColumn(['sale_item_id', 'quantity']);
         });
     }
 

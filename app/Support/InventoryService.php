@@ -132,7 +132,7 @@ class InventoryService
         // from finished-good stock; the rest fall back to their link.
         /** @var array<int, true> $producedSaleItemIds */
         $producedSaleItemIds = ProductionOutput::query()
-            ->whereHas('production', fn ($query) => $query->whereDate('entry_date', '<=', $to))
+            ->whereHas('production', fn ($query) => $query->confirmed()->whereDate('entry_date', '<=', $to))
             ->pluck('sale_item_id')
             ->flip()
             ->all();
@@ -288,6 +288,7 @@ class InventoryService
     private static function productionEvents(Carbon $to): Collection
     {
         return Production::query()
+            ->confirmed()
             ->whereDate('entry_date', '<=', $to)
             ->with(['outputs.saleItem', 'components.purchaseItem'])
             ->get()

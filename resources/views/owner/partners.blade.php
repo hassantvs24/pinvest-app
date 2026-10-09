@@ -52,7 +52,7 @@
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="font-bold text-lg {{ $partner->is_active ? '' : 'line-through text-gray-400' }}">
-                            👤 {{ $partner->name }}
+                            <span class="inline-flex items-center gap-1.5"><x-avatar :user="$partner" size="22" /> {{ $partner->name }}</span>
                         </div>
                         <div class="text-sm text-gray-500">📱 {{ $partner->phone }}</div>
                         @if($partner->email)

@@ -21,7 +21,7 @@
         @forelse($payouts as $payout)
             <div class="bg-white rounded-xl shadow p-4 flex items-start justify-between gap-2">
                 <div>
-                    <div class="font-medium">👤 {{ $payout->user->name ?? '—' }}</div>
+                    <div class="font-medium inline-flex items-center gap-1.5"><x-avatar :user="$payout->user" size="22" /> {{ $payout->user->name ?? '—' }}</div>
                     @if($payout->note)
                         <div class="text-sm text-gray-500">📝 {{ $payout->note }}</div>
                     @endif

@@ -72,6 +72,11 @@ class User extends Authenticatable
         return $this->hasMany(Sale::class);
     }
 
+    public function productions(): HasMany
+    {
+        return $this->hasMany(Production::class);
+    }
+
     public function payouts(): HasMany
     {
         return $this->hasMany(Payout::class);
@@ -99,7 +104,8 @@ class User extends Authenticatable
     {
         return $this->expenses()->pending()->count()
             + $this->purchases()->pending()->count()
-            + $this->sales()->pending()->count();
+            + $this->sales()->pending()->count()
+            + $this->productions()->pending()->count();
     }
 
     /**

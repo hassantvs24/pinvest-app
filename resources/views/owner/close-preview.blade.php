@@ -26,10 +26,10 @@
                                 <div class="min-w-0">
                                     <div class="font-medium">
                                         {{ $entry->type_icon }} {{ $entry->type_label }}
-                                        · {{ $entry->{$entry->type_item_relation}->name ?? '—' }}
+                                        · {{ $entry->type_item_name ?? $entry->{$entry->type_item_relation}->name ?? '—' }}
                                     </div>
                                     <div class="text-xs text-gray-600">
-                                        👤 {{ $entry->user->name }}
+                                        <span class="inline-flex items-center gap-1.5"><x-avatar :user="$entry->user" size="20" /> {{ $entry->user->name }}</span>
                                         · 📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
                                         🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
                                     </div>
@@ -96,7 +96,7 @@
                     @foreach($rows as $row)
                         <li class="px-4 py-2 flex items-center justify-between text-sm">
                             <div>
-                                <span class="font-medium">👤 {{ $row['user']->name }}</span>
+                                <span class="font-medium inline-flex items-center gap-1.5"><x-avatar :user="$row['user']" size="20" /> {{ $row['user']->name }}</span>
                                 <span class="text-xs text-violet-600">🤝 {{ $row['rate'] }}%</span>
                             </div>
                             <div class="font-bold">৳{{ number_format($row['amount'], 2) }}</div>

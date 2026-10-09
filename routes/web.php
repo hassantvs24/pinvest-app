@@ -10,10 +10,11 @@ use App\Http\Controllers\Owner\InvestmentController as OwnerInvestmentController
 use App\Http\Controllers\Owner\MasterController as OwnerMasterController;
 use App\Http\Controllers\Owner\PartnerController as OwnerPartnerController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
-use App\Http\Controllers\Owner\ProductionController;
+use App\Http\Controllers\Owner\ProductionController as OwnerProductionController;
 use App\Http\Controllers\Owner\ReportController as OwnerReportController;
 use App\Http\Controllers\Owner\WithdrawalController as OwnerWithdrawalController;
 use App\Http\Controllers\PartnerCommissionController;
+use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/my-commissions', [PartnerCommissionController::class, 'index'])->name('commissions.index');
     Route::post('/my-commissions/request', [PartnerCommissionController::class, 'requestPayout'])->name('commissions.request');
 
+    // Partner production runs (pending until the owner confirms).
+    Route::get('/productions', [ProductionController::class, 'index'])->name('productions.index');
+    Route::post('/productions', [ProductionController::class, 'store'])->name('productions.store');
+
     // Partner entries (own only — scoped by user_id in the controller).
     Route::get('/entries/{type}', [EntryController::class, 'index'])->name('entries.index');
     Route::get('/entries/{type}/create', [EntryController::class, 'create'])->name('entries.create');
@@ -61,9 +66,11 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/reports', [OwnerReportController::class, 'index'])->name('reports.index');
 
         // Production runs (raw materials -> finished goods).
-        Route::get('/productions', [ProductionController::class, 'index'])->name('productions.index');
-        Route::post('/productions', [ProductionController::class, 'store'])->name('productions.store');
-        Route::delete('/productions/{production}', [ProductionController::class, 'destroy'])->name('productions.destroy');
+        Route::get('/productions', [OwnerProductionController::class, 'index'])->name('productions.index');
+        Route::post('/productions', [OwnerProductionController::class, 'store'])->name('productions.store');
+        Route::patch('/productions/{production}/confirm', [OwnerProductionController::class, 'confirm'])->name('productions.confirm');
+        Route::patch('/productions/{production}/reject', [OwnerProductionController::class, 'reject'])->name('productions.reject');
+        Route::delete('/productions/{production}', [OwnerProductionController::class, 'destroy'])->name('productions.destroy');
         Route::post('/allowances', [OwnerPartnerController::class, 'storeAllowance'])->name('allowances.store');
         Route::delete('/allowances/{allowance}', [OwnerPartnerController::class, 'destroyAllowance'])->name('allowances.destroy');
 

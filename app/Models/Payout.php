@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Database\Factories\PayoutFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['user_id', 'amount', 'note', 'payout_date'])]
 class Payout extends Model
 {
-    /** @use HasFactory<\Database\Factories\PayoutFactory> */
+    /** @use HasFactory<PayoutFactory> */
     use HasFactory;
 
     /**

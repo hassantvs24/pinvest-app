@@ -36,20 +36,4 @@ class SaleItem extends Model
     {
         return $this->belongsTo(PurchaseItem::class);
     }
-
-    /**
-     * Production runs that manufactured this item.
-     */
-    public function productions(): HasMany
-    {
-        return $this->hasMany(Production::class);
-    }
-
-    /**
-     * Output lines of production runs that produced this item.
-     */
-    public function productionOutputs(): HasMany
-    {
-        return $this->hasMany(ProductionOutput::class);
-    }
 }

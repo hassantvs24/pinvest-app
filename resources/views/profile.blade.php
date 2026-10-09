@@ -6,7 +6,7 @@
     <div class="max-w-xl mx-auto space-y-4">
         <div class="bg-white rounded-2xl shadow-lg p-5">
             <div class="text-center mb-4">
-                <div class="text-5xl mb-2">👤</div>
+                <x-avatar :user="$user" size="72" class="mb-2" />
                 <div class="text-xl font-bold">{{ $user->name }}</div>
                 <span class="inline-block mt-1 text-xs px-2 py-1 rounded-full {{ $user->isOwner() ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800' }}">
                     {{ $user->isOwner() ? __('messages.role_owner') : __('messages.role_partner') }}

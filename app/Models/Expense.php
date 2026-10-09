@@ -69,12 +69,4 @@ class Expense extends Model
     {
         return $this->belongsTo(User::class, 'confirmed_by');
     }
-
-    /**
-     * Formatted amount for display, e.g. "৳1,200".
-     */
-    public function formattedAmount(): string
-    {
-        return '৳'.number_format((float) $this->amount, 2);
-    }
 }

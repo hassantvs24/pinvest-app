@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ config('app.name') }} — @yield('title', __('messages.dashboard'))</title>
-    {{-- Tailwind CSS (CDN) + jQuery (CDN) --}}
+    {{-- Tailwind CSS (CDN) + local jQuery — icon/avatars are offline SVG --}}
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="{{ asset('js/jquery.min.js') }}"></script>
+    <link rel="icon" type="image/svg+xml" href="{{ asset('icon.svg') }}">
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; }
     </style>
@@ -18,7 +19,8 @@
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex items-center justify-between h-14">
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-2 font-bold text-lg">
-                    📦 {{ config('app.name') }}
+                    <img src="{{ asset('icon.svg') }}" alt="" class="w-8 h-8 rounded-lg shadow">
+                    {{ config('app.name') }}
                 </a>
 
                 {{-- Desktop navigation --}}
@@ -32,12 +34,15 @@
                         <a href="{{ route('owner.partners.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.partners.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">👥 {{ __('messages.partners') }}</a>
                     @else
                         <a href="{{ route('entries.index', ['type' => 'sales']) }}" class="px-3 py-2 rounded {{ request()->routeIs('entries.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📋 {{ __('messages.my_entries') }}</a>
+                        <a href="{{ route('productions.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('productions.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏭 {{ __('messages.productions') }}</a>
                     @endif
                     <a href="{{ route('profile') }}" class="px-3 py-2 rounded {{ request()->routeIs('profile') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">👤 {{ __('messages.profile') }}</a>
                 </nav>
 
                 <div class="flex items-center gap-2">
-                    <span class="hidden sm:inline text-sm">{{ auth()->user()->name }}</span>
+                    <span class="hidden sm:inline-flex items-center gap-1.5 text-sm">
+                        <x-avatar :user="auth()->user()" size="28" /> {{ auth()->user()->name }}
+                    </span>
                     <span class="text-xs px-2 py-1 rounded-full {{ auth()->user()->isOwner() ? 'bg-amber-400 text-amber-900' : 'bg-emerald-500' }}">
                         {{ auth()->user()->isOwner() ? __('messages.role_owner') : __('messages.role_partner') }}
                     </span>
@@ -80,7 +85,7 @@
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg">
-        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-6' : 'grid-cols-3' }} text-center text-xs">
+        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-6' : 'grid-cols-4' }} text-center text-xs">
             <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                 <div class="text-xl">🏠</div>{{ __('messages.home') }}
             </a>
@@ -103,6 +108,9 @@
             @else
                 <a href="{{ route('entries.index', ['type' => 'sales']) }}" class="py-2 {{ request()->routeIs('entries.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">📋</div>{{ __('messages.my_entries') }}
+                </a>
+                <a href="{{ route('productions.index') }}" class="py-2 {{ request()->routeIs('productions.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
+                    <div class="text-xl">🏭</div>{{ __('messages.productions') }}
                 </a>
                 <a href="{{ route('profile') }}" class="py-2 {{ request()->routeIs('profile') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">👤</div>{{ __('messages.profile') }}

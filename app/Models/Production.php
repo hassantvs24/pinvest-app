@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\EntryStatus;
 use Database\Factories\ProductionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['user_id', 'sale_item_id', 'quantity', 'extra_cost', 'note', 'entry_date'])]
+#[Fillable(['user_id', 'extra_cost', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
 class Production extends Model
 {
     /** @use HasFactory<ProductionFactory> */
@@ -22,25 +23,31 @@ class Production extends Model
     protected function casts(): array
     {
         return [
-            'quantity' => 'integer',
             'extra_cost' => 'decimal:2',
             'entry_date' => 'date',
+            'status' => EntryStatus::class,
+            'confirmed_at' => 'datetime',
         ];
     }
 
-    /**
-     * Scope: entries in a date range (by entry date, inclusive).
-     */
-    public function scopeDateBetween(Builder $query, mixed $from, mixed $to): Builder
+    public function scopeConfirmed(Builder $query): Builder
     {
-        return $query
-            ->when($from, fn (Builder $q) => $q->whereDate('entry_date', '>=', $from))
-            ->when($to, fn (Builder $q) => $q->whereDate('entry_date', '<=', $to));
+        return $query->where('status', EntryStatus::Confirmed->value);
+    }
+
+    public function scopePending(Builder $query): Builder
+    {
+        return $query->where('status', EntryStatus::Pending->value);
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function confirmedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'confirmed_by');
     }
 
     /**

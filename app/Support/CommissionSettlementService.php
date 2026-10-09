@@ -7,6 +7,7 @@ use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\Investment;
+use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\User;
@@ -194,15 +195,17 @@ class CommissionSettlementService
     }
 
     /**
-     * All pending (owner-unapproved) entries across the three entry types,
-     * with user + item/head eager-loaded. A cycle cannot be closed while
-     * any of these exist — only one cycle is open at a time, so every
-     * pending entry belongs to it.
+     * All pending (owner-unapproved) entries across the entry types and
+     * production runs. A cycle cannot be closed while any of these exist —
+     * only one cycle is open at a time, so every pending entry belongs
+     * to it.
      *
      * Each row is tagged with `type_label`, `type_icon` and
-     * `type_item_relation` (from the shared EntryTypes config) for display.
+     * `type_item_relation` (from the shared EntryTypes config) for display;
+     * productions additionally carry a precomputed `type_item_name`
+     * (their output list) because they have several products per run.
      *
-     * @return Collection<int, Sale|Purchase|Expense>
+     * @return Collection<int, Sale|Purchase|Expense|Production>
      */
     public static function pendingEntries(): Collection
     {
@@ -225,7 +228,22 @@ class CommissionSettlementService
             $entries = $entries->merge($rows);
         }
 
+        $productions = Production::query()
+            ->pending()
+            ->with(['user', 'outputs.saleItem'])
+            ->get()
+            ->each(function (Production $production): void {
+                $production->type_label = __('messages.productions');
+                $production->type_icon = '🏭';
+                $production->type_item_relation = null;
+                $production->type_item_name = $production->outputs
+                    ->map(fn ($output): string => $output->saleItem->name.' × '.$output->quantity)
+                    ->implode(', ');
+                $production->amount = $production->extra_cost;
+            });
+
         return $entries
+            ->merge($productions)
             ->sortByDesc(fn (Model $entry) => $entry->entry_date->getTimestamp())
             ->values();
     }

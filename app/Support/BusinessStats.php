@@ -4,11 +4,13 @@ namespace App\Support;
 
 use App\EntryStatus;
 use App\Enums\ExpenseCostType;
+use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\Investment;
 use App\Models\OwnerWithdrawal;
 use App\Models\Payout;
+use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
 use Illuminate\Database\Eloquent\Builder;
@@ -23,7 +25,7 @@ use Illuminate\Support\Carbon;
  * until the goods are sold. Cash in hand stays cash-based and
  * subtracts partner payouts and owner profit withdrawals.
  *
- * @phpstan-type StatsArray array{investment: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
+ * @phpstan-type StatsArray array{investment: float, opening_cash: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
  */
 class BusinessStats
 {
@@ -75,11 +77,22 @@ class BusinessStats
             ->dateBetween($from, $to)
             ->sum('amount');
 
+        // Physical cash the cycles started with (per-cycle opening cash).
+        $openingCash = (float) CommissionPeriod::query()->sum('opening_cash');
+
+        // Production labour is paid in cash as the run happens.
+        $productionLabour = (float) Production::query()
+            ->confirmed()
+            ->when($from, fn (Builder $q) => $q->whereDate('entry_date', '>=', $from))
+            ->when($to, fn (Builder $q) => $q->whereDate('entry_date', '<=', $to))
+            ->sum('extra_cost');
+
         $netProfit = $sales - $cogs - $generalExpense - $commission;
-        $cashInHand = $investment + $sales - $purchase - $expense - $payout - $withdrawal;
+        $cashInHand = $investment + $openingCash + $sales - $purchase - $expense - $productionLabour - $payout - $withdrawal;
 
         return [
             'investment' => $investment,
+            'opening_cash' => $openingCash,
             'purchase' => $purchase,
             'cogs' => $cogs,
             'expense' => $expense,

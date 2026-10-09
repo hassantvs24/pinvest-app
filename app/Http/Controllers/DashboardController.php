@@ -6,6 +6,7 @@ use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\PayoutRequest;
+use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\User;
@@ -53,6 +54,7 @@ class DashboardController extends Controller
                     'expenses' => Expense::query()->pending()->count(),
                     'purchases' => Purchase::query()->pending()->count(),
                     'sales' => Sale::query()->pending()->count(),
+                    'productions' => Production::query()->pending()->count(),
                 ],
                 'pendingPayoutRequests' => PayoutRequest::query()->pending()->count(),
                 'leaderboard' => User::query()
@@ -60,6 +62,7 @@ class DashboardController extends Controller
                     ->orderBy('name')
                     ->get()
                     ->map(fn (User $partner) => [
+                        'user' => $partner,
                         'name' => $partner->name,
                         'commission_rate' => (float) $partner->commission_rate,
                         'total_sales' => $openPeriod

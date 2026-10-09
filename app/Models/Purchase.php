@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\EntryStatus;
+use Database\Factories\PurchaseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['user_id', 'purchase_item_id', 'quantity', 'unit_price', 'total', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
 class Purchase extends Model
 {
-    /** @use HasFactory<\Database\Factories\PurchaseFactory> */
+    /** @use HasFactory<PurchaseFactory> */
     use HasFactory;
 
     /**

@@ -9,7 +9,7 @@
             <h1 class="text-xl font-bold mb-1">🏭 {{ __('messages.add_production') }}</h1>
             <p class="text-sm text-gray-500 mb-4">{{ __('messages.production_hint') }}</p>
 
-            <form method="POST" action="{{ route('owner.productions.store') }}" class="space-y-4 js-confirm-submit">
+            <form method="POST" action="{{ route('productions.store') }}" class="space-y-4 js-confirm-submit">
                 @csrf
 
                 {{-- Finished good output rows (dynamic add/remove) --}}
@@ -80,53 +80,32 @@
             </form>
         </div>
 
-        {{-- Productions list --}}
-        <h2 class="font-bold text-lg mb-2">📋 {{ __('messages.productions') }}</h2>
+        {{-- Own productions list --}}
+        <h2 class="font-bold text-lg mb-2">📋 {{ __('messages.my_entries') }}</h2>
         <div class="space-y-3">
             @forelse($productions as $production)
                 <div class="bg-white rounded-xl shadow p-4">
-                    <div class="flex items-start justify-between gap-2">
-                        <div class="min-w-0">
-                            <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->saleItem->name.' × '.$o->quantity)->implode(', ') }}</div>
-                            <div class="text-sm text-gray-500">
-                                📅 {{ $production->entry_date->format(\App\Support\DateFormats::DATE) }}
-                                · 👤 {{ $production->user->name }}
-                                @php $pst = $production->status->value; @endphp
-                                <span class="inline-block text-xs px-2 py-0.5 rounded-full
-                                    {{ $pst === 'pending' ? 'bg-yellow-100 text-yellow-800' : ($pst === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800') }}">
-                                    {{ $pst === 'pending' ? '⏳' : ($pst === 'confirmed' ? '✅' : '❌') }} {{ __('messages.'.$pst) }}
-                                </span>
-                            </div>
-                            @foreach($production->components as $component)
-                                <div class="text-sm text-gray-600">
-                                    🧵 {{ $component->purchaseItem->name ?? '—' }}
-                                    — {{ $component->quantity }} {{ \App\Support\ItemUnits::label($component->purchaseItem->unit ?? null) }}
-                                </div>
-                            @endforeach
-                            @if((float) $production->extra_cost > 0)
-                                <div class="text-sm text-violet-700">🧾 {{ __('messages.extra_cost') }}: ৳{{ number_format((float) $production->extra_cost, 2) }}</div>
-                            @endif
-                            @if($production->note)
-                                <div class="text-sm text-gray-500">📝 {{ $production->note }}</div>
-                            @endif
-                        </div>
-                        <div class="flex items-center gap-1 shrink-0">
-                            @if($pst === 'pending')
-                                <form method="POST" action="{{ route('owner.productions.confirm', ['production' => $production->id]) }}">
-                                    @csrf @method('PATCH')
-                                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded-lg px-3 py-2">✔️</button>
-                                </form>
-                                <form method="POST" action="{{ route('owner.productions.reject', ['production' => $production->id]) }}" class="js-confirm-reject">
-                                    @csrf @method('PATCH')
-                                    <button type="submit" class="bg-red-500 hover:bg-red-600 text-white text-sm font-bold rounded-lg px-3 py-2">✖️</button>
-                                </form>
-                            @endif
-                            <form method="POST" action="{{ route('owner.productions.destroy', ['production' => $production->id]) }}" class="js-confirm-delete">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="bg-red-100 text-red-700 hover:bg-red-200 text-sm font-bold rounded-lg px-3 py-2">🗑️</button>
-                            </form>
-                        </div>
+                    <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->saleItem->name.' × '.$o->quantity)->implode(', ') }}</div>
+                    <div class="text-sm text-gray-500">
+                        📅 {{ $production->entry_date->format(\App\Support\DateFormats::DATE) }}
+                        @php $pst = $production->status->value; @endphp
+                        <span class="inline-block text-xs px-2 py-0.5 rounded-full
+                            {{ $pst === 'pending' ? 'bg-yellow-100 text-yellow-800' : ($pst === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800') }}">
+                            {{ $pst === 'pending' ? '⏳' : ($pst === 'confirmed' ? '✅' : '❌') }} {{ __('messages.'.$pst) }}
+                        </span>
                     </div>
+                    @foreach($production->components as $component)
+                        <div class="text-sm text-gray-600">
+                            🧵 {{ $component->purchaseItem->name ?? '—' }}
+                            — {{ $component->quantity }} {{ \App\Support\ItemUnits::label($component->purchaseItem->unit ?? null) }}
+                        </div>
+                    @endforeach
+                    @if((float) $production->extra_cost > 0)
+                        <div class="text-sm text-violet-700">🧾 {{ __('messages.extra_cost') }}: ৳{{ number_format((float) $production->extra_cost, 2) }}</div>
+                    @endif
+                    @if($production->note)
+                        <div class="text-sm text-gray-500">📝 {{ $production->note }}</div>
+                    @endif
                 </div>
             @empty
                 <div class="bg-white rounded-xl shadow p-8 text-center text-gray-500">
