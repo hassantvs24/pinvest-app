@@ -3,6 +3,8 @@
 @section('title', __('messages.entries'))
 
 @section('content')
+    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.owner_entries_hint') }}</p>
+
     {{-- Filter form: type / partner / status --}}
     <form method="GET" action="{{ route('owner.entries.index') }}" class="bg-white rounded-xl shadow p-4 mb-4">
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">

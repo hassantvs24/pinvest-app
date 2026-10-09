@@ -3,6 +3,8 @@
 @section('title', __('messages.my_commission'))
 
 @section('content')
+    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.my_commissions_hint') }}</p>
+
     {{-- Pending due + request button --}}
     <div class="bg-white rounded-xl shadow p-4 mb-4 border-l-4 border-violet-600">
         <div class="text-sm text-gray-500">🤝 {{ __('messages.commission_due') }}</div>

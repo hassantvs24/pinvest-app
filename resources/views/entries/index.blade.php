@@ -3,6 +3,8 @@
 @section('title', __('messages.'.$config['label']))
 
 @section('content')
+    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.entries_status_legend') }}</p>
+
     {{-- Type switcher --}}
     <div class="grid grid-cols-3 gap-2 mb-3">
         @foreach(['expenses', 'purchases', 'sales'] as $t)

@@ -321,4 +321,26 @@ return [
     'add_cash' => 'Add cash',
     'cash_pool_hint' => 'Sales money and investments share one cash pool; expenses/purchases are paid from it.',
     'investment_cash_hint' => 'Add money here when cash runs low for expenses — "cash in hand" increases.',
+
+    // Entry form hints (what each entry does)
+    'entry_hint_expenses' => 'Record any cost. "Product cost" joins stock (costed when sold), "general cost" is deducted from profit directly. ⏳ It counts only after the owner approves.',
+    'entry_hint_purchases' => 'Record buying raw materials/goods — they join stock; when sold later, cost comes out at the average rate to compute profit.',
+    'entry_hint_sales' => 'Record a sale. Linked or manufactured items get their cost deducted automatically; unlinked items trigger a warning at close.',
+    'entries_status_legend' => '⏳ = awaiting owner approval, ✅ = counted in the books, ❌ = rejected.',
+
+    // Page section hints
+    'masters_hint_expense_heads' => 'Create expense types — product costs join stock, general costs deduct from profit directly.',
+    'masters_hint_purchase_items' => 'What you buy — tracked as stock (these appear in purchase entries).',
+    'masters_hint_sale_items' => 'What you sell. Link direct resales (oil) to a purchase item; manufactured goods (chips) stay unlinked.',
+    'owner_entries_hint' => 'Approve or reject partner entries — they only count in stock/profit once approved.',
+    'partner_rate_hint' => 'On a profitable cycle the partner earns this % as commission — on a loss they get nothing. If total rates pass 100%, your own share shrinks.',
+    'my_commissions_hint' => 'Your commission ledger. ⏳ pending means it can be withdrawn — send a request below; once the owner approves, you are paid.',
+    'production_pending_hint' => '⏳ Your production counts towards stock and cost only after the owner approves it.',
+    'payout_requests_hint' => 'Partner withdrawal requests. ✅ Approving pays out ALL of that partner\'s pending commission (deducted from cash).',
+    'reports_intro_hint' => 'Summary: investment, purchases, sales, expenses, stock, commission and cash — for the selected period/cycle (lifetime when nothing is selected).',
+
+    // Cautions (⚠️)
+    'warn_expense_double_count' => 'Product costs join stock and are costed when sold — entering the same cost again as production labour counts it twice.',
+    'warn_sale_unlinked' => 'Selling an item with no purchase link and no production counts its cost as 0 — profit looks inflated. Link it from Masters.',
+    'warn_unit_locked' => 'Links and names can be changed later, but the unit cannot — make sure the unit is correct before saving.',
 ];

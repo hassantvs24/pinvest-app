@@ -65,6 +65,7 @@
     @endif
 
     {{-- 1. Business summary for the period --}}
+    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.reports_intro_hint') }}</p>
     <h2 class="font-bold text-lg mb-2">📊 {{ __('messages.business_summary') }}
         @if($from || $to)
             <span class="text-sm font-normal text-gray-500">({{ $from ?? '…' }} — {{ $to ?? '…' }})</span>

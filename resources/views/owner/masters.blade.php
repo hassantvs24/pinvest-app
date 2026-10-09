@@ -5,16 +5,20 @@
 @section('content')
     @php
         $sections = [
-            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false, 'has_link' => false, 'has_cost_type' => true],
-            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false, 'has_unit' => true, 'has_link' => false, 'has_cost_type' => false],
-            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true, 'has_unit' => true, 'has_link' => true, 'has_cost_type' => false],
+            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false, 'has_link' => false, 'has_cost_type' => true, 'hint' => __('messages.masters_hint_expense_heads')],
+            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false, 'has_unit' => true, 'has_link' => false, 'has_cost_type' => false, 'hint' => __('messages.masters_hint_purchase_items')],
+            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true, 'has_unit' => true, 'has_link' => true, 'has_cost_type' => false, 'hint' => __('messages.masters_hint_sale_items')],
         ];
     @endphp
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         @foreach($sections as $group => $section)
             <div class="bg-white rounded-xl shadow p-4">
-                <h2 class="font-bold text-lg mb-3">{{ $section['title'] }}</h2>
+                <h2 class="font-bold text-lg mb-1">{{ $section['title'] }}</h2>
+                <p class="text-xs text-gray-500 mb-3">💡 {{ $section['hint'] }}</p>
+                @if($section['has_link'])
+                    <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">⚠️ {{ __('messages.warn_unit_locked') }}</p>
+                @endif
 
                 {{-- Inline add form --}}
                 <form method="POST" action="{{ route('owner.masters.store', ['group' => $group]) }}" class="mb-4">

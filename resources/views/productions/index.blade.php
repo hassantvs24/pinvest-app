@@ -7,7 +7,8 @@
         {{-- Create form --}}
         <div class="bg-white rounded-2xl shadow-lg p-5 mb-4">
             <h1 class="text-xl font-bold mb-1">🏭 {{ __('messages.add_production') }}</h1>
-            <p class="text-sm text-gray-500 mb-4">{{ __('messages.production_hint') }}</p>
+            <p class="text-sm text-gray-500 mb-2">{{ __('messages.production_hint') }}</p>
+            <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">⏳ {{ __('messages.production_pending_hint') }}</p>
 
             <form method="POST" action="{{ route('productions.store') }}" class="space-y-4 js-confirm-submit">
                 @csrf
@@ -39,7 +40,7 @@
                         <label class="block text-sm font-medium mb-1">🧾 {{ __('messages.extra_cost') }} ({{ __('messages.optional') }})</label>
                         <input type="number" name="extra_cost" value="{{ old('extra_cost') }}" step="0.01" min="0"
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                        <p class="text-xs text-gray-500 mt-1">{{ __('messages.labour_double_count_hint') }}</p>
+                        <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mt-1">⚠️ {{ __('messages.labour_double_count_hint') }}</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-1">{{ __('messages.date') }}</label>

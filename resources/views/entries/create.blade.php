@@ -8,6 +8,10 @@
 
         <div class="bg-white rounded-2xl shadow-lg p-5">
             <h1 class="text-xl font-bold mb-4">{{ $config['icon'] }} {{ __('messages.add_'.rtrim($type, 's')) }}</h1>
+            <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.entry_hint_'.$type) }}</p>
+            @if($type === 'sales')
+                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">⚠️ {{ __('messages.warn_sale_unlinked') }}</p>
+            @endif
 
             <form method="POST" action="{{ route('entries.store', ['type' => $type]) }}" class="space-y-4 js-confirm-submit">
                 @csrf
@@ -34,6 +38,7 @@
                 {{-- Expense: optional product the cost belongs to (product-type heads only) --}}
                 @if($type === 'expenses')
                     <div id="product_item_wrap" class="hidden">
+                        <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-2">⚠️ {{ __('messages.warn_expense_double_count') }}</p>
                         <label class="block text-sm font-medium mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
                         <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                             <option value="">{{ __('messages.shared_across_products') }}</option>

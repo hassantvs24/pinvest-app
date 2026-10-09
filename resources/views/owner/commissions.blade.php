@@ -79,6 +79,7 @@
 
     {{-- 2. Pending payout requests --}}
     <h2 class="font-bold text-lg mb-2">💸 {{ __('messages.payout_requests') }}</h2>
+    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.payout_requests_hint') }}</p>
     <div class="space-y-3 mb-6">
         @forelse($requests as $request)
             <div class="bg-white rounded-xl shadow p-4">

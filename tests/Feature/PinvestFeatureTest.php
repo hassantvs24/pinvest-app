@@ -1515,3 +1515,50 @@ it('renders per-user avatars with distinct colors and name initials', function (
         ->and($htmlB)->toContain('>S</text>')
         ->and($htmlA)->not->toBe($htmlB); // different id → different color
 });
+
+it('shows entry form hints and cautions in the user language', function (): void {
+    $partner = makeUser(['phone' => '01700000050']); // bn locale
+    CommissionPeriod::factory()->open()->create();
+
+    $this->actingAs($partner)->get('/entries/sales/create')
+        ->assertOk()
+        ->assertSee(__('messages.entry_hint_sales', [], 'bn'), escape: false)
+        ->assertSee(__('messages.warn_sale_unlinked', [], 'bn'), escape: false);
+
+    $this->actingAs($partner)->get('/entries/purchases/create')
+        ->assertOk()
+        ->assertSee(__('messages.entry_hint_purchases', [], 'bn'), escape: false);
+
+    // English locale shows the English versions of the same keys.
+    $partner->update(['preferred_language' => 'en']);
+    $this->actingAs($partner)->get('/entries/sales/create')
+        ->assertSee(__('messages.entry_hint_sales', [], 'en'), escape: false);
+});
+
+it('shows section hints across owner and partner pages', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000051']);
+
+    $this->actingAs($owner)->get('/owner/masters')
+        ->assertSee(__('messages.masters_hint_expense_heads'), escape: false)
+        ->assertSee(__('messages.masters_hint_sale_items'), escape: false)
+        ->assertSee(__('messages.warn_unit_locked'), escape: false);
+
+    $this->actingAs($owner)->get('/owner/entries')
+        ->assertSee(__('messages.owner_entries_hint'), escape: false);
+
+    $this->actingAs($owner)->get('/owner/partners/create')
+        ->assertSee(__('messages.partner_rate_hint'), escape: false);
+
+    $this->actingAs($owner)->get('/owner/commissions')
+        ->assertSee(__('messages.payout_requests_hint'), escape: false);
+
+    $this->actingAs($owner)->get('/owner/reports')
+        ->assertSee(__('messages.reports_intro_hint'), escape: false);
+
+    $this->actingAs($partner)->get('/my-commissions')
+        ->assertSee(__('messages.my_commissions_hint'), escape: false);
+
+    $this->actingAs($partner)->get('/productions')
+        ->assertSee(__('messages.production_pending_hint'), escape: false);
+});
