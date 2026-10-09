@@ -136,9 +136,14 @@
         @else
             <ul class="divide-y divide-gray-100">
                 @foreach($leaderboard as $partner)
-                    <li class="px-4 py-3">
+                    <li class="px-4 py-3 {{ $partner['is_active'] ? '' : 'bg-gray-50 opacity-60' }}">
                         <div class="flex items-center justify-between gap-2 mb-1">
-                            <div class="font-medium truncate inline-flex items-center gap-1.5"><x-avatar :user="$partner['user']" size="24" /> {{ $partner['name'] }}</div>
+                            <div class="font-medium truncate inline-flex items-center gap-1.5 {{ $partner['is_active'] ? '' : 'line-through text-gray-400' }}">
+                                <x-avatar :user="$partner['user']" size="24" /> {{ $partner['name'] }}
+                                @unless($partner['is_active'])
+                                    <span class="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500 no-underline" style="text-decoration:none">⏸️ {{ __('messages.inactive') }}</span>
+                                @endunless
+                            </div>
                             <div class="text-xl font-bold text-violet-600 shrink-0">{{ $partner['commission_rate'] }}%</div>
                         </div>
                         <div class="text-xs text-gray-500">

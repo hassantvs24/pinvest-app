@@ -61,9 +61,14 @@ class DashboardController extends Controller
                     ->partners()
                     ->orderBy('name')
                     ->get()
+                    // Active partners first; inactive (grayed out) sink to
+                    // the bottom but stay visible with their history.
+                    ->sortBy(fn (User $partner): int => $partner->is_active ? 0 : 1)
+                    ->values()
                     ->map(fn (User $partner) => [
                         'user' => $partner,
                         'name' => $partner->name,
+                        'is_active' => (bool) $partner->is_active,
                         'commission_rate' => (float) $partner->commission_rate,
                         'total_sales' => $openPeriod
                             ? (float) $partner->sales()->confirmed()->whereDate('entry_date', '>=', $from)->sum('total')

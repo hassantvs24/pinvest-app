@@ -196,6 +196,17 @@ it('lets the owner create entries that are auto-confirmed', function (): void {
         ->and($sale->user_id)->toBe($owner->id);
 });
 
+it('keeps inactive partners visible but sorted last and grayed on the dashboard', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    makeUser(['name' => 'Active Raja', 'phone' => '01700000091']);
+    makeUser(['name' => 'বিদায়ী রাজু', 'phone' => '01700000092', 'is_active' => false]);
+
+    $this->actingAs($owner)->get('/dashboard')
+        ->assertOk()
+        ->assertSeeInOrder(['Active Raja', 'বিদায়ী রাজু'])
+        ->assertSee('bg-gray-50 opacity-60', escape: false);
+});
+
 it('scopes the owner dashboard to the running cycle with estimated commissions', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000017']);
