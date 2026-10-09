@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\CommissionSettlementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -15,7 +16,10 @@ class ProfileController extends Controller
      */
     public function show(Request $request): View
     {
-        return view('profile', ['user' => $request->user()]);
+        return view('profile', [
+            'user' => $request->user(),
+            'commissionDue' => CommissionSettlementService::pendingDue($request->user()->id),
+        ]);
     }
 
     /**

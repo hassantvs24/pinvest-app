@@ -59,9 +59,23 @@ class CommissionController extends Controller
     {
         abort_if(CommissionPeriod::query()->open()->exists(), 409);
 
+        // A new cycle cannot start inside a previous closed one — that
+        // would count the same entries in two cycles. Reopening the same
+        // day the previous cycle closed is fine (the effective start
+        // shifts to the next day automatically).
+        $latestClosedAt = CommissionPeriod::query()
+            ->closed()
+            ->orderByDesc('closed_at')
+            ->value('closed_at');
+
+        $openedAtRules = ['required', 'date', 'before_or_equal:today'];
+        if ($latestClosedAt !== null) {
+            $openedAtRules[] = 'after_or_equal:'.Carbon::parse($latestClosedAt)->format('Y-m-d');
+        }
+
         $validated = $request->validate([
             'label' => ['nullable', 'string', 'max:255'],
-            'opened_at' => ['required', 'date', 'before_or_equal:today'],
+            'opened_at' => $openedAtRules,
             'opening_cash' => ['nullable', 'numeric', 'min:0'],
             'investment_amount' => ['nullable', 'numeric', 'min:0.01'],
             'note' => ['nullable', 'string', 'max:1000'],
@@ -91,7 +105,7 @@ class CommissionController extends Controller
         }
 
         $closedAt = Carbon::today();
-        $stats = CommissionSettlementService::periodStats($period->opened_at, $closedAt);
+        $stats = CommissionSettlementService::periodStats(CommissionSettlementService::effectiveStart($period), $closedAt);
         $profit = $stats['profit'];
         $rows = CommissionSettlementService::settlementRows($profit);
         $totalCommission = array_sum(array_column($rows, 'amount'));
@@ -127,7 +141,12 @@ class CommissionController extends Controller
         }
 
         $validated = $request->validate([
-            'closed_at' => ['required', 'date', 'after_or_equal:'.$period->opened_at->format('Y-m-d')],
+            'closed_at' => [
+                'required',
+                'date',
+                'after_or_equal:'.$period->opened_at->format('Y-m-d'),
+                'before_or_equal:today',
+            ],
         ]);
 
         $result = CommissionSettlementService::closePeriod($period, Carbon::parse($validated['closed_at']));

@@ -26,6 +26,14 @@
             </ul>
         </div>
 
+        @if(! $user->isOwner())
+            <a href="{{ route('commissions.index') }}"
+               class="flex items-center justify-between bg-white rounded-2xl shadow-lg p-4 font-bold text-emerald-700 hover:bg-emerald-50">
+                <span>🤝 {{ __('messages.my_commission') }}</span>
+                <span class="text-xs font-normal text-gray-500">{{ __('messages.commission_due') }}: ৳{{ number_format($commissionDue, 2) }} →</span>
+            </a>
+        @endif
+
         <div class="bg-white rounded-2xl shadow-lg p-5">
             <h2 class="font-bold text-lg mb-4">🔒 {{ __('messages.change_password') }}</h2>
             <form method="POST" action="{{ route('profile.password') }}" class="space-y-3">

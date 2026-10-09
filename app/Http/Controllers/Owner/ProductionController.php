@@ -140,10 +140,13 @@ class ProductionController extends Controller
 
     /**
      * Remove a production run (cascades its component and output lines).
-     * Stock and COGS recomputed live afterwards.
+     * Stock and COGS recomputed live afterwards. Only while a cycle is
+     * open, so closed cycles keep matching their stored profit.
      */
     public function destroy(Production $production): RedirectResponse
     {
+        abort_unless($this->cycleOpen(), 409);
+
         $production->delete();
 
         return back()->with('success', __('messages.production_deleted'));

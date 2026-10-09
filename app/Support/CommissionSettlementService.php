@@ -83,9 +83,31 @@ class CommissionSettlementService
         return $rows;
     }
 
+    /**
+     * The date a cycle's accounts actually start from. When a previous
+     * cycle was closed on/after this cycle's opened_at (overlap or
+     * same-day reopen), counting starts the day AFTER that close — so
+     * no entry is ever counted in two cycles, and days left between
+     * cycles fall into the next one instead of vanishing.
+     */
+    public static function effectiveStart(CommissionPeriod $period): Carbon
+    {
+        // Accounts start the day after the latest closed cycle. That
+        // prevents double-counting on overlap/same-day reopen and pulls
+        // gap days (between close and reopen) into the new cycle.
+        $latestClosed = CommissionPeriod::query()
+            ->closed()
+            ->orderByDesc('closed_at')
+            ->value('closed_at');
+
+        return $latestClosed !== null
+            ? Carbon::parse($latestClosed)->addDay()
+            : $period->opened_at->copy();
+    }
+
     public static function closePeriod(CommissionPeriod $period, Carbon $closedAt): array
     {
-        $profit = self::periodProfit($period->opened_at, $closedAt);
+        $profit = self::periodProfit(self::effectiveStart($period), $closedAt);
 
         $period->update([
             'status' => 'closed',
@@ -270,7 +292,7 @@ class CommissionSettlementService
      */
     public static function runningProfit(CommissionPeriod $period): float
     {
-        return self::periodProfit($period->opened_at, Carbon::today());
+        return self::periodProfit(self::effectiveStart($period), Carbon::today());
     }
 
     /**

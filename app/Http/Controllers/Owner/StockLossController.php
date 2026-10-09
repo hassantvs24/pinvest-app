@@ -117,6 +117,8 @@ class StockLossController extends Controller
 
     public function destroy(StockLoss $stockLoss): RedirectResponse
     {
+        abort_unless(CommissionPeriod::query()->open()->exists(), 409);
+
         $stockLoss->delete();
 
         return back()->with('success', __('messages.stock_loss_deleted'));

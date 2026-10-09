@@ -77,8 +77,12 @@ class BusinessStats
             ->dateBetween($from, $to)
             ->sum('amount');
 
-        // Physical cash the cycles started with (per-cycle opening cash).
-        $openingCash = (float) CommissionPeriod::query()->sum('opening_cash');
+        // Physical cash the cycles started with (per-cycle opening cash),
+        // scoped to the requested range like every other figure.
+        $openingCash = (float) CommissionPeriod::query()
+            ->when($from, fn (Builder $q) => $q->whereDate('opened_at', '>=', $from))
+            ->when($to, fn (Builder $q) => $q->whereDate('opened_at', '<=', $to))
+            ->sum('opening_cash');
 
         // Production labour is paid in cash as the run happens.
         $productionLabour = (float) Production::query()

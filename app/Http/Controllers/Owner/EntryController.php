@@ -233,9 +233,15 @@ class EntryController extends Controller
 
     /**
      * Permanently delete an entry (owner-triggered, JS confirm popup).
+     * Deleting is only possible while a cycle is open, so closed cycles
+     * keep matching their stored profit and settlements.
      */
     public function destroy(string $type, int $entry): RedirectResponse
     {
+        if (! $this->cycleOpen()) {
+            return back()->with('warning', __('messages.confirm_blocked_no_period'));
+        }
+
         $this->findEntry($type, $entry)->delete();
 
         return back()->with('success', __('messages.entry_deleted'));

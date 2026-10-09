@@ -872,6 +872,24 @@ it('lets a user change their password from the profile', function (): void {
     expect(Hash::check('newsecret456', $user->fresh()->password))->toBeTrue();
 });
 
+it('shows the pending commission amount on the profile page', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000097']);
+    $item = Item::factory()->create(['unit' => 'pcs']);
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000, 'status' => EntryStatus::Confirmed]);
+    Sale::factory()->create(['user_id' => $partner->id, 'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 200, 'total' => 2000, 'status' => EntryStatus::Confirmed]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', ['closed_at' => now()->format('Y-m-d')]);
+
+    expect(CommissionSettlementService::pendingDue($partner->id))->toBe(100.0);
+
+    $this->actingAs($partner)->get('/profile')
+        ->assertOk()
+        ->assertSee('100.00')
+        ->assertSee(__('messages.commission_due', [], 'bn'));
+});
+
 it('rejects a password change with a wrong current password', function (): void {
     $user = makeUser(['password' => 'secret123']);
 
@@ -1762,4 +1780,126 @@ it('forces partner entries to today regardless of the submitted date', function 
     ])->assertRedirect();
 
     expect(Expense::sole()->entry_date->format('Y-m-d'))->toBe(now()->format('Y-m-d'));
+});
+
+it('blocks opening a cycle inside a previously closed one', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(30)]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->subDays(10)->format('Y-m-d'),
+    ])->assertRedirect();
+
+    // Opening before the previous close day is rejected.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(15)->format('Y-m-d'),
+    ])->assertSessionHasErrors('opened_at');
+
+    // Same-day reopen is allowed.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(10)->format('Y-m-d'),
+    ])->assertSessionDoesntHaveErrors()->assertRedirect();
+
+    expect(CommissionPeriod::query()->open()->count())->toBe(1);
+});
+
+it('does not double-count entries when a cycle is reopened the same day', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10]);
+    $item = Item::factory()->create(['unit' => 'pcs']);
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4)]);
+    Sale::factory()->create(['user_id' => $partner->id, 'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 200, 'total' => 2000, 'status' => EntryStatus::Confirmed, 'entry_date' => today()]);
+
+    // Close cycle A today — today's sale counts in A only.
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ])->assertRedirect();
+    expect((float) CommissionPeriod::sole()->profit)->toBe(1000.0);
+
+    // Reopen the same day: cycle B must not see today's sale again.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->format('Y-m-d'),
+    ])->assertSessionDoesntHaveErrors();
+
+    $periodB = CommissionPeriod::query()->open()->sole();
+    expect(CommissionSettlementService::runningProfit($periodB))->toBe(0.0);
+});
+
+it('absorbs entries from the gap between cycles into the next one', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $head = ExpenseHead::factory()->create(['name' => 'গ্যাপ খরচ']);
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(30)]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->subDays(20)->format('Y-m-d'),
+    ])->assertRedirect();
+
+    // New cycle opens 15 days ago; an entry lands 18 days ago — inside the gap.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(15)->format('Y-m-d'),
+    ])->assertSessionDoesntHaveErrors();
+
+    $expense = Expense::factory()->create([
+        'user_id' => $owner->id,
+        'expense_head_id' => $head->id,
+        'amount' => 500,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDays(18),
+    ]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ])->assertRedirect();
+
+    expect((float) CommissionPeriod::orderByDesc('id')->first()->profit)->toBe(-500.0);
+});
+
+it('rejects closing a cycle with a future date', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->addDay()->format('Y-m-d'),
+    ])->assertSessionHasErrors('closed_at');
+
+    expect(CommissionPeriod::sole()->status)->toBe('open');
+});
+
+it('blocks deleting confirmed entries outside an open cycle', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = Item::factory()->create();
+    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
+
+    $sale = Sale::factory()->create(['item_id' => $item->id, 'status' => EntryStatus::Confirmed]);
+    $production = Production::factory()->create(['status' => EntryStatus::Confirmed]);
+    $loss = StockLoss::factory()->create(['item_id' => $item->id, 'status' => EntryStatus::Confirmed]);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ])->assertRedirect();
+
+    // No cycle is open → deletes are blocked, the closed cycle stays intact.
+    $this->actingAs($owner)->delete("/owner/entries/sales/{$sale->id}")->assertRedirect();
+    $this->actingAs($owner)->delete("/owner/productions/{$production->id}")->assertStatus(409);
+    $this->actingAs($owner)->delete("/owner/stock-losses/{$loss->id}")->assertStatus(409);
+
+    expect(Sale::query()->whereKey($sale->id)->exists())->toBeTrue()
+        ->and(Production::query()->whereKey($production->id)->exists())->toBeTrue()
+        ->and(StockLoss::query()->whereKey($loss->id)->exists())->toBeTrue();
+});
+
+it('scopes opening cash to the requested date range', function (): void {
+    CommissionPeriod::factory()->create([
+        'opened_at' => now()->subDays(60),
+        'closed_at' => now()->subDays(50),
+        'opening_cash' => 5000,
+    ]);
+    CommissionPeriod::factory()->open()->create([
+        'opened_at' => now()->subDays(5),
+        'opening_cash' => 700,
+    ]);
+
+    expect(BusinessStats::all()['opening_cash'])->toBe(5700.0)
+        ->and(BusinessStats::all(null, now()->subDays(10)->format('Y-m-d'), now()->format('Y-m-d'))['opening_cash'])->toBe(700.0);
 });
