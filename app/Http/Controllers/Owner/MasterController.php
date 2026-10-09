@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\ExpenseCostType;
 use App\Http\Controllers\Controller;
 use App\Models\ExpenseHead;
 use App\Models\PurchaseItem;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -22,7 +24,7 @@ class MasterController extends Controller
     /**
      * Allowed master groups => configuration.
      *
-     * @return array<string, array{model: class-string<Model>, has_price: bool, has_unit: bool, relation: string}>
+     * @return array<string, array{model: class-string<Model>, has_price: bool, has_unit: bool, has_link: bool, has_cost_type: bool, relation: string}>
      */
     private function groups(): array
     {
@@ -31,25 +33,31 @@ class MasterController extends Controller
                 'model' => ExpenseHead::class,
                 'has_price' => false,
                 'has_unit' => false,
+                'has_link' => false,
+                'has_cost_type' => true,
                 'relation' => 'expenses',
             ],
             'purchase-items' => [
                 'model' => PurchaseItem::class,
                 'has_price' => false,
                 'has_unit' => true,
+                'has_link' => false,
+                'has_cost_type' => false,
                 'relation' => 'purchases',
             ],
             'sale-items' => [
                 'model' => SaleItem::class,
                 'has_price' => true,
                 'has_unit' => true,
+                'has_link' => true,
+                'has_cost_type' => false,
                 'relation' => 'sales',
             ],
         ];
     }
 
     /**
-     * @return array{model: class-string<Model>, has_price: bool, has_unit: bool, relation: string}
+     * @return array{model: class-string<Model>, has_price: bool, has_unit: bool, has_link: bool, has_cost_type: bool, relation: string}
      */
     private function groupConfig(string $group): array
     {
@@ -67,7 +75,7 @@ class MasterController extends Controller
         return view('owner.masters', [
             'expenseHeads' => ExpenseHead::query()->orderBy('name')->get(),
             'purchaseItems' => PurchaseItem::query()->orderBy('name')->get(),
-            'saleItems' => SaleItem::query()->orderBy('name')->get(),
+            'saleItems' => SaleItem::query()->with('purchaseItem')->orderBy('name')->get(),
         ]);
     }
 
@@ -90,14 +98,34 @@ class MasterController extends Controller
         if ($config['has_unit']) {
             $rules['unit'] = ['required', ItemUnits::rule()];
         }
+        if ($config['has_link']) {
+            $rules['purchase_item_id'] = ['nullable', 'exists:purchase_items,id'];
+        }
+        if ($config['has_cost_type']) {
+            $rules['cost_type'] = ['required', Rule::enum(ExpenseCostType::class)];
+        }
 
         $validated = $request->validate($rules);
 
-        $modelClass::query()->create([
+        if ($config['has_link'] && ! empty($validated['purchase_item_id'])) {
+            $this->ensureCompatibleUnits($validated['unit'], (int) $validated['purchase_item_id']);
+        }
+
+        $payload = [
             'name' => $validated['name'],
             'default_price' => $config['has_price'] ? $validated['default_price'] : null,
             'unit' => $config['has_unit'] ? $validated['unit'] : 'pcs',
-        ]);
+        ];
+
+        if ($config['has_link']) {
+            $payload['purchase_item_id'] = $validated['purchase_item_id'] ?? null;
+        }
+
+        if ($config['has_cost_type']) {
+            $payload['cost_type'] = $validated['cost_type'];
+        }
+
+        $modelClass::query()->create($payload);
 
         return back()->with('success', __('messages.item_added'));
     }
@@ -139,11 +167,47 @@ class MasterController extends Controller
                 'max:255',
                 Rule::unique($item->getTable(), 'name')->ignore($item->id),
             ],
+            'purchase_item_id' => ['nullable', 'exists:purchase_items,id'],
+            'cost_type' => ['nullable', Rule::enum(ExpenseCostType::class)],
         ]);
 
-        $item->update(['name' => $validated['name']]);
+        if ($config['has_link']) {
+            $this->ensureCompatibleUnits($item->unit, (int) ($validated['purchase_item_id'] ?? 0));
+        }
+
+        $payload = ['name' => $validated['name']];
+
+        if ($config['has_link']) {
+            $payload['purchase_item_id'] = $validated['purchase_item_id'];
+        }
+
+        if ($config['has_cost_type']) {
+            $payload['cost_type'] = $validated['cost_type'] ?? $item->cost_type;
+        }
+
+        $item->update($payload);
 
         return back()->with('success', __('messages.item_renamed'));
+    }
+
+    /**
+     * A sale item may only resell a purchase item whose unit is
+     * convertible (same unit category), otherwise stock and COGS
+     * would be meaningless.
+     */
+    private function ensureCompatibleUnits(string $unit, int $purchaseItemId): void
+    {
+        if ($purchaseItemId <= 0) {
+            return;
+        }
+
+        $purchaseItem = PurchaseItem::query()->findOrFail($purchaseItemId);
+
+        if (! ItemUnits::compatible($unit, $purchaseItem->unit)) {
+            throw ValidationException::withMessages([
+                'purchase_item_id' => __('messages.incompatible_units'),
+            ]);
+        }
     }
 
     /**

@@ -3,16 +3,17 @@
 namespace App\Models;
 
 use App\EntryStatus;
+use Database\Factories\ExpenseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'expense_head_id', 'amount', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
+#[Fillable(['user_id', 'expense_head_id', 'purchase_item_id', 'amount', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
 class Expense extends Model
 {
-    /** @use HasFactory<\Database\Factories\ExpenseFactory> */
+    /** @use HasFactory<ExpenseFactory> */
     use HasFactory;
 
     /**
@@ -54,6 +55,14 @@ class Expense extends Model
     public function expenseHead(): BelongsTo
     {
         return $this->belongsTo(ExpenseHead::class);
+    }
+
+    /**
+     * Optional purchase item this product cost applies to.
+     */
+    public function purchaseItem(): BelongsTo
+    {
+        return $this->belongsTo(PurchaseItem::class);
     }
 
     public function confirmedBy(): BelongsTo

@@ -91,7 +91,8 @@ class CommissionController extends Controller
         }
 
         $closedAt = Carbon::today();
-        $profit = CommissionSettlementService::periodProfit($period->opened_at, $closedAt);
+        $stats = CommissionSettlementService::periodStats($period->opened_at, $closedAt);
+        $profit = $stats['profit'];
         $rows = CommissionSettlementService::settlementRows($profit);
         $totalCommission = array_sum(array_column($rows, 'amount'));
         $pendingEntries = CommissionSettlementService::pendingEntries();
@@ -100,6 +101,7 @@ class CommissionController extends Controller
             'period' => $period,
             'closedAt' => $closedAt,
             'pendingEntries' => $pendingEntries,
+            'stats' => $stats,
             'profit' => $profit,
             'rows' => $rows,
             'totalCommission' => $totalCommission,

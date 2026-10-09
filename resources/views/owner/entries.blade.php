@@ -50,6 +50,9 @@
                         @if($entry->note)
                             <div class="text-sm text-gray-500">📝 {{ $entry->note }}</div>
                         @endif
+                        @if($type === 'expenses' && $entry->purchaseItem)
+                            <div class="text-sm text-gray-500">📦 {{ $entry->purchaseItem->name }}</div>
+                        @endif
                         <div class="text-sm text-gray-500">
                             📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
                             🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
@@ -104,6 +107,17 @@
                     </div>
 
                     @if($type === 'expenses')
+                        <div>
+                            <label class="block text-xs font-medium text-gray-500 mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
+                            <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                                <option value="">{{ __('messages.shared_across_products') }}</option>
+                                @foreach($purchaseItems as $purchaseItem)
+                                    <option value="{{ $purchaseItem->id }}" {{ $entry->purchase_item_id === $purchaseItem->id ? 'selected' : '' }}>
+                                        {{ $purchaseItem->name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.amount') }}</label>
                             <input type="number" name="amount" step="0.01" min="0" value="{{ $entry->amount }}" required

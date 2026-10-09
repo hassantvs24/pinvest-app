@@ -39,6 +39,61 @@ class ItemUnits
     }
 
     /**
+     * @var array<string, string> unit => category (weight shares one base).
+     */
+    private const CATEGORIES = [
+        'kg' => 'weight',
+        'gram' => 'weight',
+        'tola' => 'weight',
+        'pcs' => 'count',
+        'ml' => 'volume',
+    ];
+
+    /**
+     * Category of a unit: 'weight', 'count' or 'volume'. Units of
+     * different categories can never be converted into each other.
+     */
+    public static function category(string $unit): string
+    {
+        return self::CATEGORIES[$unit] ?? 'count';
+    }
+
+    /**
+     * Whether two units can be linked across purchase/sale items
+     * (they must share the same category).
+     */
+    public static function compatible(string $a, string $b): bool
+    {
+        return self::category($a) === self::category($b);
+    }
+
+    /**
+     * Convert a quantity to the base unit of its category: grams for
+     * weight units, the raw quantity for count/volume units. Factors
+     * come from config/inventory.php — nothing is hardcoded here.
+     */
+    public static function toBase(float $quantity, string $unit): float
+    {
+        if (self::category($unit) !== 'weight') {
+            return $quantity;
+        }
+
+        return $quantity * (float) config('inventory.grams_per_unit.'.$unit, 1.0);
+    }
+
+    /**
+     * Convert a base-quantity back into the given unit for display.
+     */
+    public static function fromBase(float $baseQuantity, string $unit): float
+    {
+        if (self::category($unit) !== 'weight') {
+            return $baseQuantity;
+        }
+
+        return $baseQuantity / (float) config('inventory.grams_per_unit.'.$unit, 1.0);
+    }
+
+    /**
      * Validation rule fragment, e.g. "in:kg,gram,tola,pcs,ml".
      */
     public static function rule(): string

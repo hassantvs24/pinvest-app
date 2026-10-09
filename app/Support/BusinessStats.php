@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\EntryStatus;
+use App\Enums\ExpenseCostType;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\Investment;
@@ -11,16 +12,18 @@ use App\Models\Payout;
 use App\Models\Purchase;
 use App\Models\Sale;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 /**
  * Single source of truth for the business calculation logic.
  *
- * Totals count CONFIRMED entries only. Commission is settlement-based
- * (period net profit x partner rate, see CommissionSettlementService) —
- * NOT the per-sale estimate stored on sale rows. Cash in hand subtracts
- * partner payouts and owner profit withdrawals.
+ * Totals count CONFIRMED entries only. Net profit is accrual-based:
+ * sales − COGS (cost of goods sold, via InventoryService) − general
+ * expenses; product costs (transport, labour) stay in stock value
+ * until the goods are sold. Cash in hand stays cash-based and
+ * subtracts partner payouts and owner profit withdrawals.
  *
- * @phpstan-type StatsArray array{investment: float, purchase: float, expense: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
+ * @phpstan-type StatsArray array{investment: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
  */
 class BusinessStats
 {
@@ -41,6 +44,22 @@ class BusinessStats
         $expense = self::entrySum(Expense::query(), 'amount', $userId, $from, $to);
         $sales = self::entrySum(Sale::query(), 'total', $userId, $from, $to);
 
+        // COGS / stock are business-wide concepts: partner-scoped views
+        // keep their simple cash-basis figures.
+        $cogs = $userId === null ? InventoryService::cogs(
+            Carbon::parse($from ?? '1970-01-01'),
+            Carbon::parse($to ?? now()->format('Y-m-d')),
+        ) : 0.0;
+        $generalExpense = $userId === null ? (float) Expense::query()
+            ->where('status', EntryStatus::Confirmed->value)
+            ->whereHas('expenseHead', fn (Builder $q) => $q->where('cost_type', ExpenseCostType::General->value))
+            ->when($from, fn (Builder $q) => $q->whereDate('entry_date', '>=', $from))
+            ->when($to, fn (Builder $q) => $q->whereDate('entry_date', '<=', $to))
+            ->sum('amount') : $expense;
+        $stockValue = $userId === null
+            ? InventoryService::stockValue(Carbon::parse($to ?? now()->format('Y-m-d')))
+            : 0.0;
+
         $commission = (float) CommissionSettlement::query()
             ->when($userId, fn (Builder $q) => $q->where('user_id', $userId))
             ->periodBetween($from, $to)
@@ -56,13 +75,17 @@ class BusinessStats
             ->dateBetween($from, $to)
             ->sum('amount');
 
-        $netProfit = $sales - $purchase - $expense - $commission;
+        $netProfit = $sales - $cogs - $generalExpense - $commission;
         $cashInHand = $investment + $sales - $purchase - $expense - $payout - $withdrawal;
 
         return [
             'investment' => $investment,
             'purchase' => $purchase,
+            'cogs' => $cogs,
             'expense' => $expense,
+            'general_expense' => $generalExpense,
+            'product_expense' => $expense - $generalExpense,
+            'stock_value' => $stockValue,
             'sales' => $sales,
             'commission' => $commission,
             'payout' => $payout,

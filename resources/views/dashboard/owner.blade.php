@@ -109,6 +109,14 @@
                 ৳{{ number_format($stats['net_profit'], 2) }}
             </div>
         </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-teal-600">
+            <div class="text-sm text-gray-500">🏪 {{ __('messages.stock_value') }}</div>
+            <div class="text-2xl font-bold">৳{{ number_format($stats['stock_value'], 2) }}</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-indigo-600">
+            <div class="text-sm text-gray-500">🏷️ {{ __('messages.cost_of_goods_sold') }}</div>
+            <div class="text-2xl font-bold">৳{{ number_format($stats['cogs'], 2) }}</div>
+        </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">🏦 {{ __('messages.cash_in_hand') }}</div>
             <div class="text-2xl font-bold">৳{{ number_format($cashInHand, 2) }}</div>

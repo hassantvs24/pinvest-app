@@ -14,6 +14,7 @@ use App\Models\Sale;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
+use App\Support\InventoryService;
 use App\Support\ItemUnits;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -68,8 +69,9 @@ class ReportController extends Controller
             'openDays' => $selectedCycle
                 ? max(1, (int) $selectedCycle->opened_at->diffInDays($selectedCycle->closed_at ?? now()) + 1)
                 : 0,
-            'ownerShare' => $periodStats['sales'] - $periodStats['purchase'] - $periodStats['expense'] - $periodStats['commission'],
+            'ownerShare' => $periodStats['net_profit'],
             'stats' => $periodStats,
+            'stockRows' => InventoryService::stockRows(Carbon::parse($to ?? now()->format('Y-m-d'))),
             'lifetimeCashInHand' => $lifetime['cash_in_hand'],
             'lifetimeInvestment' => $lifetime['investment'],
             'partners' => $this->partnerRows($from, $to),

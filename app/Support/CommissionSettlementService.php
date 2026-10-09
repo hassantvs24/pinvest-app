@@ -118,9 +118,17 @@ class CommissionSettlementService
     }
 
     /**
-     * Confirmed-only net profit between two dates (by entry date).
+     * Confirmed-only breakdown between two dates (by entry date):
+     * sales, purchases, cost of goods sold, product/general expenses
+     * and the resulting net profit.
+     *
+     * Profit is accrual-based: purchases and product costs sit in stock
+     * until the goods are sold, so unsold stock never distorts a cycle
+     * (COGS follows the sale across cycle boundaries automatically).
+     *
+     * @return array{sales: float, purchase: float, cogs: float, product_expense: float, expense: float, profit: float, stock_value: float, warnings: list<string>}
      */
-    public static function periodProfit(Carbon $start, Carbon $end): float
+    public static function periodStats(Carbon $start, Carbon $end): array
     {
         $sales = (float) Sale::query()
             ->where('status', EntryStatus::Confirmed->value)
@@ -134,13 +142,55 @@ class CommissionSettlementService
             ->whereDate('entry_date', '<=', $end)
             ->sum('total');
 
-        $expense = (float) Expense::query()
+        $expenseTotals = self::expenseTotals($start, $end);
+
+        $cogs = InventoryService::cogs($start, $end);
+
+        return [
+            'sales' => $sales,
+            'purchase' => $purchase,
+            'cogs' => $cogs,
+            'product_expense' => $expenseTotals['product'],
+            'expense' => $expenseTotals['general'],
+            'profit' => $sales - $cogs - $expenseTotals['general'],
+            'stock_value' => InventoryService::stockValue($end),
+            'warnings' => InventoryService::warnings($end),
+        ];
+    }
+
+    /**
+     * Confirmed expense split between general (period cost) and product
+     * (stock cost) heads for a date range.
+     *
+     * @return array{general: float, product: float}
+     */
+    private static function expenseTotals(Carbon $start, Carbon $end): array
+    {
+        $general = 0.0;
+        $product = 0.0;
+
+        foreach (Expense::query()
             ->where('status', EntryStatus::Confirmed->value)
             ->whereDate('entry_date', '>=', $start)
             ->whereDate('entry_date', '<=', $end)
-            ->sum('amount');
+            ->with('expenseHead')
+            ->get() as $expense) {
+            if ($expense->expenseHead?->cost_type?->addsToStock()) {
+                $product += (float) $expense->amount;
+            } else {
+                $general += (float) $expense->amount;
+            }
+        }
 
-        return $sales - $purchase - $expense;
+        return ['general' => $general, 'product' => $product];
+    }
+
+    /**
+     * Confirmed-only net profit between two dates (by entry date).
+     */
+    public static function periodProfit(Carbon $start, Carbon $end): float
+    {
+        return self::periodStats($start, $end)['profit'];
     }
 
     /**

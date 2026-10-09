@@ -23,12 +23,29 @@
                         @foreach($items as $item)
                             <option value="{{ $item->id }}" data-price="{{ $type === 'sales' ? $item->default_price : '' }}"
                                     data-unit="{{ $config['has_unit'] ? \App\Support\ItemUnits::label($item->unit) : '' }}"
+                                    data-cost-type="{{ $type === 'expenses' ? $item->cost_type->value : '' }}"
                                     {{ old('head_id') == $item->id ? 'selected' : '' }}>
                                 {{ $item->name }}{{ $type === 'sales' ? ' (৳'.number_format((float) $item->default_price, 2).')' : '' }}{{ $config['has_unit'] ? ' ('.\App\Support\ItemUnits::label($item->unit).')' : '' }}
                             </option>
                         @endforeach
                     </select>
                 </div>
+
+                {{-- Expense: optional product the cost belongs to (product-type heads only) --}}
+                @if($type === 'expenses')
+                    <div id="product_item_wrap" class="hidden">
+                        <label class="block text-sm font-medium mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
+                        <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="">{{ __('messages.shared_across_products') }}</option>
+                            @foreach($purchaseItems as $purchaseItem)
+                                <option value="{{ $purchaseItem->id }}" {{ old('purchase_item_id') == $purchaseItem->id ? 'selected' : '' }}>
+                                    {{ $purchaseItem->name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">{{ __('messages.product_cost_hint') }}</p>
+                    </div>
+                @endif
 
                 {{-- Expense: single amount --}}
                 @if($type === 'expenses')
@@ -80,4 +97,18 @@
             </form>
         </div>
     </div>
+
+    @if($type === 'expenses')
+        <script>
+            $(function () {
+                // Product item picker only makes sense for product-type heads.
+                function toggleProductItem() {
+                    var isProduct = $('#head_id option:selected').data('cost-type') === 'product';
+                    $('#product_item_wrap').toggleClass('hidden', !isProduct);
+                }
+                $(document).on('change', '#head_id', toggleProductItem);
+                toggleProductItem();
+            });
+        </script>
+    @endif
 @endsection

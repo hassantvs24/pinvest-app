@@ -41,6 +41,46 @@
                 </div>
             @endif
 
+            {{-- Period breakdown: sales / COGS / purchases / expenses / stock --}}
+            <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 mb-4 text-sm">
+                <li class="px-4 py-2 flex items-center justify-between">
+                    <span>💰 {{ __('messages.total_sales') }}</span>
+                    <span class="font-bold text-emerald-700">৳{{ number_format($stats['sales'], 2) }}</span>
+                </li>
+                <li class="px-4 py-2 flex items-center justify-between">
+                    <span>🏷️ {{ __('messages.cost_of_goods_sold') }}</span>
+                    <span class="font-bold text-indigo-700">−৳{{ number_format($stats['cogs'], 2) }}</span>
+                </li>
+                <li class="px-4 py-2 flex items-center justify-between">
+                    <span>🛒 {{ __('messages.total_purchase') }} <span class="text-xs text-gray-400">({{ __('messages.cash_reference') }})</span></span>
+                    <span class="font-bold text-orange-700">৳{{ number_format($stats['purchase'], 2) }}</span>
+                </li>
+                <li class="px-4 py-2 flex items-center justify-between">
+                    <span>📦 {{ __('messages.product_expense') }}</span>
+                    <span class="font-bold text-violet-700">৳{{ number_format($stats['product_expense'], 2) }}</span>
+                </li>
+                <li class="px-4 py-2 flex items-center justify-between">
+                    <span>🧾 {{ __('messages.general_expense') }}</span>
+                    <span class="font-bold text-red-700">−৳{{ number_format($stats['expense'], 2) }}</span>
+                </li>
+                <li class="px-4 py-2 flex items-center justify-between bg-gray-50">
+                    <span>🏪 {{ __('messages.stock_value') }}</span>
+                    <span class="font-bold text-teal-700">৳{{ number_format($stats['stock_value'], 2) }}</span>
+                </li>
+            </ul>
+
+            {{-- Data-quality warnings (unlinked items, negative stock, ...) --}}
+            @if(count($stats['warnings']) > 0)
+                <div class="bg-yellow-50 border border-yellow-400 rounded-xl p-4 mb-4">
+                    <div class="font-bold text-yellow-900 mb-1">⚠️ {{ __('messages.attention') }}</div>
+                    <ul class="list-disc list-inside text-sm text-yellow-800 space-y-1">
+                        @foreach($stats['warnings'] as $warning)
+                            <li>{{ $warning }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             {{-- Profit --}}
             <div class="rounded-xl p-4 mb-4 {{ $profit >= 0 ? 'bg-green-50 border border-green-300' : 'bg-red-50 border border-red-300' }}">
                 <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>

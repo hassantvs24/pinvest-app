@@ -5,9 +5,9 @@
 @section('content')
     @php
         $sections = [
-            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false],
-            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false, 'has_unit' => true],
-            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true, 'has_unit' => true],
+            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false, 'has_link' => false, 'has_cost_type' => true],
+            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false, 'has_unit' => true, 'has_link' => false, 'has_cost_type' => false],
+            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true, 'has_unit' => true, 'has_link' => true, 'has_cost_type' => false],
         ];
     @endphp
 
@@ -32,6 +32,20 @@
                             @endforeach
                         </select>
                     @endif
+                    @if($section['has_link'])
+                        <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2 bg-white">
+                            <option value="">{{ __('messages.linked_purchase_item') }} ({{ __('messages.optional') }})</option>
+                            @foreach($purchaseItems as $purchaseItem)
+                                <option value="{{ $purchaseItem->id }}">{{ $purchaseItem->name }} ({{ \App\Support\ItemUnits::label($purchaseItem->unit) }})</option>
+                            @endforeach
+                        </select>
+                    @endif
+                    @if($section['has_cost_type'])
+                        <select name="cost_type" class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2 bg-white">
+                            <option value="general">{{ __('messages.cost_type_general') }}</option>
+                            <option value="product">{{ __('messages.cost_type_product') }}</option>
+                        </select>
+                    @endif
                     <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg py-3">
                         ➕ {{ __('messages.add_item') }}
                     </button>
@@ -50,6 +64,16 @@
                                 @endif
                                 @if($section['has_unit'])
                                     <div class="text-xs text-emerald-700">⚖️ {{ \App\Support\ItemUnits::label($item->unit) }}</div>
+                                @endif
+                                @if($section['has_link'])
+                                    <div class="text-xs {{ $item->purchaseItem ? 'text-gray-500' : 'text-yellow-600 font-medium' }}">
+                                        🔗 {{ $item->purchaseItem ? $item->purchaseItem->name : __('messages.not_linked') }}
+                                    </div>
+                                @endif
+                                @if($section['has_cost_type'])
+                                    <div class="text-xs {{ $item->cost_type?->addsToStock() ? 'text-violet-600' : 'text-gray-500' }}">
+                                        🏷️ {{ $item->cost_type?->addsToStock() ? __('messages.cost_type_product') : __('messages.cost_type_general') }}
+                                    </div>
                                 @endif
                             </div>
                             <div class="flex items-center gap-1 shrink-0">
@@ -70,12 +94,28 @@
 
                         {{-- Inline rename form (hidden until the pencil is clicked) --}}
                         <li class="js-item-edit-form hidden bg-gray-50 px-2 py-2 -mt-1">
-                            <form method="POST" action="{{ route('owner.masters.update', ['group' => $group, 'id' => $item->id]) }}" class="flex gap-2">
+                            <form method="POST" action="{{ route('owner.masters.update', ['group' => $group, 'id' => $item->id]) }}" class="space-y-2">
                                 @csrf @method('PATCH')
                                 <input type="text" name="name" maxlength="255" value="{{ $item->name }}" required
-                                       class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm min-w-0">
-                                <button type="submit" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg px-3 py-2 text-sm shrink-0">
-                                    💾
+                                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                                @if($section['has_link'])
+                                    <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                                        <option value="">{{ __('messages.no_link') }}</option>
+                                        @foreach($purchaseItems as $purchaseItem)
+                                            <option value="{{ $purchaseItem->id }}" {{ $item->purchase_item_id === $purchaseItem->id ? 'selected' : '' }}>
+                                                {{ $purchaseItem->name }} ({{ \App\Support\ItemUnits::label($purchaseItem->unit) }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                @endif
+                                @if($section['has_cost_type'])
+                                    <select name="cost_type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                                        <option value="general" {{ ! $item->cost_type?->addsToStock() ? 'selected' : '' }}>{{ __('messages.cost_type_general') }}</option>
+                                        <option value="product" {{ $item->cost_type?->addsToStock() ? 'selected' : '' }}>{{ __('messages.cost_type_product') }}</option>
+                                    </select>
+                                @endif
+                                <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg px-3 py-2 text-sm">
+                                    💾 {{ __('messages.save') }}
                                 </button>
                             </form>
                         </li>

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\ExpenseCostType;
 use App\Models\ExpenseHead;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -14,6 +15,7 @@ class ExpenseHeadFactory extends Factory
     {
         return [
             'name' => fake()->unique()->word(),
+            'cost_type' => ExpenseCostType::General,
             'is_active' => true,
         ];
     }

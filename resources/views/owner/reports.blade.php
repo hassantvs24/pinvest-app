@@ -107,6 +107,14 @@
                 ৳{{ number_format($ownerShare, 2) }}
             </div>
         </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-teal-600">
+            <div class="text-sm text-gray-500">🏪 {{ __('messages.stock_value') }}</div>
+            <div class="text-2xl font-bold">৳{{ number_format($stats['stock_value'], 2) }}</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-indigo-600">
+            <div class="text-sm text-gray-500">🏷️ {{ __('messages.cost_of_goods_sold') }}</div>
+            <div class="text-2xl font-bold">৳{{ number_format($stats['cogs'], 2) }}</div>
+        </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">🏦 {{ __('messages.cash_in_hand') }} ({{ __('messages.all_time') }})</div>
             <div class="text-2xl font-bold">৳{{ number_format($lifetimeCashInHand, 2) }}</div>
@@ -178,6 +186,30 @@
     </div>
 
     {{-- 4. Purchase report --}}
+    <h2 class="font-bold text-lg mb-2">🏪 {{ __('messages.stock_report') }}</h2>
+    <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
+        @if($stockRows === [])
+            <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_stock') }}</p>
+        @else
+            <ul class="divide-y divide-gray-100">
+                @foreach($stockRows as $row)
+                    <li class="px-4 py-2 flex items-center justify-between text-sm">
+                        <div>
+                            <span class="font-medium">{{ $row['item']->name }}</span>
+                            <span class="text-xs text-emerald-700">
+                                {{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($row['item']->unit) }}
+                            </span>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold">৳{{ number_format($row['value'], 2) }}</div>
+                            <div class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: ৳{{ number_format($row['avg_cost'], 2) }}/{{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+    </div>
+
     <h2 class="font-bold text-lg mb-2">🛒 {{ __('messages.purchase_report') }}</h2>
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">

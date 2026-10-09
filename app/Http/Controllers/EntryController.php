@@ -6,6 +6,7 @@ use App\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Expense;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
 use App\Models\Sale;
 use App\Support\EntryTypes;
 use Illuminate\Database\Eloquent\Model;
@@ -79,6 +80,9 @@ class EntryController extends Controller
             'type' => $type,
             'config' => $config,
             'items' => $itemsClass::query()->active()->orderBy('name')->get(),
+            'purchaseItems' => $type === 'expenses'
+                ? PurchaseItem::query()->active()->orderBy('name')->get()
+                : collect(),
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -104,6 +108,7 @@ class EntryController extends Controller
         if ($type === 'expenses') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:expense_heads,id'],
+                'purchase_item_id' => ['nullable', 'exists:purchase_items,id'],
                 'amount' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
@@ -112,6 +117,7 @@ class EntryController extends Controller
             Expense::query()->create([
                 'user_id' => $user->id,
                 'expense_head_id' => $validated['head_id'],
+                'purchase_item_id' => $validated['purchase_item_id'] ?? null,
                 'amount' => $validated['amount'],
                 'note' => $validated['note'] ?? null,
                 'entry_date' => $validated['entry_date'],

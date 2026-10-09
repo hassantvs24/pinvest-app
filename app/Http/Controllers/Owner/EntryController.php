@@ -46,6 +46,10 @@ class EntryController extends Controller
 
         $query = $modelClass::query()->with($config['relations'])->latest('entry_date')->latest('id');
 
+        if ($type === 'expenses') {
+            $query->with('purchaseItem');
+        }
+
         $status = $request->query('status', 'all');
         if (in_array($status, ['pending', 'confirmed', 'rejected'], true)) {
             $query->where('status', $status);
@@ -63,6 +67,10 @@ class EntryController extends Controller
             default => SaleItem::query()->active()->orderBy('name')->get(),
         };
 
+        $purchaseItems = $type === 'expenses'
+            ? PurchaseItem::query()->active()->orderBy('name')->get()
+            : collect();
+
         return view('owner.entries', [
             'type' => $type,
             'config' => $config,
@@ -71,6 +79,7 @@ class EntryController extends Controller
             'partnerId' => $partnerId,
             'partners' => User::query()->partners()->orderBy('name')->get(),
             'items' => $items,
+            'purchaseItems' => $purchaseItems,
         ]);
     }
 
@@ -140,6 +149,7 @@ class EntryController extends Controller
         if ($type === 'expenses') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:expense_heads,id'],
+                'purchase_item_id' => ['nullable', 'exists:purchase_items,id'],
                 'amount' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
@@ -147,6 +157,7 @@ class EntryController extends Controller
 
             $model->update([
                 'expense_head_id' => $validated['head_id'],
+                'purchase_item_id' => $validated['purchase_item_id'] ?? null,
                 'amount' => $validated['amount'],
                 'entry_date' => $validated['entry_date'],
                 'note' => $validated['note'] ?? null,

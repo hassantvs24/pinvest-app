@@ -1,6 +1,7 @@
 <?php
 
 use App\EntryStatus;
+use App\Enums\ExpenseCostType;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
@@ -17,6 +18,7 @@ use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
 use App\Support\DateFormats;
+use App\Support\InventoryService;
 use App\Support\ItemUnits;
 use App\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -178,8 +180,9 @@ it('scopes the owner dashboard to the running cycle with estimated commissions',
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000017']);
     CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
-    $item = SaleItem::factory()->create();
     $purchaseItem = PurchaseItem::factory()->create();
+    // Link the sale item to the purchase item so COGS applies on sale.
+    $item = SaleItem::factory()->create(['purchase_item_id' => $purchaseItem->id]);
     $head = ExpenseHead::factory()->create();
 
     // Inside the running cycle: sale 400, purchase 200, expense 50.
@@ -205,8 +208,10 @@ it('scopes the owner dashboard to the running cycle with estimated commissions',
         'quantity' => 1, 'unit_price' => 100, 'total' => 100,
         'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
     ]);
+    // Before the cycle opened — must NOT appear (different item, so it
+    // also cannot distort this cycle's weighted average cost).
     Purchase::factory()->create([
-        'user_id' => $partner->id, 'purchase_item_id' => $purchaseItem->id,
+        'user_id' => $partner->id, 'purchase_item_id' => PurchaseItem::factory(),
         'quantity' => 1, 'unit_price' => 999, 'total' => 999,
         'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
     ]);
@@ -224,8 +229,9 @@ it('scopes the owner dashboard to the running cycle with estimated commissions',
         ->assertSee('৳200.00')
         ->assertSee('৳50.00')
         ->assertDontSee('৳100.00')
-        ->assertDontSee('৳999.00')
         ->assertDontSee('৳888.00')
+        // The pre-cycle purchase of another item is still in stock.
+        ->assertSee('৳999.00')
         // Leaderboard shows the estimated commission value (profit 150 x
         // 10% = 15) and the highlighted rate.
         ->assertSee('৳15.00')
@@ -296,9 +302,14 @@ it('shows the open cycle on both dashboards and the close summary before closing
         ->assertOk()
         ->assertSee(__('messages.current_period'));
 
-    // Close summary shows profit and expected commission per partner.
+    // Close summary shows the sales/COGS/expense breakdown, profit and expected commission.
     $this->actingAs($owner)->get('/owner/commissions/close')
         ->assertOk()
+        ->assertSee(__('messages.total_sales'))
+        ->assertSee(__('messages.total_purchase'))
+        ->assertSee(__('messages.cost_of_goods_sold'))
+        ->assertSee(__('messages.general_expense'))
+        ->assertSee(__('messages.stock_value'))
         ->assertSee('৳100.00')
         ->assertSee('৳10.00')
         ->assertSee(__('messages.owner_share'));
@@ -848,4 +859,159 @@ it('rejects a password change with a wrong current password', function (): void 
     ])->assertSessionHasErrors('current_password');
 
     expect(Hash::check('secret123', $user->fresh()->password))->toBeTrue();
+});
+
+it('carries unsold stock across cycles so cycle profit is not distorted', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000020']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create(['purchase_item_id' => $purchaseItem->id]);
+
+    // Cycle 1: buy 10 pcs @ 100, sell nothing. Old logic would show a
+    // 1000 loss here; stock must carry over instead.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(10)->format('Y-m-d'),
+    ]);
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(9),
+    ]);
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->subDays(8)->format('Y-m-d'),
+    ]);
+
+    $firstPeriod = CommissionPeriod::orderBy('id')->first();
+    expect((float) $firstPeriod->profit)->toBe(0.0)
+        ->and(CommissionSettlement::count())->toBe(0);
+
+    // Cycle 2: sell the same 10 pcs @ 150. Profit = 1500 - 1000 = 500.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(5)->format('Y-m-d'),
+    ]);
+    Sale::factory()->create([
+        'sale_item_id' => $item->id,
+        'quantity' => 10, 'unit_price' => 150, 'total' => 1500,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    expect((float) CommissionPeriod::orderByDesc('id')->first()->profit)->toBe(500.0)
+        ->and((float) CommissionSettlement::sole()->amount)->toBe(50.0); // 500 x 10%
+});
+
+it('adds product costs to stock and deducts general expenses from profit', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $purchaseItem = PurchaseItem::factory()->create();
+    $item = SaleItem::factory()->create(['purchase_item_id' => $purchaseItem->id]);
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(5)->format('Y-m-d'),
+    ]);
+
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4),
+    ]);
+
+    // Product cost (transport) belongs to the stock of this item.
+    Expense::factory()->create([
+        'expense_head_id' => ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::Product]),
+        'purchase_item_id' => $purchaseItem->id,
+        'amount' => 100,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+    ]);
+
+    // General cost hits the profit directly.
+    Expense::factory()->create([
+        'expense_head_id' => ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::General]),
+        'amount' => 50,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+    ]);
+
+    Sale::factory()->create([
+        'sale_item_id' => $item->id,
+        'quantity' => 10, 'unit_price' => 200, 'total' => 2000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    // COGS = 10 x ((1000 + 100) / 10) = 1100; profit = 2000 - 1100 - 50.
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    expect((float) CommissionPeriod::sole()->profit)->toBe(850.0);
+});
+
+it('warns about unlinked sale items and counts their cost as zero', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = SaleItem::factory()->create(['name' => 'Gold ring']); // no purchase link
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(3)->format('Y-m-d'),
+    ]);
+    Sale::factory()->create([
+        'sale_item_id' => $item->id,
+        'quantity' => 1, 'unit_price' => 100, 'total' => 100,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    $this->actingAs($owner)->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.attention'))
+        ->assertSee(__('messages.warn_unlinked_sale_items', ['items' => 'Gold ring']));
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    // Cost 0 → profit equals the full sale amount.
+    expect((float) CommissionPeriod::sole()->profit)->toBe(100.0);
+});
+
+it('converts units when computing COGS (kg purchase, tola sale)', function (): void {
+    $purchaseItem = PurchaseItem::factory()->create(['unit' => 'kg']);
+    $item = SaleItem::factory()->create(['unit' => 'tola', 'purchase_item_id' => $purchaseItem->id]);
+
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 1, 'unit_price' => 100000, 'total' => 100000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+    Sale::factory()->create([
+        'sale_item_id' => $item->id,
+        'quantity' => 10, 'unit_price' => 15000, 'total' => 150000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    // 1 kg = 1000 g at ৳100/g; 10 tola = 116.64 g → COGS = ৳11,664.
+    $cogs = InventoryService::cogs(now()->subDays(3), now());
+
+    expect($cogs)->toBe(11664.0)
+        ->and(InventoryService::stockValue(now()))->toBe(round((1000 - 116.64) * 100, 2));
+});
+
+it('shows stock value on the owner dashboard and reports', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $purchaseItem = PurchaseItem::factory()->create(['name' => 'Silver bar']);
+
+    Purchase::factory()->create([
+        'purchase_item_id' => $purchaseItem->id,
+        'quantity' => 5, 'unit_price' => 100, 'total' => 500,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    $this->actingAs($owner)->get('/dashboard')
+        ->assertOk()
+        ->assertSee(__('messages.stock_value'))
+        ->assertSee('৳500.00');
+
+    $this->actingAs($owner)->get('/owner/reports')
+        ->assertOk()
+        ->assertSee(__('messages.stock_report'))
+        ->assertSee('Silver bar')
+        ->assertSee('৳500.00');
 });
