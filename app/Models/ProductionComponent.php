@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['production_id', 'purchase_item_id', 'quantity'])]
+#[Fillable(['production_id', 'item_id', 'quantity'])]
 class ProductionComponent extends Model
 {
     /**
@@ -24,8 +24,8 @@ class ProductionComponent extends Model
         return $this->belongsTo(Production::class);
     }
 
-    public function purchaseItem(): BelongsTo
+    public function item(): BelongsTo
     {
-        return $this->belongsTo(PurchaseItem::class);
+        return $this->belongsTo(Item::class);
     }
 }

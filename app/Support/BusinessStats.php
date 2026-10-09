@@ -25,7 +25,7 @@ use Illuminate\Support\Carbon;
  * until the goods are sold. Cash in hand stays cash-based and
  * subtracts partner payouts and owner profit withdrawals.
  *
- * @phpstan-type StatsArray array{investment: float, opening_cash: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
+ * @phpstan-type StatsArray array{investment: float, opening_cash: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_loss: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
  */
 class BusinessStats
 {
@@ -87,7 +87,13 @@ class BusinessStats
             ->when($to, fn (Builder $q) => $q->whereDate('entry_date', '<=', $to))
             ->sum('extra_cost');
 
-        $netProfit = $sales - $cogs - $generalExpense - $commission;
+        // Lost stock costs profit (non-cash: stock value shrinks instead).
+        $stockLoss = $userId === null ? InventoryService::stockLossCost(
+            Carbon::parse($from ?? '1970-01-01'),
+            Carbon::parse($to ?? now()->format('Y-m-d')),
+        ) : 0.0;
+
+        $netProfit = $sales - $cogs - $generalExpense - $stockLoss - $commission;
         $cashInHand = $investment + $openingCash + $sales - $purchase - $expense - $productionLabour - $payout - $withdrawal;
 
         return [
@@ -98,6 +104,7 @@ class BusinessStats
             'expense' => $expense,
             'general_expense' => $generalExpense,
             'product_expense' => $expense - $generalExpense,
+            'stock_loss' => $stockLoss,
             'stock_value' => $stockValue,
             'sales' => $sales,
             'commission' => $commission,

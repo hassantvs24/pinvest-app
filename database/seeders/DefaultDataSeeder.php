@@ -4,9 +4,8 @@ namespace Database\Seeders;
 
 use App\Enums\ExpenseCostType;
 use App\Models\ExpenseHead;
-use App\Models\PurchaseItem;
+use App\Models\Item;
 use App\Models\RegistrationAllow;
-use App\Models\SaleItem;
 use App\Models\User;
 use App\UserRole;
 use Illuminate\Database\Seeder;
@@ -80,33 +79,17 @@ class DefaultDataSeeder extends Seeder
             );
         }
 
-        // Purchase items (raw materials).
-        $wood = PurchaseItem::query()->firstOrCreate(
-            ['name' => 'অগর গাছ'],
-            ['unit' => 'pcs', 'is_active' => true],
-        );
-        $oil = PurchaseItem::query()->firstOrCreate(
-            ['name' => 'উদ অয়েল'],
-            ['unit' => 'ml', 'is_active' => true],
-        );
-
-        // Sale items. Chips are produced (no link); oils are direct
-        // resales linked to the oil purchase item.
+        // Unified item list: the same items are bought, sold and used
+        // in production — one weighted-average pool per item.
         foreach ([
-            ['name' => 'উদ চিপস — প্রিমিয়াম', 'default_price' => 12000, 'unit' => 'gram', 'link' => null],
-            ['name' => 'উদ চিপস — স্ট্যান্ডার্ড', 'default_price' => 6000, 'unit' => 'gram', 'link' => null],
-            ['name' => 'আসারি', 'default_price' => 300, 'unit' => 'gram', 'link' => null],
-            ['name' => 'উদ অয়েল — গ্রেড A', 'default_price' => 15000, 'unit' => 'ml', 'link' => $oil],
-            ['name' => 'উদ অয়েল — গ্রেড B', 'default_price' => 9000, 'unit' => 'ml', 'link' => $oil],
+            ['name' => 'অগর গাছ', 'unit' => 'pcs', 'default_price' => 0],
+            ['name' => 'উদ চিপস', 'unit' => 'gram', 'default_price' => 6000],
+            ['name' => 'আসারি', 'unit' => 'gram', 'default_price' => 300],
+            ['name' => 'উদ অয়েল', 'unit' => 'ml', 'default_price' => 15000],
         ] as $item) {
-            SaleItem::query()->firstOrCreate(
+            Item::query()->firstOrCreate(
                 ['name' => $item['name']],
-                [
-                    'default_price' => $item['default_price'],
-                    'unit' => $item['unit'],
-                    'purchase_item_id' => $item['link']?->id,
-                    'is_active' => true,
-                ],
+                ['unit' => $item['unit'], 'default_price' => $item['default_price'], 'is_active' => true],
             );
         }
     }

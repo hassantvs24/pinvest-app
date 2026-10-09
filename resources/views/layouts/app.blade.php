@@ -35,6 +35,7 @@
                     @else
                         <a href="{{ route('entries.index', ['type' => 'sales']) }}" class="px-3 py-2 rounded {{ request()->routeIs('entries.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📋 {{ __('messages.my_entries') }}</a>
                         <a href="{{ route('productions.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('productions.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏭 {{ __('messages.productions') }}</a>
+                        <a href="{{ route('stock-losses.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('stock-losses.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📉 {{ __('messages.stock_losses') }}</a>
                     @endif
                     <a href="{{ route('profile') }}" class="px-3 py-2 rounded {{ request()->routeIs('profile') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">👤 {{ __('messages.profile') }}</a>
                 </nav>
@@ -85,7 +86,7 @@
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg">
-        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-6' : 'grid-cols-4' }} text-center text-xs">
+        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-6' : 'grid-cols-5' }} text-center text-xs">
             <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                 <div class="text-xl">🏠</div>{{ __('messages.home') }}
             </a>
@@ -111,6 +112,9 @@
                 </a>
                 <a href="{{ route('productions.index') }}" class="py-2 {{ request()->routeIs('productions.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">🏭</div>{{ __('messages.productions') }}
+                </a>
+                <a href="{{ route('stock-losses.index') }}" class="py-2 {{ request()->routeIs('stock-losses.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
+                    <div class="text-xl">📉</div>{{ __('messages.stock_losses') }}
                 </a>
                 <a href="{{ route('profile') }}" class="py-2 {{ request()->routeIs('profile') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">👤</div>{{ __('messages.profile') }}

@@ -4,10 +4,9 @@ namespace App\Support;
 
 use App\Models\Expense;
 use App\Models\ExpenseHead;
+use App\Models\Item;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\Sale;
-use App\Models\SaleItem;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -38,10 +37,10 @@ class EntryTypes
             ],
             'purchases' => [
                 'model' => Purchase::class,
-                'items' => PurchaseItem::class,
-                'item_relation' => 'purchaseItem',
-                'item_field' => 'purchase_item_id',
-                'relations' => ['user', 'purchaseItem'],
+                'items' => Item::class,
+                'item_relation' => 'item',
+                'item_field' => 'item_id',
+                'relations' => ['user', 'item'],
                 'label' => 'purchases',
                 'icon' => '🛒',
                 'has_quantity' => true,
@@ -50,10 +49,10 @@ class EntryTypes
             ],
             'sales' => [
                 'model' => Sale::class,
-                'items' => SaleItem::class,
-                'item_relation' => 'saleItem',
-                'item_field' => 'sale_item_id',
-                'relations' => ['user', 'saleItem'],
+                'items' => Item::class,
+                'item_relation' => 'item',
+                'item_field' => 'item_id',
+                'relations' => ['user', 'item'],
                 'label' => 'sales',
                 'icon' => '💰',
                 'has_quantity' => true,

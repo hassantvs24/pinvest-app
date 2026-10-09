@@ -81,8 +81,8 @@ class ReportController extends Controller
                 ->dateBetween($from, $to)
                 ->orderByDesc('withdrawn_at')
                 ->get(),
-            'salesByItem' => $this->entryRowsByItem(Sale::class, 'sale_item_id', 'saleItem', $from, $to),
-            'purchasesByItem' => $this->entryRowsByItem(Purchase::class, 'purchase_item_id', 'purchaseItem', $from, $to),
+            'salesByItem' => $this->entryRowsByItem(Sale::class, 'item_id', 'item', $from, $to),
+            'purchasesByItem' => $this->entryRowsByItem(Purchase::class, 'item_id', 'item', $from, $to),
             'expensesByHead' => $this->expenseRowsByHead($from, $to),
             'salesDetails' => $this->entryDetailRows(Sale::class, $from, $to),
             'purchaseDetails' => $this->entryDetailRows(Purchase::class, $from, $to),

@@ -8,12 +8,11 @@ use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Investment;
+use App\Models\Item;
 use App\Models\Payout;
 use App\Models\Production;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\Sale;
-use App\Models\SaleItem;
 use App\Models\User;
 use App\Support\CommissionSettlementService;
 use Illuminate\Database\Seeder;
@@ -48,12 +47,10 @@ class DemoDataSeeder extends Seeder
             'invested_at' => now()->subMonths(11)->startOfMonth(),
         ]);
 
-        $woodId = PurchaseItem::query()->where('name', 'অগর গাছ')->value('id');
-        $oilId = PurchaseItem::query()->where('name', 'উদ অয়েল')->value('id');
-        $premiumId = SaleItem::query()->where('name', 'উদ চিপস — প্রিমিয়াম')->value('id');
-        $standardId = SaleItem::query()->where('name', 'উদ চিপস — স্ট্যান্ডার্ড')->value('id');
-        $scrapId = SaleItem::query()->where('name', 'আসারি')->value('id');
-        $gradeAId = SaleItem::query()->where('name', 'উদ অয়েল — গ্রেড A')->value('id');
+        $woodId = Item::query()->where('name', 'অগর গাছ')->value('id');
+        $oilId = Item::query()->where('name', 'উদ অয়েল')->value('id');
+        $chipsId = Item::query()->where('name', 'উদ চিপস')->value('id');
+        $scrapId = Item::query()->where('name', 'আসারি')->value('id');
         $transportId = ExpenseHead::query()->where('name', 'পরিবহন ভাড়া')->value('id');
         $labourId = ExpenseHead::query()->where('name', 'প্রসেসিং মজুরি')->value('id');
 
@@ -75,7 +72,7 @@ class DemoDataSeeder extends Seeder
                 // Loss month: sales below expenses.
                 Sale::query()->create([
                     'user_id' => $raju->id,
-                    'sale_item_id' => $gradeAId,
+                    'item_id' => $oilId,
                     'quantity' => 1,
                     'unit_price' => 15000,
                     'total' => 15000,
@@ -100,7 +97,7 @@ class DemoDataSeeder extends Seeder
                 // sell chips; oil is resold directly.
                 Purchase::query()->create([
                     'user_id' => $sahel->id,
-                    'purchase_item_id' => $woodId,
+                    'item_id' => $woodId,
                     'quantity' => 15 + $i,
                     'unit_price' => 400,
                     'total' => (15 + $i) * 400,
@@ -112,7 +109,7 @@ class DemoDataSeeder extends Seeder
                 ]);
                 Purchase::query()->create([
                     'user_id' => $sahel->id,
-                    'purchase_item_id' => $oilId,
+                    'item_id' => $oilId,
                     'quantity' => 2,
                     'unit_price' => 11000,
                     'total' => 22000,
@@ -132,14 +129,13 @@ class DemoDataSeeder extends Seeder
                     'confirmed_by' => $owner->id,
                     'confirmed_at' => $mid,
                 ]);
-                $production->components()->create(['purchase_item_id' => $woodId, 'quantity' => 15 + $i]);
-                $production->outputs()->create(['sale_item_id' => $premiumId, 'quantity' => 40 + $i]);
-                $production->outputs()->create(['sale_item_id' => $standardId, 'quantity' => 60 + $i]);
-                $production->outputs()->create(['sale_item_id' => $scrapId, 'quantity' => 20]);
+                $production->components()->create(['item_id' => $woodId, 'quantity' => 15 + $i]);
+                $production->outputs()->create(['item_id' => $chipsId, 'quantity' => 140 + $i]);
+                $production->outputs()->create(['item_id' => $scrapId, 'quantity' => 20]);
 
                 Sale::query()->create([
                     'user_id' => $raju->id,
-                    'sale_item_id' => $premiumId,
+                    'item_id' => $chipsId,
                     'quantity' => 30,
                     'unit_price' => 12000,
                     'total' => 360000,
@@ -151,7 +147,7 @@ class DemoDataSeeder extends Seeder
                 ]);
                 Sale::query()->create([
                     'user_id' => $raju->id,
-                    'sale_item_id' => $standardId,
+                    'item_id' => $chipsId,
                     'quantity' => 40,
                     'unit_price' => 6000,
                     'total' => 240000,
@@ -163,7 +159,7 @@ class DemoDataSeeder extends Seeder
                 ]);
                 Sale::query()->create([
                     'user_id' => $riad->id,
-                    'sale_item_id' => $gradeAId,
+                    'item_id' => $oilId,
                     'quantity' => 1,
                     'unit_price' => 15000,
                     'total' => 15000,
@@ -240,7 +236,7 @@ class DemoDataSeeder extends Seeder
 
         Purchase::query()->create([
             'user_id' => $sahel->id,
-            'purchase_item_id' => $woodId,
+            'item_id' => $woodId,
             'quantity' => 3,
             'unit_price' => 400,
             'total' => 1200,

@@ -4,30 +4,24 @@ namespace Database\Factories;
 
 use App\EntryStatus;
 use App\Models\Item;
-use App\Models\Sale;
+use App\Models\StockLoss;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Sale>
+ * @extends Factory<StockLoss>
  */
-class SaleFactory extends Factory
+class StockLossFactory extends Factory
 {
     public function definition(): array
     {
-        $quantity = fake()->numberBetween(1, 50);
-        $unitPrice = fake()->randomFloat(2, 10, 2000);
-        $total = round($quantity * $unitPrice, 2);
-
         return [
             'user_id' => User::factory(),
             'item_id' => Item::factory(),
-            'quantity' => $quantity,
-            'unit_price' => $unitPrice,
-            'total' => $total,
+            'quantity' => fake()->numberBetween(1, 10),
             'note' => fake()->optional()->sentence(),
             'entry_date' => now(),
-            'status' => EntryStatus::Pending,
+            'status' => EntryStatus::Confirmed,
         ];
     }
 }

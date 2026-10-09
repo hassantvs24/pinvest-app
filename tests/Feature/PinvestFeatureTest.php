@@ -7,15 +7,15 @@ use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Investment;
+use App\Models\Item;
 use App\Models\OwnerWithdrawal;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
 use App\Models\Production;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\RegistrationAllow;
 use App\Models\Sale;
-use App\Models\SaleItem;
+use App\Models\StockLoss;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
@@ -116,10 +116,10 @@ it('blocks partners from owner routes with 403', function (): void {
 it('scopes partner entries to their own user id', function (): void {
     $me = makeUser(['commission_rate' => 5]);
     $other = makeUser(['phone' => '01700000003']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     CommissionPeriod::factory()->open()->create();
 
-    Sale::factory()->create(['user_id' => $other->id, 'sale_item_id' => $item->id]);
+    Sale::factory()->create(['user_id' => $other->id, 'item_id' => $item->id]);
 
     $this->actingAs($me)->post('/entries/sales', [
         'head_id' => $item->id,
@@ -139,7 +139,7 @@ it('scopes partner entries to their own user id', function (): void {
 it('blocks entry creation and confirmation without an open cycle', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000002']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
 
     // Partner form + store are blocked.
     $this->actingAs($partner)->get('/entries/sales/create')->assertRedirect();
@@ -152,7 +152,7 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
     expect(Sale::count())->toBe(0);
 
     // Owner cannot confirm without an open cycle.
-    $sale = Sale::factory()->create(['sale_item_id' => $item->id, 'status' => EntryStatus::Pending]);
+    $sale = Sale::factory()->create(['item_id' => $item->id, 'status' => EntryStatus::Pending]);
     $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}/confirm");
     expect($sale->fresh()->status)->toBe(EntryStatus::Pending);
 
@@ -164,7 +164,7 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
 
 it('lets the owner create entries that are auto-confirmed', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     CommissionPeriod::factory()->open()->create();
 
     $this->actingAs($owner)->post('/entries/sales', [
@@ -184,19 +184,18 @@ it('scopes the owner dashboard to the running cycle with estimated commissions',
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000017']);
     CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
-    $purchaseItem = PurchaseItem::factory()->create();
-    // Link the sale item to the purchase item so COGS applies on sale.
-    $item = SaleItem::factory()->create(['purchase_item_id' => $purchaseItem->id]);
+    // One unified item: bought AND sold (no links needed).
+    $item = Item::factory()->create();
     $head = ExpenseHead::factory()->create();
 
     // Inside the running cycle: sale 400, purchase 200, expense 50.
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'user_id' => $partner->id, 'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 400, 'total' => 400,
         'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
     ]);
     Purchase::factory()->create([
-        'user_id' => $partner->id, 'purchase_item_id' => $purchaseItem->id,
+        'user_id' => $partner->id, 'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 200, 'total' => 200,
         'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
     ]);
@@ -208,14 +207,14 @@ it('scopes the owner dashboard to the running cycle with estimated commissions',
 
     // Before the cycle opened — must NOT appear.
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'user_id' => $partner->id, 'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 100, 'total' => 100,
         'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
     ]);
     // Before the cycle opened — must NOT appear (different item, so it
     // also cannot distort this cycle's weighted average cost).
     Purchase::factory()->create([
-        'user_id' => $partner->id, 'purchase_item_id' => PurchaseItem::factory(),
+        'user_id' => $partner->id, 'item_id' => Item::factory(),
         'quantity' => 1, 'unit_price' => 999, 'total' => 999,
         'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
     ]);
@@ -245,15 +244,15 @@ it('scopes the owner dashboard to the running cycle with estimated commissions',
 it('scopes the partner dashboard to the running cycle', function (): void {
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000018']);
     CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
 
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'user_id' => $partner->id, 'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 400, 'total' => 400,
         'entry_date' => now()->subDay(), 'status' => EntryStatus::Confirmed,
     ]);
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $item->id,
+        'user_id' => $partner->id, 'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 100, 'total' => 100,
         'entry_date' => now()->subMonths(2), 'status' => EntryStatus::Confirmed,
     ]);
@@ -288,12 +287,12 @@ it('shows each partner lifetime earned commission and rate on the leaderboard wh
 it('shows the open cycle on both dashboards and the close summary before closing', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000012']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     $period = CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
 
     // Profit 100 → partner 10% = 10.
     Sale::factory()->create([
-        'sale_item_id' => $item->id, 'total' => 100,
+        'item_id' => $item->id, 'total' => 100,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
 
@@ -335,16 +334,16 @@ it('uses the partner rate at closing time and ignores sales shares', function ()
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $a = makeUser(['commission_rate' => 10, 'phone' => '01700000013']);
     $b = makeUser(['commission_rate' => 20, 'phone' => '01700000014']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(5)]);
 
     // Partner A sells 10x more than B — must NOT affect commissions.
     Sale::factory()->create([
-        'user_id' => $a->id, 'sale_item_id' => $item->id, 'total' => 900,
+        'user_id' => $a->id, 'item_id' => $item->id, 'total' => 900,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
     ]);
     Sale::factory()->create([
-        'user_id' => $b->id, 'sale_item_id' => $item->id, 'total' => 100,
+        'user_id' => $b->id, 'item_id' => $item->id, 'total' => 100,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
     ]);
 
@@ -364,12 +363,12 @@ it('blocks closing the cycle while unapproved entries exist and explains why', f
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000015']);
     CommissionPeriod::factory()->open()->create();
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     $head = ExpenseHead::factory()->create();
 
     Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 1,
         'unit_price' => 250,
         'total' => 250,
@@ -422,11 +421,11 @@ it('shows the recorded time next to each transaction date', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000016']);
     CommissionPeriod::factory()->open()->create();
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
 
     $sale = Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'status' => EntryStatus::Confirmed,
         'entry_date' => now(),
     ]);
@@ -439,11 +438,11 @@ it('shows the recorded time next to each transaction date', function (): void {
 it('shows owner reports with date filtering and guards them from partners', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 5, 'phone' => '01700000009']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
 
     Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 1,
         'unit_price' => 100,
         'total' => 100,
@@ -453,7 +452,7 @@ it('shows owner reports with date filtering and guards them from partners', func
 
     Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 1,
         'unit_price' => 400,
         'total' => 400,
@@ -477,7 +476,7 @@ it('shows owner reports with date filtering and guards them from partners', func
 it('scopes the owner report to a selected cycle and shows cycle meta', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 5, 'phone' => '01700000007']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
 
     $period = CommissionPeriod::factory()->create([
         'label' => 'August session',
@@ -487,7 +486,7 @@ it('scopes the owner report to a selected cycle and shows cycle meta', function 
 
     Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 1,
         'unit_price' => 400,
         'total' => 400,
@@ -497,7 +496,7 @@ it('scopes the owner report to a selected cycle and shows cycle meta', function 
 
     Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 1,
         'unit_price' => 999,
         'total' => 999,
@@ -591,16 +590,18 @@ it('shows commission due per partner on the report (pending settlements)', funct
 it('stores item units and rejects invalid ones', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
 
-    $this->actingAs($owner)->post('/owner/masters/purchase-items', [
+    $this->actingAs($owner)->post('/owner/masters/items', [
         'name' => 'Gold',
         'unit' => 'tola',
+        'default_price' => 1000,
     ])->assertRedirect();
 
-    expect(PurchaseItem::sole()->unit)->toBe('tola');
+    expect(Item::sole()->unit)->toBe('tola');
 
-    $this->actingAs($owner)->post('/owner/masters/purchase-items', [
+    $this->actingAs($owner)->post('/owner/masters/items', [
         'name' => 'Milk',
         'unit' => 'litre',
+        'default_price' => 50,
     ])->assertSessionHasErrors(['unit']);
 
     // Unit label renders translated in entry forms.
@@ -676,14 +677,14 @@ it('allows registration with an allow-listed phone exactly once', function (): v
 
 it('computes business stats from confirmed entries and commission settlements', function (): void {
     $partner = makeUser(['commission_rate' => 5]);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     $head = ExpenseHead::factory()->create();
 
     Investment::factory()->create(['amount' => 1000]);
 
     Sale::factory()->create([
         'user_id' => $partner->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 2,
         'unit_price' => 500,
         'total' => 1000,
@@ -720,7 +721,7 @@ it('opens and closes a commission period manually, settling profit x rate', func
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $a = makeUser(['commission_rate' => 10, 'phone' => '01700000005']);
     $b = makeUser(['commission_rate' => 20, 'phone' => '01700000006']);
-    $item = SaleItem::factory()->create();
+    $item = Item::factory()->create();
     $openedAt = now()->subDays(10);
 
     // Owner opens the period with opening cash and an opening investment.
@@ -744,14 +745,14 @@ it('opens and closes a commission period manually, settling profit x rate', func
     // Entries inside the period (profit = 100) and outside it (must not count).
     Sale::factory()->create([
         'user_id' => $a->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'total' => 100,
         'status' => EntryStatus::Confirmed,
         'entry_date' => $openedAt->copy()->addDays(3),
     ]);
     Sale::factory()->create([
         'user_id' => $a->id,
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'total' => 999,
         'status' => EntryStatus::Confirmed,
         'entry_date' => now()->subDays(30),
@@ -868,8 +869,8 @@ it('rejects a password change with a wrong current password', function (): void 
 it('carries unsold stock across cycles so cycle profit is not distorted', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000020']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create(['purchase_item_id' => $purchaseItem->id]);
+    // One unified item: bought in cycle 1, sold in cycle 2.
+    $item = Item::factory()->create();
 
     // Cycle 1: buy 10 pcs @ 100, sell nothing. Old logic would show a
     // 1000 loss here; stock must carry over instead.
@@ -877,7 +878,7 @@ it('carries unsold stock across cycles so cycle profit is not distorted', functi
         'opened_at' => now()->subDays(10)->format('Y-m-d'),
     ]);
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(9),
     ]);
@@ -894,7 +895,7 @@ it('carries unsold stock across cycles so cycle profit is not distorted', functi
         'opened_at' => now()->subDays(5)->format('Y-m-d'),
     ]);
     Sale::factory()->create([
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 150, 'total' => 1500,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
     ]);
@@ -908,15 +909,14 @@ it('carries unsold stock across cycles so cycle profit is not distorted', functi
 
 it('adds product costs to stock and deducts general expenses from profit', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create(['purchase_item_id' => $purchaseItem->id]);
+    $item = Item::factory()->create();
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(5)->format('Y-m-d'),
     ]);
 
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4),
     ]);
@@ -924,7 +924,7 @@ it('adds product costs to stock and deducts general expenses from profit', funct
     // Product cost (transport) belongs to the stock of this item.
     Expense::factory()->create([
         'expense_head_id' => ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::Product]),
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $item->id,
         'amount' => 100,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
     ]);
@@ -937,7 +937,7 @@ it('adds product costs to stock and deducts general expenses from profit', funct
     ]);
 
     Sale::factory()->create([
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 200, 'total' => 2000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
@@ -950,15 +950,15 @@ it('adds product costs to stock and deducts general expenses from profit', funct
     expect((float) CommissionPeriod::sole()->profit)->toBe(850.0);
 });
 
-it('warns about unlinked sale items and counts their cost as zero', function (): void {
+it('selling an item with no stock at all shows a negative-stock warning and zero cost', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $item = SaleItem::factory()->create(['name' => 'Gold ring']); // no purchase link
+    $item = Item::factory()->create(['name' => 'Gold ring']); // never purchased
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(3)->format('Y-m-d'),
     ]);
     Sale::factory()->create([
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 100, 'total' => 100,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
@@ -966,44 +966,53 @@ it('warns about unlinked sale items and counts their cost as zero', function ():
     $this->actingAs($owner)->get('/owner/commissions/close')
         ->assertOk()
         ->assertSee(__('messages.attention'))
-        ->assertSee(__('messages.warn_unlinked_sale_items', ['items' => 'Gold ring']));
+        ->assertSee(__('messages.warn_negative_stock', ['items' => 'Gold ring']));
 
     $this->actingAs($owner)->post('/owner/commissions/close', [
         'closed_at' => now()->format('Y-m-d'),
     ]);
 
-    // Cost 0 → profit equals the full sale amount.
+    // Cost 0 (nothing ever bought) → profit equals the full sale amount.
     expect((float) CommissionPeriod::sole()->profit)->toBe(100.0);
 });
 
-it('converts units when computing COGS (kg purchase, tola sale)', function (): void {
-    $purchaseItem = PurchaseItem::factory()->create(['unit' => 'kg']);
-    $item = SaleItem::factory()->create(['unit' => 'tola', 'purchase_item_id' => $purchaseItem->id]);
+it('converts units through production (kg input, gram output)', function (): void {
+    $wood = Item::factory()->create(['unit' => 'kg', 'default_price' => 0]);
+    $chips = Item::factory()->create(['unit' => 'gram', 'default_price' => 1000]);
 
+    CommissionPeriod::factory()->open()->create();
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $wood->id,
         'quantity' => 1, 'unit_price' => 100000, 'total' => 100000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
     ]);
+
+    // Melt 1 kg (1000 g @ ৳100/g) → 100 g chips + extra cost ৳5,000.
+    $production = Production::factory()->create([
+        'extra_cost' => 5000, 'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDay(),
+    ]);
+    $production->components()->create(['item_id' => $wood->id, 'quantity' => 1]);
+    $production->outputs()->create(['item_id' => $chips->id, 'quantity' => 100]);
+
     Sale::factory()->create([
-        'sale_item_id' => $item->id,
-        'quantity' => 10, 'unit_price' => 15000, 'total' => 150000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+        'item_id' => $chips->id,
+        'quantity' => 10, 'unit_price' => 2000, 'total' => 20000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now(),
     ]);
 
-    // 1 kg = 1000 g at ৳100/g; 10 tola = 116.64 g → COGS = ৳11,664.
-    $cogs = InventoryService::cogs(now()->subDays(3), now());
-
-    expect($cogs)->toBe(11664.0)
-        ->and(InventoryService::stockValue(now()))->toBe(round((1000 - 116.64) * 100, 2));
+    // Chips pool = 100,000 + 5,000 = 105,000 → avg ৳1,050/g.
+    // COGS = 10 g × 1,050 = ৳10,500.
+    expect(InventoryService::cogs(now()->subDays(3), now()))->toBe(10500.0)
+        ->and(InventoryService::stockValue(now()))->toBe(94500.0);
 });
 
 it('shows stock value on the owner dashboard and reports', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $purchaseItem = PurchaseItem::factory()->create(['name' => 'Silver bar']);
+    $purchaseItem = Item::factory()->create(['name' => 'Silver bar']);
 
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $purchaseItem->id,
         'quantity' => 5, 'unit_price' => 100, 'total' => 500,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
@@ -1024,44 +1033,44 @@ it('tracks production from raw materials and costs the sale at the finished good
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000021']);
 
-    $cotton = PurchaseItem::factory()->create(['unit' => 'kg']);
-    $button = PurchaseItem::factory()->create(['unit' => 'pcs']);
-    $zip = PurchaseItem::factory()->create(['unit' => 'pcs']);
-    $panjabi = SaleItem::factory()->create(['unit' => 'pcs']); // no purchase link
+    $cotton = Item::factory()->create(['unit' => 'kg']);
+    $button = Item::factory()->create(['unit' => 'pcs']);
+    $zip = Item::factory()->create(['unit' => 'pcs']);
+    $panjabi = Item::factory()->create(['unit' => 'pcs']); // no purchase link
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(6)->format('Y-m-d'),
     ]);
 
     // Raw materials: cotton 5kg @ 200, buttons 10 @ 5, zips 10 @ 8.
-    Purchase::factory()->create(['purchase_item_id' => $cotton->id, 'quantity' => 5, 'unit_price' => 200, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
-    Purchase::factory()->create(['purchase_item_id' => $button->id, 'quantity' => 10, 'unit_price' => 5, 'total' => 50, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
-    Purchase::factory()->create(['purchase_item_id' => $zip->id, 'quantity' => 10, 'unit_price' => 8, 'total' => 80, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $cotton->id, 'quantity' => 5, 'unit_price' => 200, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $button->id, 'quantity' => 10, 'unit_price' => 5, 'total' => 50, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $zip->id, 'quantity' => 10, 'unit_price' => 8, 'total' => 80, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
 
     // Produce 10 panjabis: all the cotton + buttons + zips + ৳500 labour.
     $this->actingAs($owner)->post('/owner/productions', [
         'extra_cost' => 500,
         'entry_date' => now()->subDays(2)->format('Y-m-d'),
         'outputs' => [
-            ['sale_item_id' => $panjabi->id, 'quantity' => 10],
+            ['item_id' => $panjabi->id, 'quantity' => 10],
         ],
         'components' => [
-            ['purchase_item_id' => $cotton->id, 'quantity' => 5],
-            ['purchase_item_id' => $button->id, 'quantity' => 10],
-            ['purchase_item_id' => $zip->id, 'quantity' => 10],
+            ['item_id' => $cotton->id, 'quantity' => 5],
+            ['item_id' => $button->id, 'quantity' => 10],
+            ['item_id' => $zip->id, 'quantity' => 10],
         ],
     ])->assertRedirect()->assertSessionHas('success');
 
-    // Materials fully consumed; finished stock: 10 @ (1630/10) = 163 each.
+    // Inputs fully consumed; output stock: 10 @ (1630/10) = 163 each.
     $rows = InventoryService::stockRows(now());
-    expect($rows['materials'])->toBe([])
-        ->and($rows['finished'][0]['item']->id)->toBe($panjabi->id)
-        ->and($rows['finished'][0]['base_quantity'])->toBe(10.0)
-        ->and($rows['finished'][0]['avg_cost'])->toBe(163.0);
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['item']->id)->toBe($panjabi->id)
+        ->and($rows[0]['base_quantity'])->toBe(10.0)
+        ->and($rows[0]['avg_cost'])->toBe(163.0);
 
     // Sell 6 @ 300 → COGS 6 x 163 = 978; profit = 1800 - 978 = 822.
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $panjabi->id,
+        'user_id' => $partner->id, 'item_id' => $panjabi->id,
         'quantity' => 6, 'unit_price' => 300, 'total' => 1800,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
@@ -1076,31 +1085,31 @@ it('tracks production from raw materials and costs the sale at the finished good
     expect((float) CommissionPeriod::sole()->profit)->toBe(822.0);
 });
 
-it('guards master items that are linked or used in production from deletion', function (): void {
+it('guards master items used anywhere from deletion', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
 
-    // Purchase item linked from a sale item (no purchases yet).
-    $linkedPurchase = PurchaseItem::factory()->create();
-    SaleItem::factory()->create(['purchase_item_id' => $linkedPurchase->id]);
+    // Item referenced by a purchase entry.
+    $purchased = Item::factory()->create();
+    Purchase::factory()->create(['item_id' => $purchased->id]);
 
-    $this->actingAs($owner)->delete("/owner/masters/purchase-items/{$linkedPurchase->id}")
+    $this->actingAs($owner)->delete("/owner/masters/items/{$purchased->id}")
         ->assertSessionHas('error');
-    expect($linkedPurchase->fresh())->not->toBeNull();
+    expect($purchased->fresh())->not->toBeNull();
 
-    // Purchase item consumed by a production run.
-    $component = PurchaseItem::factory()->create();
+    // Item consumed by a production run (component).
+    $component = Item::factory()->create();
     $production = Production::factory()->create();
-    $production->components()->create(['purchase_item_id' => $component->id, 'quantity' => 1]);
-    $this->actingAs($owner)->delete("/owner/masters/purchase-items/{$component->id}")
+    $production->components()->create(['item_id' => $component->id, 'quantity' => 1]);
+    $this->actingAs($owner)->delete("/owner/masters/items/{$component->id}")
         ->assertSessionHas('error');
     expect($component->fresh())->not->toBeNull();
 
-    // Sale item that has a production run.
-    $producedItem = SaleItem::factory()->create();
+    // Item produced by a production run (output).
+    $producedItem = Item::factory()->create();
     $production = Production::factory()->create();
-    $production->outputs()->create(['sale_item_id' => $producedItem->id, 'quantity' => 1]);
+    $production->outputs()->create(['item_id' => $producedItem->id, 'quantity' => 1]);
 
-    $this->actingAs($owner)->delete("/owner/masters/sale-items/{$producedItem->id}")
+    $this->actingAs($owner)->delete("/owner/masters/items/{$producedItem->id}")
         ->assertSessionHas('error');
     expect($producedItem->fresh())->not->toBeNull();
 });
@@ -1119,29 +1128,29 @@ it('restricts the productions page to the owner', function (): void {
 
 it('warns when more is sold than produced of a manufactured item', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create(['name' => 'Orna']);
+    $purchaseItem = Item::factory()->create();
+    $item = Item::factory()->create(['name' => 'Orna']);
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(3)->format('Y-m-d'),
     ]);
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $purchaseItem->id,
         'quantity' => 10, 'unit_price' => 50, 'total' => 500,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
     ]);
     $production = Production::factory()->create(['extra_cost' => 0, 'entry_date' => now()->subDay()]);
-    $production->outputs()->create(['sale_item_id' => $item->id, 'quantity' => 5]);
-    $production->components()->create(['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]);
+    $production->outputs()->create(['item_id' => $item->id, 'quantity' => 5]);
+    $production->components()->create(['item_id' => $purchaseItem->id, 'quantity' => 5]);
     Sale::factory()->create([
-        'sale_item_id' => $item->id,
+        'item_id' => $item->id,
         'quantity' => 7, 'unit_price' => 100, 'total' => 700,
         'status' => EntryStatus::Confirmed, 'entry_date' => now(),
     ]);
 
     $this->actingAs($owner)->get('/owner/commissions/close')
         ->assertOk()
-        ->assertSee(__('messages.warn_negative_finished_stock', ['items' => 'Orna']));
+        ->assertSee(__('messages.warn_negative_stock', ['items' => 'Orna']));
 });
 
 it('splits one purchased item into several goods and costs each sale fairly', function (): void {
@@ -1149,15 +1158,15 @@ it('splits one purchased item into several goods and costs each sale fairly', fu
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000023']);
 
     // Buy one old ornament for ৳80,000; melting costs ৳2,000 labour.
-    $ornament = PurchaseItem::factory()->create(['unit' => 'pcs']);
-    $gold = SaleItem::factory()->create(['unit' => 'gram', 'default_price' => 12000]);
-    $scrap = SaleItem::factory()->create(['unit' => 'gram', 'default_price' => 500]);
+    $ornament = Item::factory()->create(['unit' => 'pcs']);
+    $gold = Item::factory()->create(['unit' => 'gram', 'default_price' => 12000]);
+    $scrap = Item::factory()->create(['unit' => 'gram', 'default_price' => 500]);
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(4)->format('Y-m-d'),
     ]);
     Purchase::factory()->create([
-        'purchase_item_id' => $ornament->id,
+        'item_id' => $ornament->id,
         'quantity' => 1, 'unit_price' => 80000, 'total' => 80000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
     ]);
@@ -1167,27 +1176,26 @@ it('splits one purchased item into several goods and costs each sale fairly', fu
         'extra_cost' => 2000,
         'entry_date' => now()->subDays(2)->format('Y-m-d'),
         'outputs' => [
-            ['sale_item_id' => $gold->id, 'quantity' => 8],
-            ['sale_item_id' => $scrap->id, 'quantity' => 3],
+            ['item_id' => $gold->id, 'quantity' => 8],
+            ['item_id' => $scrap->id, 'quantity' => 3],
         ],
         'components' => [
-            ['purchase_item_id' => $ornament->id, 'quantity' => 1],
+            ['item_id' => $ornament->id, 'quantity' => 1],
         ],
     ])->assertRedirect()->assertSessionHas('success');
 
-    // Material fully consumed; finished stock holds both outputs.
+    // Input fully consumed; stock holds both outputs.
     $rows = InventoryService::stockRows(now());
-    expect($rows['materials'])->toBe([])
-        ->and($rows['finished'])->toHaveCount(2);
+    expect($rows)->toHaveCount(2);
 
     // Sell everything: gold 8g @ 12000, scrap 3g @ 500.
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $gold->id,
+        'user_id' => $partner->id, 'item_id' => $gold->id,
         'quantity' => 8, 'unit_price' => 12000, 'total' => 96000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $scrap->id,
+        'user_id' => $partner->id, 'item_id' => $scrap->id,
         'quantity' => 3, 'unit_price' => 500, 'total' => 1500,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
@@ -1211,12 +1219,12 @@ it('redirects guests from the root to the login page', function (): void {
 it('keeps partner productions pending until the owner confirms them', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000030']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create();
+    $purchaseItem = Item::factory()->create();
+    $item = Item::factory()->create();
 
     CommissionPeriod::factory()->open()->create();
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $purchaseItem->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
@@ -1224,72 +1232,72 @@ it('keeps partner productions pending until the owner confirms them', function (
     // Partner records a production run → pending.
     $this->actingAs($partner)->post('/productions', [
         'entry_date' => now()->format('Y-m-d'),
-        'outputs' => [['sale_item_id' => $item->id, 'quantity' => 5]],
-        'components' => [['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]],
+        'outputs' => [['item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['item_id' => $purchaseItem->id, 'quantity' => 5]],
     ])->assertRedirect()->assertSessionHas('warning');
 
     $production = Production::sole();
     expect($production->status)->toBe(EntryStatus::Pending);
 
-    // Pending: no finished stock, material stock untouched.
-    $rows = InventoryService::stockRows(now());
-    expect($rows['finished'])->toBe([])
-        ->and($rows['materials'][0]['base_quantity'] ?? 0)->toBe(10.0);
+    // Pending: no output stock yet; input item untouched.
+    $rows = collect(InventoryService::stockRows(now()))->keyBy(fn ($row) => $row['item']->id);
+    expect($rows->has($item->id))->toBeFalse()
+        ->and($rows[$purchaseItem->id]['base_quantity'] ?? 0)->toBe(10.0);
 
     // Owner confirms → stock moves.
     $this->actingAs($owner)->patch("/owner/productions/{$production->id}/confirm")
         ->assertRedirect();
 
-    $rows = InventoryService::stockRows(now());
+    $rows = collect(InventoryService::stockRows(now()))->keyBy(fn ($row) => $row['item']->id);
     expect($production->fresh()->status)->toBe(EntryStatus::Confirmed)
-        ->and($rows['materials'][0]['base_quantity'])->toBe(5.0)
-        ->and($rows['finished'][0]['base_quantity'])->toBe(5.0);
+        ->and($rows[$purchaseItem->id]['base_quantity'])->toBe(5.0)
+        ->and($rows[$item->id]['base_quantity'])->toBe(5.0);
 });
 
 it('rejected productions never count in stock', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000031']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create();
+    $purchaseItem = Item::factory()->create();
+    $item = Item::factory()->create();
 
     CommissionPeriod::factory()->open()->create();
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $purchaseItem->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
     ]);
 
     $this->actingAs($partner)->post('/productions', [
         'entry_date' => now()->format('Y-m-d'),
-        'outputs' => [['sale_item_id' => $item->id, 'quantity' => 5]],
-        'components' => [['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]],
+        'outputs' => [['item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['item_id' => $purchaseItem->id, 'quantity' => 5]],
     ]);
 
     $production = Production::sole();
 
     $this->actingAs($owner)->patch("/owner/productions/{$production->id}/reject")->assertRedirect();
 
-    $rows = InventoryService::stockRows(now());
-    expect($rows['finished'])->toBe([])
-        ->and($rows['materials'][0]['base_quantity'])->toBe(10.0);
+    $rows = collect(InventoryService::stockRows(now()))->keyBy(fn ($row) => $row['item']->id);
+    expect($rows->has($item->id))->toBeFalse()
+        ->and($rows[$purchaseItem->id]['base_quantity'])->toBe(10.0);
 });
 
 it('blocks closing the cycle while a production is pending', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['phone' => '01700000032']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create(['name' => 'Chips Premium']);
+    $purchaseItem = Item::factory()->create();
+    $item = Item::factory()->create(['name' => 'Chips Premium']);
 
     CommissionPeriod::factory()->open()->create();
     Sale::factory()->create([
-        'sale_item_id' => $item->id, 'quantity' => 1, 'unit_price' => 100, 'total' => 100,
+        'item_id' => $item->id, 'quantity' => 1, 'unit_price' => 100, 'total' => 100,
         'status' => EntryStatus::Confirmed, 'entry_date' => now(),
     ]);
 
     $this->actingAs($partner)->post('/productions', [
         'entry_date' => now()->format('Y-m-d'),
-        'outputs' => [['sale_item_id' => $item->id, 'quantity' => 5]],
-        'components' => [['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]],
+        'outputs' => [['item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['item_id' => $purchaseItem->id, 'quantity' => 5]],
     ]);
 
     $this->actingAs($owner)->get('/owner/commissions/close')
@@ -1308,15 +1316,15 @@ it('blocks closing the cycle while a production is pending', function (): void {
 
 it('counts opening cash and production labour in cash in hand', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $purchaseItem = PurchaseItem::factory()->create();
-    $item = SaleItem::factory()->create();
+    $purchaseItem = Item::factory()->create();
+    $item = Item::factory()->create();
 
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(3)->format('Y-m-d'),
         'opening_cash' => 5000,
     ]);
     Purchase::factory()->create([
-        'purchase_item_id' => $purchaseItem->id,
+        'item_id' => $purchaseItem->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
     ]);
@@ -1326,8 +1334,8 @@ it('counts opening cash and production labour in cash in hand', function (): voi
         'status' => EntryStatus::Confirmed,
         'entry_date' => now()->subDay(),
     ]);
-    $production->outputs()->create(['sale_item_id' => $item->id, 'quantity' => 5]);
-    $production->components()->create(['purchase_item_id' => $purchaseItem->id, 'quantity' => 5]);
+    $production->outputs()->create(['item_id' => $item->id, 'quantity' => 5]);
+    $production->components()->create(['item_id' => $purchaseItem->id, 'quantity' => 5]);
 
     // cash = opening 5000 - purchase 1000 - labour 300
     expect(BusinessStats::all()['cash_in_hand'])->toBe(3700.0)
@@ -1373,8 +1381,8 @@ it('lets the partner see and use the productions page', function (): void {
 it('runs the full business lifecycle across cycles with payout', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000034']);
-    $wood = PurchaseItem::factory()->create(['unit' => 'pcs']);
-    $chips = SaleItem::factory()->create(['unit' => 'pcs', 'purchase_item_id' => $wood->id]);
+    $wood = Item::factory()->create(['unit' => 'pcs']);
+    $chips = $wood; // one unified item: bought and sold (no links)
     $generalHead = ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::General]);
 
     // Cycle 1: invest, buy 10 wood, sell 5 as chips.
@@ -1383,11 +1391,11 @@ it('runs the full business lifecycle across cycles with payout', function (): vo
     ]);
     Investment::factory()->create(['amount' => 5000, 'invested_at' => now()->subDays(20)]);
     Purchase::factory()->create([
-        'purchase_item_id' => $wood->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'item_id' => $wood->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(15),
     ]);
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $chips->id,
+        'user_id' => $partner->id, 'item_id' => $wood->id,
         'quantity' => 5, 'unit_price' => 300, 'total' => 1500,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(12),
     ]);
@@ -1405,7 +1413,7 @@ it('runs the full business lifecycle across cycles with payout', function (): vo
     ]);
     Investment::factory()->create(['amount' => 2000, 'invested_at' => now()->subDays(8)]);
     Sale::factory()->create([
-        'user_id' => $partner->id, 'sale_item_id' => $chips->id,
+        'user_id' => $partner->id, 'item_id' => $wood->id,
         'quantity' => 5, 'unit_price' => 320, 'total' => 1600,
         'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5),
     ]);
@@ -1464,17 +1472,16 @@ it('seeds permanent Bangla defaults with accounts, masters and links', function 
 
     // Bangla masters.
     expect(ExpenseHead::query()->count())->toBeGreaterThanOrEqual(8)
-        ->and(PurchaseItem::query()->where('name', 'অগর গাছ')->exists())->toBeTrue()
-        ->and(SaleItem::query()->where('name', 'উদ চিপস — প্রিমিয়াম')->exists())->toBeTrue();
-
-    // Oil sale items are linked for direct resale.
-    $gradeA = SaleItem::query()->where('name', 'উদ অয়েল — গ্রেড A')->first();
-    expect($gradeA->purchaseItem?->name)->toBe('উদ অয়েল');
+        ->and(Item::query()->where('name', 'অগর গাছ')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'উদ চিপস')->exists())->toBeTrue()
+        ->and(Item::query()->where('name', 'উদ অয়েল')->exists())->toBeTrue();
 
     // Re-running the default seeder creates no duplicates.
     $heads = ExpenseHead::query()->count();
+    $items = Item::query()->count();
     $this->seed(DefaultDataSeeder::class);
     expect(ExpenseHead::query()->count())->toBe($heads)
+        ->and(Item::query()->count())->toBe($items)
         ->and(User::query()->count())->toBe(4);
 });
 
@@ -1541,7 +1548,7 @@ it('shows section hints across owner and partner pages', function (): void {
 
     $this->actingAs($owner)->get('/owner/masters')
         ->assertSee(__('messages.masters_hint_expense_heads'), escape: false)
-        ->assertSee(__('messages.masters_hint_sale_items'), escape: false)
+        ->assertSee(__('messages.masters_hint_items'), escape: false)
         ->assertSee(__('messages.warn_unit_locked'), escape: false);
 
     $this->actingAs($owner)->get('/owner/entries')
@@ -1588,4 +1595,146 @@ it('logs a partner with no email into their own account, not the owners', functi
     $this->post('/login', ['identifier' => '01675870047', 'password' => '123456'])
         ->assertRedirect('/dashboard');
     $this->assertAuthenticatedAs($owner);
+});
+
+it('reduces stock and profit when confirmed stock loss is recorded', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000060']);
+    // One unified item: bought, sold, then partly lost.
+    $purchaseItem = Item::factory()->create();
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(4)->format('Y-m-d'),
+    ]);
+    Purchase::factory()->create([
+        'item_id' => $purchaseItem->id,
+        'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+    ]);
+    Sale::factory()->create([
+        'user_id' => $partner->id, 'item_id' => $purchaseItem->id,
+        'quantity' => 5, 'unit_price' => 200, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+
+    // Partner reports a loss of 2 wood → pending: nothing changes yet.
+    $this->actingAs($partner)->post('/stock-losses', [
+        'item_id' => $purchaseItem->id,
+        'quantity' => 2,
+        'note' => 'পচে গেছে',
+    ])->assertRedirect()->assertSessionHas('warning');
+
+    $loss = StockLoss::sole();
+    $rowOf = fn () => collect(InventoryService::stockRows(now()))->firstWhere('item.id', $purchaseItem->id);
+    expect($loss->status)->toBe(EntryStatus::Pending)
+        ->and($rowOf()['base_quantity'])->toBe(5.0);
+
+    // Owner confirms → stock drops to 3, cycle profit drops by 2 × 100.
+    $this->actingAs($owner)->patch("/owner/stock-losses/{$loss->id}/confirm")->assertRedirect();
+
+    expect($rowOf()['base_quantity'])->toBe(3.0)
+        ->and(InventoryService::stockLossCost(now()->subDays(4), now()))->toBe(200.0);
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    // Profit = sales(1000) − COGS(500) − loss(200) = 300.
+    expect((float) CommissionPeriod::sole()->profit)->toBe(300.0);
+});
+
+it('blocks closing while a stock loss is pending and rejects cleanly', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000061']);
+    $purchaseItem = Item::factory()->create(['name' => 'নষ্ট হওয়া কাঠ']);
+
+    CommissionPeriod::factory()->open()->create();
+
+    $this->actingAs($partner)->post('/stock-losses', [
+        'item_id' => $purchaseItem->id,
+        'quantity' => 3,
+    ]);
+
+    $this->actingAs($owner)->get('/owner/commissions/close')
+        ->assertOk()
+        ->assertSee(__('messages.unapproved_entries'))
+        ->assertSee('নষ্ট হওয়া কাঠ')
+        ->assertDontSee(__('messages.confirm_close'));
+
+    $this->actingAs($owner)->post('/owner/commissions/close', [
+        'closed_at' => now()->format('Y-m-d'),
+    ]);
+
+    expect(CommissionPeriod::sole()->status)->toBe('open');
+
+    // Reject → never counts.
+    $this->actingAs($owner)->patch('/owner/stock-losses/'.StockLoss::sole()->id.'/reject')->assertRedirect();
+    expect(InventoryService::stockLossCost(now()->subDay(), now()))->toBe(0.0);
+});
+
+it('costs direct buy-and-sell of the same item without any links', function (): void {
+    $item = Item::factory()->create(['unit' => 'pcs']);
+
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create([
+        'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+    Sale::factory()->create([
+        'item_id' => $item->id, 'quantity' => 4, 'unit_price' => 200, 'total' => 800,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+    ]);
+
+    // COGS = 4 × 100 = 400 — no links involved at all.
+    expect(InventoryService::cogs(now()->subDays(3), now()))->toBe(400.0)
+        ->and(InventoryService::stockRows(now())[0]['base_quantity'])->toBe(6.0);
+});
+
+it('blends purchased and produced stock into one fair average cost', function (): void {
+    $item = Item::factory()->create(['unit' => 'pcs', 'default_price' => 200]);
+
+    CommissionPeriod::factory()->open()->create();
+    // Buy 10 @ 100, then produce 10 more costing 300 (pool 1000 + 300).
+    Purchase::factory()->create([
+        'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
+        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+    ]);
+    $production = Production::factory()->create([
+        'extra_cost' => 300, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+    ]);
+    $production->outputs()->create(['item_id' => $item->id, 'quantity' => 10]);
+
+    // Average = (1000 + 300) / 20 = 65 per pcs.
+    expect(InventoryService::stockRows(now())[0]['avg_cost'])->toBe(65.0)
+        ->and(InventoryService::stockRows(now())[0]['base_quantity'])->toBe(20.0);
+});
+
+it('rejects a production where an item is both input and output', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $item = Item::factory()->create();
+
+    CommissionPeriod::factory()->open()->create();
+
+    $this->actingAs($owner)->post('/owner/productions', [
+        'entry_date' => now()->format('Y-m-d'),
+        'outputs' => [['item_id' => $item->id, 'quantity' => 5]],
+        'components' => [['item_id' => $item->id, 'quantity' => 5]],
+    ])->assertSessionHasErrors('components');
+
+    expect(Production::count())->toBe(0);
+});
+
+it('forces partner entries to today regardless of the submitted date', function (): void {
+    $partner = makeUser(['phone' => '01700000070']);
+    $head = ExpenseHead::factory()->create();
+
+    CommissionPeriod::factory()->open()->create();
+
+    $this->actingAs($partner)->post('/entries/expenses', [
+        'head_id' => $head->id,
+        'amount' => 100,
+        'entry_date' => now()->subDays(5)->format('Y-m-d'), // attempted backdate
+    ])->assertRedirect();
+
+    expect(Expense::sole()->entry_date->format('Y-m-d'))->toBe(now()->format('Y-m-d'));
 });

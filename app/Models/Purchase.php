@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'purchase_item_id', 'quantity', 'unit_price', 'total', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
+#[Fillable(['user_id', 'item_id', 'quantity', 'unit_price', 'total', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
 class Purchase extends Model
 {
     /** @use HasFactory<PurchaseFactory> */
@@ -54,9 +54,9 @@ class Purchase extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function purchaseItem(): BelongsTo
+    public function item(): BelongsTo
     {
-        return $this->belongsTo(PurchaseItem::class);
+        return $this->belongsTo(Item::class);
     }
 
     public function confirmedBy(): BelongsTo

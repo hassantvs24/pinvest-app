@@ -81,8 +81,6 @@ return [
     'date' => 'Date',
     'note' => 'Note',
     'expense_head' => 'Expense head',
-    'purchase_item' => 'Purchase item',
-    'sale_item' => 'Sale item',
     'item' => 'Item',
     'partner' => 'Partner',
     'phone' => 'Mobile number',
@@ -109,8 +107,6 @@ return [
 
     // Master sections
     'expense_heads' => 'Expense Heads',
-    'purchase_items' => 'Purchase Items',
-    'sale_items' => 'Sale Items',
 
     // Flash messages
     'saved_success' => 'Saved successfully',
@@ -284,9 +280,6 @@ return [
     'general_expense' => 'General expense',
     'cost_type_general' => 'General expense (deducted from profit directly)',
     'cost_type_product' => 'Product cost (added to stock value)',
-    'linked_purchase_item' => 'Purchase item',
-    'not_linked' => 'Not linked',
-    'no_link' => '— no link —',
     'related_product' => 'Related product',
     'shared_across_products' => 'Shared across all products',
     'product_cost_hint' => 'For product costs (transport/labour/processing) pick which product it belongs to — otherwise it is shared across all products.',
@@ -295,19 +288,13 @@ return [
     'stock_report' => 'Stock report',
     'no_stock' => 'No stock at the moment',
     'avg_cost' => 'Avg. cost',
-    'incompatible_units' => 'Units do not match — sale and purchase item units must be of the same kind',
-    'warn_unlinked_sale_items' => 'These items are not linked to any purchase item, so their cost counts as 0: :items',
     'warn_negative_stock' => 'More used/sold than purchased for: :items',
-    'warn_negative_finished_stock' => 'More sold than produced for: :items',
     'warn_unallocated_product_expense' => '৳:amount of product cost could not be allocated to any item (no purchases)',
 
     // Production
     'productions' => 'Production',
     'add_production' => 'Add production',
     'production_hint' => 'Record finished goods made from raw materials + labour. Cost is computed automatically at sale time.',
-    'finished_good' => 'Finished good',
-    'finished_goods' => 'Finished goods',
-    'raw_materials' => 'Raw materials',
     'extra_cost' => 'Extra cost (labour)',
     'add_material' => 'Add more material',
     'add_output' => 'Add more output',
@@ -330,8 +317,6 @@ return [
 
     // Page section hints
     'masters_hint_expense_heads' => 'Create expense types — product costs join stock, general costs deduct from profit directly.',
-    'masters_hint_purchase_items' => 'What you buy — tracked as stock (these appear in purchase entries).',
-    'masters_hint_sale_items' => 'What you sell. Link direct resales (oil) to a purchase item; manufactured goods (chips) stay unlinked.',
     'owner_entries_hint' => 'Approve or reject partner entries — they only count in stock/profit once approved.',
     'partner_rate_hint' => 'On a profitable cycle the partner earns this % as commission — on a loss they get nothing. If total rates pass 100%, your own share shrinks.',
     'my_commissions_hint' => 'Your commission ledger. ⏳ pending means it can be withdrawn — send a request below; once the owner approves, you are paid.',
@@ -343,4 +328,26 @@ return [
     'warn_expense_double_count' => 'Product costs join stock and are costed when sold — entering the same cost again as production labour counts it twice.',
     'warn_sale_unlinked' => 'Selling an item with no purchase link and no production counts its cost as 0 — profit looks inflated. Link it from Masters.',
     'warn_unit_locked' => 'Links and names can be changed later, but the unit cannot — make sure the unit is correct before saving.',
+
+    // Stock losses
+    'stock_loss' => 'Stock loss',
+    'stock_losses' => 'Stock losses',
+    'add_stock_loss' => 'Report stock loss',
+    'stock_loss_hint' => 'Record goods lost without a sale (rot, damage, theft, shrinkage) — stock and profit stay accurate.',
+    'stock_loss_pending_hint' => 'It leaves stock and counts as a cycle loss once the owner approves.',
+    'reason' => 'Reason',
+    'stock_loss_reason_placeholder' => 'e.g. rotted / broken / stolen',
+    'stock_loss_saved' => 'Stock loss recorded',
+    'stock_loss_deleted' => 'Stock loss deleted',
+
+    // Unified items (one list: buy, sell and produce the same items)
+    'items' => 'Items',
+    'item' => 'Item',
+    'output_item' => 'Output',
+    'output_items' => 'Outputs',
+    'input_items' => 'Inputs (raw materials)',
+    'masters_intro_hint' => 'One item list drives purchases, sales and production — add new products here.',
+    'masters_hint_items' => 'Anything you buy, sell or use in production lives in this one list. Price = usual sale rate (drives production cost split and the sale form).',
+    'production_circular_item' => 'An item cannot be both input and output of the same production run.',
+    'auto_today_hint' => 'The date is recorded automatically as today.',
 ];

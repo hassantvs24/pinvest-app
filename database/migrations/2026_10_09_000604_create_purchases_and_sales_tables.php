@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('purchases', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('purchase_item_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('item_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('quantity');
             $table->decimal('unit_price', 12, 2);
             $table->decimal('total', 12, 2);
@@ -32,7 +32,7 @@ return new class extends Migration
         Schema::create('sales', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('sale_item_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('item_id')->constrained()->cascadeOnDelete();
             $table->unsignedInteger('quantity');
             $table->decimal('unit_price', 12, 2);
             $table->decimal('total', 12, 2);

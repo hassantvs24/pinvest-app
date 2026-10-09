@@ -5,18 +5,19 @@
 @section('content')
     @php
         $sections = [
-            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false, 'has_link' => false, 'has_cost_type' => true, 'hint' => __('messages.masters_hint_expense_heads')],
-            'purchase-items' => ['title' => '🛒 '.__('messages.purchase_items'), 'items' => $purchaseItems, 'has_price' => false, 'has_unit' => true, 'has_link' => false, 'has_cost_type' => false, 'hint' => __('messages.masters_hint_purchase_items')],
-            'sale-items' => ['title' => '💵 '.__('messages.sale_items'), 'items' => $saleItems, 'has_price' => true, 'has_unit' => true, 'has_link' => true, 'has_cost_type' => false, 'hint' => __('messages.masters_hint_sale_items')],
+            'items' => ['title' => '📦 '.__('messages.items'), 'items' => $items, 'has_price' => true, 'has_unit' => true, 'has_cost_type' => false, 'hint' => __('messages.masters_hint_items')],
+            'expense-heads' => ['title' => '💸 '.__('messages.expense_heads'), 'items' => $expenseHeads, 'has_price' => false, 'has_unit' => false, 'has_cost_type' => true, 'hint' => __('messages.masters_hint_expense_heads')],
         ];
     @endphp
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.masters_intro_hint') }}</p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         @foreach($sections as $group => $section)
             <div class="bg-white rounded-xl shadow p-4">
                 <h2 class="font-bold text-lg mb-1">{{ $section['title'] }}</h2>
                 <p class="text-xs text-gray-500 mb-3">💡 {{ $section['hint'] }}</p>
-                @if($section['has_link'])
+                @if($group === 'items')
                     <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">⚠️ {{ __('messages.warn_unit_locked') }}</p>
                 @endif
 
@@ -33,14 +34,6 @@
                         <select name="unit" class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2 bg-white">
                             @foreach(\App\Support\ItemUnits::options() as $value => $label)
                                 <option value="{{ $value }}">{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    @endif
-                    @if($section['has_link'])
-                        <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2 bg-white">
-                            <option value="">{{ __('messages.linked_purchase_item') }} ({{ __('messages.optional') }})</option>
-                            @foreach($purchaseItems as $purchaseItem)
-                                <option value="{{ $purchaseItem->id }}">{{ $purchaseItem->name }} ({{ \App\Support\ItemUnits::label($purchaseItem->unit) }})</option>
                             @endforeach
                         </select>
                     @endif
@@ -68,11 +61,6 @@
                                 @endif
                                 @if($section['has_unit'])
                                     <div class="text-xs text-emerald-700">⚖️ {{ \App\Support\ItemUnits::label($item->unit) }}</div>
-                                @endif
-                                @if($section['has_link'])
-                                    <div class="text-xs {{ $item->purchaseItem ? 'text-gray-500' : 'text-yellow-600 font-medium' }}">
-                                        🔗 {{ $item->purchaseItem ? $item->purchaseItem->name : __('messages.not_linked') }}
-                                    </div>
                                 @endif
                                 @if($section['has_cost_type'])
                                     <div class="text-xs {{ $item->cost_type?->addsToStock() ? 'text-violet-600' : 'text-gray-500' }}">
@@ -102,16 +90,6 @@
                                 @csrf @method('PATCH')
                                 <input type="text" name="name" maxlength="255" value="{{ $item->name }}" required
                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                                @if($section['has_link'])
-                                    <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
-                                        <option value="">{{ __('messages.no_link') }}</option>
-                                        @foreach($purchaseItems as $purchaseItem)
-                                            <option value="{{ $purchaseItem->id }}" {{ $item->purchase_item_id === $purchaseItem->id ? 'selected' : '' }}>
-                                                {{ $purchaseItem->name }} ({{ \App\Support\ItemUnits::label($purchaseItem->unit) }})
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                @endif
                                 @if($section['has_cost_type'])
                                     <select name="cost_type" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
                                         <option value="general" {{ ! $item->cost_type?->addsToStock() ? 'selected' : '' }}>{{ __('messages.cost_type_general') }}</option>

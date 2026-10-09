@@ -3,17 +3,17 @@
 namespace App\Models;
 
 use App\EntryStatus;
-use Database\Factories\SaleFactory;
+use Database\Factories\StockLossFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['user_id', 'item_id', 'quantity', 'unit_price', 'total', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
-class Sale extends Model
+#[Fillable(['user_id', 'item_id', 'quantity', 'note', 'entry_date', 'status', 'confirmed_by', 'confirmed_at'])]
+class StockLoss extends Model
 {
-    /** @use HasFactory<SaleFactory> */
+    /** @use HasFactory<StockLossFactory> */
     use HasFactory;
 
     /**
@@ -23,30 +23,20 @@ class Sale extends Model
     {
         return [
             'quantity' => 'integer',
-            'unit_price' => 'decimal:2',
-            'total' => 'decimal:2',
             'entry_date' => 'date',
             'status' => EntryStatus::class,
             'confirmed_at' => 'datetime',
         ];
     }
 
-    /**
-     * Scope: only this user's entries.
-     */
-    public function scopeForUser(Builder $query, int $userId): Builder
+    public function scopeConfirmed(Builder $query): Builder
     {
-        return $query->where('user_id', $userId);
+        return $query->where('status', EntryStatus::Confirmed->value);
     }
 
     public function scopePending(Builder $query): Builder
     {
         return $query->where('status', EntryStatus::Pending->value);
-    }
-
-    public function scopeConfirmed(Builder $query): Builder
-    {
-        return $query->where('status', EntryStatus::Confirmed->value);
     }
 
     public function user(): BelongsTo
@@ -62,13 +52,5 @@ class Sale extends Model
     public function confirmedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by');
-    }
-
-    /**
-     * Formatted total for display, e.g. "৳1,200".
-     */
-    public function formattedTotal(): string
-    {
-        return '৳'.number_format((float) $this->total, 2);
     }
 }

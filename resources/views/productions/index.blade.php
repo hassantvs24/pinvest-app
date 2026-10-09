@@ -15,12 +15,12 @@
 
                 {{-- Finished good output rows (dynamic add/remove) --}}
                 <div>
-                    <label class="block text-sm font-medium mb-1">👕 {{ __('messages.finished_goods') }}</label>
+                    <label class="block text-sm font-medium mb-1">👕 {{ __('messages.output_items') }}</label>
                     <div id="output_rows" class="space-y-2">
                         <div class="output-row grid grid-cols-[1fr_110px_44px] gap-2">
-                            <select name="outputs[0][sale_item_id]" required class="border border-gray-300 rounded-lg px-3 py-3 bg-white">
-                                <option value="">{{ __('messages.finished_good') }}</option>
-                                @foreach($saleItems as $item)
+                            <select name="outputs[0][item_id]" required class="border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                                <option value="">{{ __('messages.output_item') }}</option>
+                                @foreach($items as $item)
                                     <option value="{{ $item->id }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
@@ -42,21 +42,18 @@
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mt-1">⚠️ {{ __('messages.labour_double_count_hint') }}</p>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-1">{{ __('messages.date') }}</label>
-                        <input type="date" name="entry_date" value="{{ old('entry_date', $today) }}" required
-                               class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                    </div>
+                    <input type="hidden" name="entry_date" value="{{ $today }}">
+                    <p class="text-xs text-gray-500">📅 {{ __('messages.auto_today_hint') }}</p>
                 </div>
 
                 {{-- Raw material rows (dynamic add/remove) --}}
                 <div>
-                    <label class="block text-sm font-medium mb-1">🧵 {{ __('messages.raw_materials') }} ({{ __('messages.optional') }})</label>
+                    <label class="block text-sm font-medium mb-1">🧵 {{ __('messages.input_items') }} ({{ __('messages.optional') }})</label>
                     <div id="component_rows" class="space-y-2">
                         <div class="component-row grid grid-cols-[1fr_110px_44px] gap-2">
-                            <select name="components[0][purchase_item_id]" required class="border border-gray-300 rounded-lg px-3 py-3 bg-white">
-                                <option value="">{{ __('messages.purchase_item') }}</option>
-                                @foreach($purchaseItems as $item)
+                            <select name="components[0][item_id]" required class="border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                                <option value="">{{ __('messages.item') }}</option>
+                                @foreach($items as $item)
                                     <option value="{{ $item->id }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
@@ -86,7 +83,7 @@
         <div class="space-y-3">
             @forelse($productions as $production)
                 <div class="bg-white rounded-xl shadow p-4">
-                    <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->saleItem->name.' × '.$o->quantity)->implode(', ') }}</div>
+                    <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->item->name.' × '.$o->quantity)->implode(', ') }}</div>
                     <div class="text-sm text-gray-500">
                         📅 {{ $production->entry_date->format(\App\Support\DateFormats::DATE) }}
                         @php $pst = $production->status->value; @endphp
@@ -97,8 +94,8 @@
                     </div>
                     @foreach($production->components as $component)
                         <div class="text-sm text-gray-600">
-                            🧵 {{ $component->purchaseItem->name ?? '—' }}
-                            — {{ $component->quantity }} {{ \App\Support\ItemUnits::label($component->purchaseItem->unit ?? null) }}
+                            🧵 {{ $component->item->name ?? '—' }}
+                            — {{ $component->quantity }} {{ \App\Support\ItemUnits::label($component->item->unit ?? null) }}
                         </div>
                     @endforeach
                     @if((float) $production->extra_cost > 0)
@@ -125,7 +122,7 @@
             // Add a finished-good output row (clone of the first, re-indexed).
             $(document).on('click', '#js-add-output', function () {
                 var $row = $('.output-row').first().clone();
-                $row.find('select').attr('name', 'outputs[' + rowIndex + '][sale_item_id]').val('');
+                $row.find('select').attr('name', 'outputs[' + rowIndex + '][item_id]').val('');
                 $row.find('input').attr('name', 'outputs[' + rowIndex + '][quantity]').val('');
                 rowIndex++;
                 $('#output_rows').append($row);
@@ -141,7 +138,7 @@
             // Add a raw-material row (clone of the first row, re-indexed).
             $(document).on('click', '#js-add-row', function () {
                 var $row = $('.component-row').first().clone();
-                $row.find('select').attr('name', 'components[' + rowIndex + '][purchase_item_id]').val('');
+                $row.find('select').attr('name', 'components[' + rowIndex + '][item_id]').val('');
                 $row.find('input').attr('name', 'components[' + rowIndex + '][quantity]').val('');
                 rowIndex++;
                 $('#component_rows').append($row);

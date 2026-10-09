@@ -116,6 +116,10 @@
             <div class="text-sm text-gray-500">🏷️ {{ __('messages.cost_of_goods_sold') }}</div>
             <div class="text-2xl font-bold">৳{{ number_format($stats['cogs'], 2) }}</div>
         </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-red-400">
+            <div class="text-sm text-gray-500">📉 {{ __('messages.stock_loss') }}</div>
+            <div class="text-2xl font-bold">৳{{ number_format($stats['stock_loss'], 2) }}</div>
+        </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">🏦 {{ __('messages.cash_in_hand') }} ({{ __('messages.all_time') }})</div>
             <div class="text-2xl font-bold">৳{{ number_format($lifetimeCashInHand, 2) }}</div>
@@ -175,7 +179,7 @@
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
                                 <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
-                                {{ $entry->saleItem->name ?? '—' }}
+                                {{ $entry->item->name ?? '—' }}
                                 <span class="text-gray-500">× {{ $entry->quantity }}</span>
                             </div>
                             <div class="font-bold shrink-0">৳{{ number_format((float) $entry->total, 2) }}</div>
@@ -186,55 +190,29 @@
         </div>
     </div>
 
-    {{-- 4. Purchase report --}}
+    {{-- 4. Stock report (unified item list) --}}
     <h2 class="font-bold text-lg mb-2">🏪 {{ __('messages.stock_report') }}</h2>
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div class="bg-white rounded-xl shadow overflow-hidden">
-            <h3 class="px-4 py-2 font-bold text-sm bg-gray-50">🧵 {{ __('messages.raw_materials') }}</h3>
-            @if($stockRows['materials'] === [])
-                <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_stock') }}</p>
-            @else
-                <ul class="divide-y divide-gray-100">
-                    @foreach($stockRows['materials'] as $row)
-                        <li class="px-4 py-2 flex items-center justify-between text-sm">
-                            <div>
-                                <span class="font-medium">{{ $row['item']->name }}</span>
-                                <span class="text-xs text-emerald-700">
-                                    {{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($row['item']->unit) }}
-                                </span>
-                            </div>
-                            <div class="text-right">
-                                <div class="font-bold">৳{{ number_format($row['value'], 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: ৳{{ number_format($row['avg_cost'], 2) }}/{{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
-                            </div>
-                        </li>
-                    @endforeach
-                </ul>
-            @endif
-        </div>
-        <div class="bg-white rounded-xl shadow overflow-hidden">
-            <h3 class="px-4 py-2 font-bold text-sm bg-gray-50">👕 {{ __('messages.finished_goods') }}</h3>
-            @if($stockRows['finished'] === [])
-                <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_stock') }}</p>
-            @else
-                <ul class="divide-y divide-gray-100">
-                    @foreach($stockRows['finished'] as $row)
-                        <li class="px-4 py-2 flex items-center justify-between text-sm">
-                            <div>
-                                <span class="font-medium">{{ $row['item']->name }}</span>
-                                <span class="text-xs text-emerald-700">
-                                    {{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($row['item']->unit) }}
-                                </span>
-                            </div>
-                            <div class="text-right">
-                                <div class="font-bold">৳{{ number_format($row['value'], 2) }}</div>
-                                <div class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: ৳{{ number_format($row['avg_cost'], 2) }}/{{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
-                            </div>
-                        </li>
-                    @endforeach
-                </ul>
-            @endif
-        </div>
+    <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
+        @if($stockRows === [])
+            <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_stock') }}</p>
+        @else
+            <ul class="divide-y divide-gray-100">
+                @foreach($stockRows as $row)
+                    <li class="px-4 py-2 flex items-center justify-between text-sm">
+                        <div>
+                            <span class="font-medium">{{ $row['item']->name }}</span>
+                            <span class="text-xs text-emerald-700">
+                                {{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($row['item']->unit) }}
+                            </span>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-bold">৳{{ number_format($row['value'], 2) }}</div>
+                            <div class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: ৳{{ number_format($row['avg_cost'], 2) }}/{{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
     </div>
 
     <h2 class="font-bold text-lg mb-2">🛒 {{ __('messages.purchase_report') }}</h2>
@@ -265,7 +243,7 @@
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
                                 <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
-                                {{ $entry->purchaseItem->name ?? '—' }}
+                                {{ $entry->item->name ?? '—' }}
                                 <span class="text-gray-500">× {{ $entry->quantity }}</span>
                             </div>
                             <div class="font-bold shrink-0">৳{{ number_format((float) $entry->total, 2) }}</div>

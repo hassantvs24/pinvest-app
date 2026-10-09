@@ -58,11 +58,11 @@ class Expense extends Model
     }
 
     /**
-     * Optional purchase item this product cost applies to.
+     * Optional item this product cost applies to.
      */
-    public function purchaseItem(): BelongsTo
+    public function item(): BelongsTo
     {
-        return $this->belongsTo(PurchaseItem::class);
+        return $this->belongsTo(Item::class);
     }
 
     public function confirmedBy(): BelongsTo

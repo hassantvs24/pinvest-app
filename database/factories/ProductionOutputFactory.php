@@ -2,9 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Models\Item;
 use App\Models\Production;
 use App\Models\ProductionOutput;
-use App\Models\SaleItem;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,7 +16,7 @@ class ProductionOutputFactory extends Factory
     {
         return [
             'production_id' => Production::factory(),
-            'sale_item_id' => SaleItem::factory(),
+            'item_id' => Item::factory(),
             'quantity' => fake()->numberBetween(1, 20),
         ];
     }

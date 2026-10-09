@@ -4,48 +4,43 @@ namespace App\Support;
 
 use App\Enums\ExpenseCostType;
 use App\Models\Expense;
+use App\Models\Item;
 use App\Models\Production;
-use App\Models\ProductionOutput;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\Sale;
-use App\Models\SaleItem;
+use App\Models\StockLoss;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Perpetual inventory with moving weighted average cost.
+ * Perpetual inventory with moving weighted average cost over ONE
+ * unified pool per item.
  *
- * Two kinds of stock are tracked from confirmed events only:
+ * Every item flows through the same pool:
  *
- *  - Materials (purchase items): purchases add quantity/cost, product
- *    expenses (transport, labour) add cost, production runs and direct
- *    resales consume them.
- *  - Finished goods (sale items): production runs add them at their
- *    production cost (components at average cost + extra labour cost),
- *    sales consume them.
+ *   in  = purchases (quantity + cost) + production outputs
+ *         (quantity + allocated production cost)
+ *   out = sales (COGS) + production components + stock losses
  *
- * A sale is costed against the finished-good stock when the sale item
- * has production runs, otherwise against its linked purchase item
- * (simple resale like gold/silver), otherwise it costs 0 with a
- * warning. Unsold stock of both kinds carries its value forward, so
- * commission cycles never distort profit by when goods move.
+ * Average cost = total cost in ÷ total quantity in (moving, computed
+ * as of each event's date). An item bought ready-made AND produced
+ * in-house shares one fair average; grades that must stay separate
+ * are simply separate items.
  *
  * Quantities are converted through ItemUnits (kg / gram / tola share a
  * gram base; count and volume units only ever match their own kind).
- * Everything is computed live — nothing is stored, so owner edits and
- * deletes always stay consistent.
+ * Everything is computed live from confirmed entries — nothing is
+ * stored, so owner edits and deletes always stay consistent.
  *
- * @phpstan-type MaterialState array{item: PurchaseItem, in_qty: float, in_cost: float, purchase_cost: float, out_qty: float}
- * @phpstan-type FinishedState array{item: SaleItem, in_qty: float, in_cost: float, out_qty: float}
- * @phpstan-type Simulation array{materials: array<int, MaterialState>, finished: array<int, FinishedState>, cogs: float, warnings: list<string>}
+ * @phpstan-type ItemState array{item: Item, in_qty: float, in_cost: float, purchase_cost: float, out_qty: float}
+ * @phpstan-type Simulation array{states: array<int, ItemState>, cogs: float, loss_cost: float, warnings: list<string>}
  */
 class InventoryService
 {
     /**
      * COGS (cost of goods sold) for confirmed sales between two dates
      * (by entry date, inclusive), at each sale date's weighted average
-     * cost. Sales that cannot be costed count as 0.
+     * cost.
      */
     public static function cogs(Carbon $from, Carbon $to): float
     {
@@ -53,42 +48,55 @@ class InventoryService
     }
 
     /**
-     * Total value of all stock on hand at the given date (materials and
-     * finished goods, at their moving average cost).
+     * Total cost of stock lost (confirmed losses) between two dates, at
+     * each loss date's weighted average cost. Non-cash: it reduces
+     * profit and stock value, not cash.
+     */
+    public static function stockLossCost(Carbon $from, Carbon $to): float
+    {
+        return self::simulate($from, $to)['loss_cost'];
+    }
+
+    /**
+     * Total value of all stock on hand at the given date (at each
+     * item's moving average cost).
      */
     public static function stockValue(Carbon $asOf): float
     {
-        $simulation = self::simulate(null, $asOf);
-
         return array_sum(array_map(
             fn (array $state): float => self::stateValue($state),
-            $simulation['materials'],
-        )) + array_sum(array_map(
-            fn (array $state): float => self::stateValue($state),
-            $simulation['finished'],
+            self::simulate(null, $asOf)['states'],
         ));
     }
 
     /**
-     * Per-item stock rows for display, split into raw materials and
-     * finished goods. Quantities are shown in each item's own unit.
+     * Per-item stock rows for display: current quantity in the item's
+     * own unit, remaining base quantity, average cost and value.
      *
-     * @return array{materials: array<int, array{item: PurchaseItem, quantity: float, base_quantity: float, avg_cost: float, value: float}>, finished: array<int, array{item: SaleItem, quantity: float, base_quantity: float, avg_cost: float, value: float}>}
+     * @return array<int, array{item: Item, quantity: float, base_quantity: float, avg_cost: float, value: float}>
      */
     public static function stockRows(Carbon $asOf): array
     {
-        $simulation = self::simulate(null, $asOf);
+        return array_values(array_filter(
+            array_map(function (array $state): array {
+                $remaining = max(0.0, $state['in_qty'] - $state['out_qty']);
 
-        return [
-            'materials' => self::rowsFromStates($simulation['materials']),
-            'finished' => self::rowsFromStates($simulation['finished']),
-        ];
+                return [
+                    'item' => $state['item'],
+                    'quantity' => ItemUnits::fromBase($remaining, $state['item']->unit),
+                    'base_quantity' => $remaining,
+                    'avg_cost' => self::stateAvgCost($state),
+                    'value' => self::stateValue($state),
+                ];
+            }, self::simulate(null, $asOf)['states']),
+            fn (array $row): bool => $row['base_quantity'] > 0.00001 || $row['value'] > 0.00001,
+        ));
     }
 
     /**
      * Human-readable warnings about data that makes COGS inaccurate:
-     * unlinked sale items, negative material/finished stock and product
-     * expenses that could not be allocated to any item.
+     * negative stock and product expenses that could not be allocated
+     * to any item.
      *
      * @return list<string>
      */
@@ -99,17 +107,18 @@ class InventoryService
 
     /**
      * Chronological simulation of every confirmed purchase, product
-     * expense, production and sale up to $to. When $cogsFrom is given,
-     * only sales on/after that date accumulate COGS (earlier sales and
-     * productions still shift stock so averages stay correct).
+     * expense, production, sale and stock loss up to $to. When
+     * $cogsFrom is given, only sales/losses on/after that date
+     * accumulate cost totals (earlier events still shift stock so
+     * averages stay correct).
      *
      * @return Simulation
      */
     private static function simulate(?Carbon $cogsFrom, Carbon $to): array
     {
-        /** @var array<int, MaterialState> $materials */
-        $materials = PurchaseItem::query()->get()
-            ->mapWithKeys(fn (PurchaseItem $item): array => [$item->id => [
+        /** @var array<int, ItemState> $states */
+        $states = Item::query()->get()
+            ->mapWithKeys(fn (Item $item): array => [$item->id => [
                 'item' => $item,
                 'in_qty' => 0.0,
                 'in_cost' => 0.0,
@@ -118,103 +127,72 @@ class InventoryService
             ]])
             ->all();
 
-        /** @var array<int, FinishedState> $finished */
-        $finished = SaleItem::query()->get()
-            ->mapWithKeys(fn (SaleItem $item): array => [$item->id => [
-                'item' => $item,
-                'in_qty' => 0.0,
-                'in_cost' => 0.0,
-                'out_qty' => 0.0,
-            ]])
-            ->all();
-
-        // Sale items produced by at least one production run are costed
-        // from finished-good stock; the rest fall back to their link.
-        /** @var array<int, true> $producedSaleItemIds */
-        $producedSaleItemIds = ProductionOutput::query()
-            ->whereHas('production', fn ($query) => $query->confirmed()->whereDate('entry_date', '<=', $to))
-            ->pluck('sale_item_id')
-            ->flip()
-            ->all();
-
         // Unified event stream, sorted by date; inputs (purchases,
-        // product expenses, productions) process before sales on the
-        // same date so same-day input already counts towards averages.
+        // product expenses, productions) process before sales and
+        // losses on the same date so same-day input already counts
+        // towards the average cost.
         $events = collect()
             ->merge(self::purchaseEvents($to))
             ->merge(self::productExpenseEvents($to))
             ->merge(self::productionEvents($to))
-            ->merge(self::saleEvents($to, $cogsFrom, $producedSaleItemIds))
+            ->merge(self::saleEvents($to, $cogsFrom))
+            ->merge(self::stockLossEvents($to, $cogsFrom))
             ->sortBy(fn (array $event): string => $event['date'].'|'.$event['order'].'|'.$event['id'])
             ->values();
 
         $cogs = 0.0;
+        $lossCost = 0.0;
         $unallocatedExpense = 0.0;
-        $negativeMaterials = [];
-        $negativeFinished = [];
+        $negativeNames = [];
 
         foreach ($events as $event) {
             if ($event['kind'] === 'purchase') {
-                $state = $materials[$event['item_id']];
+                $state = $states[$event['item_id']];
                 $state['in_qty'] += $event['qty_base'];
                 $state['in_cost'] += $event['cost'];
                 $state['purchase_cost'] += $event['cost'];
-                $materials[$event['item_id']] = $state;
+                $states[$event['item_id']] = $state;
 
                 continue;
             }
 
             if ($event['kind'] === 'product-expense') {
-                $materials = self::applyProductExpense($materials, $event, $unallocatedExpense);
+                $states = self::applyProductExpense($states, $event, $unallocatedExpense);
 
                 continue;
             }
 
             if ($event['kind'] === 'production') {
-                [$materials, $finished] = self::applyProduction($materials, $finished, $event, $negativeMaterials);
+                $states = self::applyProduction($states, $event, $negativeNames);
 
                 continue;
             }
 
-            // Sale: consume stock at the average cost current right now.
-            $id = $event['pool'] === 'finished' ? $event['finished_id'] : $event['item_id'];
-            $state = ($event['pool'] === 'finished' ? $finished : $materials)[$id];
-            $saleCogs = round($event['qty_base'] * self::stateAvgCost($state), 2);
+            // Sale or stock loss: consume stock at the average cost
+            // current right now.
+            $state = $states[$event['item_id']];
+            $cost = round($event['qty_base'] * self::stateAvgCost($state), 2);
 
-            if ($event['count_cogs']) {
-                $cogs += $saleCogs;
+            if ($event['kind'] === 'sale' && $event['count_cogs']) {
+                $cogs += $cost;
+            }
+
+            if ($event['kind'] === 'stock-loss' && $event['count_cost']) {
+                $lossCost += $cost;
             }
 
             $state['out_qty'] += $event['qty_base'];
+            $states[$event['item_id']] = $state;
 
-            if ($event['pool'] === 'finished') {
-                $finished[$id] = $state;
-
-                if ($state['out_qty'] > $state['in_qty']) {
-                    $negativeFinished[$id] = $state['item']->name;
-                }
-            } else {
-                $materials[$id] = $state;
-
-                if ($state['out_qty'] > $state['in_qty']) {
-                    $negativeMaterials[$id] = $state['item']->name;
-                }
+            if ($state['out_qty'] > $state['in_qty']) {
+                $negativeNames[$event['item_id']] = $state['item']->name;
             }
         }
 
         $warnings = [];
-        $unlinkedNames = self::unlinkedSaleNames($to, $producedSaleItemIds);
 
-        if ($unlinkedNames !== []) {
-            $warnings[] = __('messages.warn_unlinked_sale_items', ['items' => implode(', ', array_unique($unlinkedNames))]);
-        }
-
-        if ($negativeMaterials !== []) {
-            $warnings[] = __('messages.warn_negative_stock', ['items' => implode(', ', array_values($negativeMaterials))]);
-        }
-
-        if ($negativeFinished !== []) {
-            $warnings[] = __('messages.warn_negative_finished_stock', ['items' => implode(', ', array_values($negativeFinished))]);
+        if ($negativeNames !== []) {
+            $warnings[] = __('messages.warn_negative_stock', ['items' => implode(', ', array_values($negativeNames))]);
         }
 
         if ($unallocatedExpense > 0.0) {
@@ -222,9 +200,9 @@ class InventoryService
         }
 
         return [
-            'materials' => $materials,
-            'finished' => $finished,
+            'states' => $states,
             'cogs' => round($cogs, 2),
+            'loss_cost' => round($lossCost, 2),
             'warnings' => $warnings,
         ];
     }
@@ -239,15 +217,15 @@ class InventoryService
         return Purchase::query()
             ->confirmed()
             ->whereDate('entry_date', '<=', $to)
-            ->with('purchaseItem')
+            ->with('item')
             ->get()
             ->map(fn (Purchase $purchase): array => [
                 'kind' => 'purchase',
                 'id' => 'p'.$purchase->id,
                 'date' => $purchase->entry_date->format('Y-m-d'),
                 'order' => 0,
-                'item_id' => $purchase->purchase_item_id,
-                'qty_base' => ItemUnits::toBase((float) $purchase->quantity, $purchase->purchaseItem->unit),
+                'item_id' => $purchase->item_id,
+                'qty_base' => ItemUnits::toBase((float) $purchase->quantity, $purchase->item->unit),
                 'cost' => (float) $purchase->total,
             ]);
     }
@@ -271,152 +249,129 @@ class InventoryService
                 'date' => $expense->entry_date->format('Y-m-d'),
                 'order' => 1,
                 'amount' => (float) $expense->amount,
-                'item_id' => $expense->purchase_item_id,
+                'item_id' => $expense->item_id,
             ]);
     }
 
     /**
-     * Productions up to $to as conversion events. Component costs and
-     * extra cost are pooled and split across the outputs in proportion
-     * to each output's sale value (quantity x default price), falling
-     * back to an even split when no output has a price — so a run like
-     * "melt one ornament" can yield several finished goods, each with a
-     * fair share of the cost.
+     * Productions up to $to as conversion events, each carrying its
+     * component consumption and output lines (base quantities; output
+     * values from quantity × default price drive the cost split).
      *
-     * @return Collection<int, array{kind: string, id: string, date: string, order: int, finished_id: int, qty_base: float, cost: float}>
+     * @return Collection<int, array{kind: string, id: string, date: string, order: int, extra_cost: float, components: array<int, array{item_id: int, qty_base: float}>, outputs: array<int, array{item_id: int, qty_base: float, value: float}>}>
      */
     private static function productionEvents(Carbon $to): Collection
     {
         return Production::query()
             ->confirmed()
             ->whereDate('entry_date', '<=', $to)
-            ->with(['outputs.saleItem', 'components.purchaseItem'])
+            ->with(['components.item', 'outputs.item'])
             ->get()
-            ->map(function (Production $production): array {
-                $poolCost = (float) $production->extra_cost;
-
-                $components = $production->components
+            ->map(fn (Production $production): array => [
+                'kind' => 'production',
+                'id' => 'pr'.$production->id,
+                'date' => $production->entry_date->format('Y-m-d'),
+                'order' => 2,
+                'extra_cost' => (float) $production->extra_cost,
+                'components' => $production->components
                     ->map(fn ($component): array => [
-                        'item_id' => $component->purchase_item_id,
-                        'qty_base' => ItemUnits::toBase((float) $component->quantity, $component->purchaseItem->unit),
+                        'item_id' => $component->item_id,
+                        'qty_base' => ItemUnits::toBase((float) $component->quantity, $component->item->unit),
                     ])
-                    ->all();
-
-                // Output lines with their cost share resolved by the
-                // caller simulation (needs live material averages).
-                $outputs = $production->outputs
+                    ->all(),
+                'outputs' => $production->outputs
                     ->map(fn ($output): array => [
-                        'finished_id' => $output->sale_item_id,
-                        'qty_base' => ItemUnits::toBase((float) $output->quantity, $output->saleItem->unit),
-                        'value' => (float) $output->quantity * (float) $output->saleItem->default_price,
+                        'item_id' => $output->item_id,
+                        'qty_base' => ItemUnits::toBase((float) $output->quantity, $output->item->unit),
+                        'value' => (float) $output->quantity * (float) $output->item->default_price,
                     ])
-                    ->all();
-
-                return [
-                    'kind' => 'production',
-                    'id' => 'pr'.$production->id,
-                    'date' => $production->entry_date->format('Y-m-d'),
-                    'order' => 2,
-                    'extra_cost' => (float) $production->extra_cost,
-                    'components' => $components,
-                    'outputs' => $outputs,
-                ];
-            });
+                    ->all(),
+            ]);
     }
 
     /**
-     * Confirmed sales up to $to as consumption events, routed to
-     * finished-good stock when the item is manufactured, to the linked
-     * material otherwise. Sales before $cogsFrom reduce stock only.
+     * Confirmed sales up to $to as consumption events. Sales before
+     * $cogsFrom reduce stock only.
      *
-     * @param  array<int, true>  $producedSaleItemIds
-     * @return Collection<int, array{kind: string, id: string, date: string, order: int, pool: string, item_id: int, finished_id: int, qty_base: float, count_cogs: bool}>
+     * @return Collection<int, array{kind: string, id: string, date: string, order: int, item_id: int, qty_base: float, count_cogs: bool}>
      */
-    private static function saleEvents(Carbon $to, ?Carbon $cogsFrom, array $producedSaleItemIds): Collection
+    private static function saleEvents(Carbon $to, ?Carbon $cogsFrom): Collection
     {
         return Sale::query()
             ->confirmed()
             ->whereDate('entry_date', '<=', $to)
-            ->where(function ($query) use ($producedSaleItemIds): void {
-                $query->whereHas('saleItem', fn ($q) => $q->whereNotNull('purchase_item_id'))
-                    ->orWhereHas('saleItem', fn ($q) => $q->whereIn('id', array_keys($producedSaleItemIds)));
-            })
-            ->with('saleItem')
+            ->with('item')
             ->get()
-            ->map(function (Sale $sale) use ($cogsFrom, $producedSaleItemIds): array {
-                $saleItem = $sale->saleItem;
-                $isProduced = isset($producedSaleItemIds[$saleItem->id]);
-
-                return [
-                    'kind' => 'sale',
-                    'id' => 's'.$sale->id,
-                    'date' => $sale->entry_date->format('Y-m-d'),
-                    'order' => 3,
-                    'pool' => $isProduced ? 'finished' : 'material',
-                    'item_id' => $isProduced ? 0 : $saleItem->purchase_item_id,
-                    'finished_id' => $isProduced ? $saleItem->id : 0,
-                    'qty_base' => ItemUnits::toBase((float) $sale->quantity, $saleItem->unit),
-                    'count_cogs' => $cogsFrom === null || $sale->entry_date->greaterThanOrEqualTo($cogsFrom),
-                ];
-            });
+            ->map(fn (Sale $sale): array => [
+                'kind' => 'sale',
+                'id' => 's'.$sale->id,
+                'date' => $sale->entry_date->format('Y-m-d'),
+                'order' => 3,
+                'item_id' => $sale->item_id,
+                'qty_base' => ItemUnits::toBase((float) $sale->quantity, $sale->item->unit),
+                'count_cogs' => $cogsFrom === null || $sale->entry_date->greaterThanOrEqualTo($cogsFrom),
+            ]);
     }
 
     /**
-     * Names of confirmed sales whose item can be costed neither through
-     * production nor through a purchase link (their cost counts as 0).
+     * Confirmed stock losses up to $to as consumption events. Losses
+     * before $countFrom reduce stock only.
      *
-     * @param  array<int, true>  $producedSaleItemIds
-     * @return array<int, string>
+     * @return Collection<int, array{kind: string, id: string, date: string, order: int, item_id: int, qty_base: float, count_cost: bool}>
      */
-    private static function unlinkedSaleNames(Carbon $to, array $producedSaleItemIds): array
+    private static function stockLossEvents(Carbon $to, ?Carbon $countFrom): Collection
     {
-        return Sale::query()
+        return StockLoss::query()
             ->confirmed()
             ->whereDate('entry_date', '<=', $to)
-            ->with('saleItem')
+            ->with('item')
             ->get()
-            ->filter(fn (Sale $sale): bool => ! isset($producedSaleItemIds[$sale->saleItem->id])
-                && $sale->saleItem->purchase_item_id === null)
-            ->map(fn (Sale $sale): string => $sale->saleItem->name)
-            ->all();
+            ->map(fn (StockLoss $loss): array => [
+                'kind' => 'stock-loss',
+                'id' => 'l'.$loss->id,
+                'date' => $loss->entry_date->format('Y-m-d'),
+                'order' => 4,
+                'item_id' => $loss->item_id,
+                'qty_base' => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit),
+                'count_cost' => $countFrom === null || $loss->entry_date->greaterThanOrEqualTo($countFrom),
+            ]);
     }
 
     /**
-     * Apply one production: consume each component at the material
-     * average cost current now, then split the pooled cost across the
-     * outputs (proportional to sale value, even split as fallback) and
-     * add each share to the finished good's cost pool.
+     * Apply one production: consume each component at the average cost
+     * current now, then split the pooled cost across the outputs
+     * (proportional to sale value, even split as fallback) and add each
+     * share to the output's cost pool.
      *
-     * @param  array<int, MaterialState>  $materials
-     * @param  array<int, FinishedState>  $finished
-     * @param  array<int, string>  $negativeMaterials
-     * @return array{0: array<int, MaterialState>, 1: array<int, FinishedState>}
+     * @param  array<int, ItemState>  $states
+     * @param  array<int, string>  $negativeNames
+     * @return array<int, ItemState>
      */
-    private static function applyProduction(array $materials, array $finished, array $event, array &$negativeMaterials): array
+    private static function applyProduction(array $states, array $event, array &$negativeNames): array
     {
         $poolCost = $event['extra_cost'];
 
         foreach ($event['components'] as $component) {
-            if (! isset($materials[$component['item_id']])) {
+            if (! isset($states[$component['item_id']])) {
                 continue;
             }
 
-            $state = $materials[$component['item_id']];
+            $state = $states[$component['item_id']];
             $poolCost += $component['qty_base'] * self::stateAvgCost($state);
 
             $state['out_qty'] += $component['qty_base'];
-            $materials[$component['item_id']] = $state;
+            $states[$component['item_id']] = $state;
 
             if ($state['out_qty'] > $state['in_qty']) {
-                $negativeMaterials[$component['item_id']] = $state['item']->name;
+                $negativeNames[$component['item_id']] = $state['item']->name;
             }
         }
 
-        $totalValue = array_sum(array_map(fn (array $output): float => $output['value'], $event['outputs']));
         $outputs = array_values(array_filter(
             $event['outputs'],
-            fn (array $output): bool => isset($finished[$output['finished_id']]),
+            fn (array $output): bool => isset($states[$output['item_id']]),
         ));
+        $totalValue = array_sum(array_map(fn (array $output): float => $output['value'], $outputs));
         $count = count($outputs);
         $allocated = 0.0;
 
@@ -433,59 +388,59 @@ class InventoryService
 
             $allocated += $share;
 
-            $state = $finished[$output['finished_id']];
+            $state = $states[$output['item_id']];
             $state['in_qty'] += $output['qty_base'];
             $state['in_cost'] += $share;
-            $finished[$output['finished_id']] = $state;
+            $states[$output['item_id']] = $state;
         }
 
-        return [$materials, $finished];
+        return $states;
     }
 
     /**
-     * Add a product expense to the material cost pool: fully to its
-     * linked item, otherwise spread across items proportionally to
-     * their purchase cost so far. Expenses with nothing to attach to
-     * are reported as unallocated.
+     * Add a product expense to the stock cost pool: fully to its linked
+     * item, otherwise spread across items proportionally to their
+     * purchase cost so far. Expenses with nothing to attach to are
+     * reported as unallocated.
      *
-     * @param  array<int, MaterialState>  $materials
-     * @return array<int, MaterialState>
+     * @param  array<int, ItemState>  $states
+     * @return array<int, ItemState>
      */
-    private static function applyProductExpense(array $materials, array $event, float &$unallocatedExpense): array
+    private static function applyProductExpense(array $states, array $event, float &$unallocatedExpense): array
     {
-        if ($event['item_id'] !== null && isset($materials[$event['item_id']])) {
-            $state = $materials[$event['item_id']];
+        if ($event['item_id'] !== null && isset($states[$event['item_id']])) {
+            $state = $states[$event['item_id']];
             $state['in_cost'] += $event['amount'];
-            $materials[$event['item_id']] = $state;
+            $states[$event['item_id']] = $state;
 
-            return $materials;
+            return $states;
         }
 
         $totalPurchaseCost = array_sum(array_map(
             fn (array $state): float => $state['purchase_cost'],
-            $materials,
+            $states,
         ));
 
         if ($totalPurchaseCost <= 0.0) {
             $unallocatedExpense += $event['amount'];
 
-            return $materials;
+            return $states;
         }
 
-        foreach ($materials as $id => $state) {
+        foreach ($states as $id => $state) {
             if ($state['purchase_cost'] <= 0.0) {
                 continue;
             }
 
             $state['in_cost'] += $event['amount'] * ($state['purchase_cost'] / $totalPurchaseCost);
-            $materials[$id] = $state;
+            $states[$id] = $state;
         }
 
-        return $materials;
+        return $states;
     }
 
     /**
-     * @param  MaterialState|FinishedState  $state
+     * @param  ItemState  $state
      */
     private static function stateAvgCost(array $state): float
     {
@@ -493,37 +448,12 @@ class InventoryService
     }
 
     /**
-     * @param  MaterialState|FinishedState  $state
+     * @param  ItemState  $state
      */
     private static function stateValue(array $state): float
     {
         $remaining = $state['in_qty'] - $state['out_qty'];
 
         return $remaining > 0.0 ? round($remaining * self::stateAvgCost($state), 2) : 0.0;
-    }
-
-    /**
-     * Build display rows (quantity in the item's own unit) for states
-     * that still hold stock or value.
-     *
-     * @param  array<int, MaterialState|FinishedState>  $states
-     * @return array<int, array{item: PurchaseItem|SaleItem, quantity: float, base_quantity: float, avg_cost: float, value: float}>
-     */
-    private static function rowsFromStates(array $states): array
-    {
-        return array_values(array_filter(
-            array_map(function (array $state): array {
-                $remaining = max(0.0, $state['in_qty'] - $state['out_qty']);
-
-                return [
-                    'item' => $state['item'],
-                    'quantity' => ItemUnits::fromBase($remaining, $state['item']->unit),
-                    'base_quantity' => $remaining,
-                    'avg_cost' => self::stateAvgCost($state),
-                    'value' => self::stateValue($state),
-                ];
-            }, $states),
-            fn (array $row): bool => $row['base_quantity'] > 0.00001 || $row['value'] > 0.00001,
-        ));
     }
 }

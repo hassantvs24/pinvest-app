@@ -63,6 +63,10 @@
                     <span>🧾 {{ __('messages.general_expense') }}</span>
                     <span class="font-bold text-red-700">−৳{{ number_format($stats['expense'], 2) }}</span>
                 </li>
+                <li class="px-4 py-2 flex items-center justify-between">
+                    <span>📉 {{ __('messages.stock_loss') }}</span>
+                    <span class="font-bold text-red-700">−৳{{ number_format($stats['stock_loss'], 2) }}</span>
+                </li>
                 <li class="px-4 py-2 flex items-center justify-between bg-gray-50">
                     <span>🏪 {{ __('messages.stock_value') }}</span>
                     <span class="font-bold text-teal-700">৳{{ number_format($stats['stock_value'], 2) }}</span>

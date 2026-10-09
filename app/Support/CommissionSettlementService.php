@@ -10,6 +10,7 @@ use App\Models\Investment;
 use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
+use App\Models\StockLoss;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -127,7 +128,7 @@ class CommissionSettlementService
      * until the goods are sold, so unsold stock never distorts a cycle
      * (COGS follows the sale across cycle boundaries automatically).
      *
-     * @return array{sales: float, purchase: float, cogs: float, product_expense: float, expense: float, profit: float, stock_value: float, warnings: list<string>}
+     * @return array{sales: float, purchase: float, cogs: float, product_expense: float, expense: float, stock_loss: float, profit: float, stock_value: float, warnings: list<string>}
      */
     public static function periodStats(Carbon $start, Carbon $end): array
     {
@@ -146,6 +147,7 @@ class CommissionSettlementService
         $expenseTotals = self::expenseTotals($start, $end);
 
         $cogs = InventoryService::cogs($start, $end);
+        $stockLoss = InventoryService::stockLossCost($start, $end);
 
         return [
             'sales' => $sales,
@@ -153,7 +155,8 @@ class CommissionSettlementService
             'cogs' => $cogs,
             'product_expense' => $expenseTotals['product'],
             'expense' => $expenseTotals['general'],
-            'profit' => $sales - $cogs - $expenseTotals['general'],
+            'stock_loss' => $stockLoss,
+            'profit' => $sales - $cogs - $expenseTotals['general'] - $stockLoss,
             'stock_value' => InventoryService::stockValue($end),
             'warnings' => InventoryService::warnings($end),
         ];
@@ -205,7 +208,7 @@ class CommissionSettlementService
      * productions additionally carry a precomputed `type_item_name`
      * (their output list) because they have several products per run.
      *
-     * @return Collection<int, Sale|Purchase|Expense|Production>
+     * @return Collection<int, Sale|Purchase|Expense|Production|StockLoss>
      */
     public static function pendingEntries(): Collection
     {
@@ -230,20 +233,33 @@ class CommissionSettlementService
 
         $productions = Production::query()
             ->pending()
-            ->with(['user', 'outputs.saleItem'])
+            ->with(['user', 'outputs.item'])
             ->get()
             ->each(function (Production $production): void {
                 $production->type_label = __('messages.productions');
                 $production->type_icon = '🏭';
                 $production->type_item_relation = null;
                 $production->type_item_name = $production->outputs
-                    ->map(fn ($output): string => $output->saleItem->name.' × '.$output->quantity)
+                    ->map(fn ($output): string => $output->item->name.' × '.$output->quantity)
                     ->implode(', ');
                 $production->amount = $production->extra_cost;
             });
 
+        $stockLosses = StockLoss::query()
+            ->pending()
+            ->with(['user', 'item'])
+            ->get()
+            ->each(function (StockLoss $loss): void {
+                $loss->type_label = __('messages.stock_loss');
+                $loss->type_icon = '📉';
+                $loss->type_item_relation = null;
+                $loss->type_item_name = ($loss->item->name ?? '—').' × '.$loss->quantity;
+                $loss->amount = 0;
+            });
+
         return $entries
             ->merge($productions)
+            ->merge($stockLosses)
             ->sortByDesc(fn (Model $entry) => $entry->entry_date->getTimestamp())
             ->values();
     }

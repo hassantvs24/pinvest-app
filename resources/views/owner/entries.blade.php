@@ -3,7 +3,13 @@
 @section('title', __('messages.entries'))
 
 @section('content')
-    <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.owner_entries_hint') }}</p>
+    <div class="flex items-center justify-between mb-3">
+        <p class="text-xs text-gray-500">💡 {{ __('messages.owner_entries_hint') }}</p>
+        <a href="{{ route('owner.stock-losses.index') }}"
+           class="text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg px-3 py-1.5 shrink-0">
+            📉 {{ __('messages.stock_losses') }}
+        </a>
+    </div>
 
     {{-- Filter form: type / partner / status --}}
     <form method="GET" action="{{ route('owner.entries.index') }}" class="bg-white rounded-xl shadow p-4 mb-4">
@@ -52,8 +58,8 @@
                         @if($entry->note)
                             <div class="text-sm text-gray-500">📝 {{ $entry->note }}</div>
                         @endif
-                        @if($type === 'expenses' && $entry->purchaseItem)
-                            <div class="text-sm text-gray-500">📦 {{ $entry->purchaseItem->name }}</div>
+                        @if($type === 'expenses' && $entry->item)
+                            <div class="text-sm text-gray-500">📦 {{ $entry->item->name }}</div>
                         @endif
                         <div class="text-sm text-gray-500">
                             📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
@@ -97,7 +103,7 @@
                     @csrf @method('PATCH')
 
                     <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.'.($type === 'expenses' ? 'expense_head' : ($type === 'purchases' ? 'purchase_item' : 'sale_item'))) }}</label>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.'.($type === 'expenses' ? 'expense_head' : 'item')) }}</label>
                         <select name="head_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
                             @foreach($items as $item)
                                 <option value="{{ $item->id }}"
@@ -111,11 +117,11 @@
                     @if($type === 'expenses')
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
-                            <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                            <select name="item_id" class="w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
                                 <option value="">{{ __('messages.shared_across_products') }}</option>
-                                @foreach($purchaseItems as $purchaseItem)
-                                    <option value="{{ $purchaseItem->id }}" {{ $entry->purchase_item_id === $purchaseItem->id ? 'selected' : '' }}>
-                                        {{ $purchaseItem->name }}
+                                @foreach($allItems as $product)
+                                    <option value="{{ $product->id }}" {{ $entry->item_id === $product->id ? 'selected' : '' }}>
+                                        {{ $product->name }}
                                     </option>
                                 @endforeach
                             </select>

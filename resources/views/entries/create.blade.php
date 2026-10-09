@@ -19,7 +19,7 @@
                 {{-- Item / head dropdown (master data, active only) --}}
                 <div>
                     <label class="block text-sm font-medium mb-1">
-                        {{ __('messages.'.($type === 'expenses' ? 'expense_head' : ($type === 'purchases' ? 'purchase_item' : 'sale_item'))) }}
+                        {{ __('messages.'.($type === 'expenses' ? 'expense_head' : 'item')) }}
                     </label>
                     <select id="head_id" name="head_id" required
                             class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
@@ -40,11 +40,11 @@
                     <div id="product_item_wrap" class="hidden">
                         <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-2">⚠️ {{ __('messages.warn_expense_double_count') }}</p>
                         <label class="block text-sm font-medium mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
-                        <select name="purchase_item_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <select name="item_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                             <option value="">{{ __('messages.shared_across_products') }}</option>
-                            @foreach($purchaseItems as $purchaseItem)
-                                <option value="{{ $purchaseItem->id }}" {{ old('purchase_item_id') == $purchaseItem->id ? 'selected' : '' }}>
-                                    {{ $purchaseItem->name }}
+                            @foreach($items as $item)
+                                <option value="{{ $item->id }}" {{ old('item_id') == $item->id ? 'selected' : '' }}>
+                                    {{ $item->name }}
                                 </option>
                             @endforeach
                         </select>
@@ -83,12 +83,17 @@
                     </div>
                 @endif
 
-                {{-- Date (defaults to today) --}}
-                <div>
-                    <label class="block text-sm font-medium mb-1">{{ __('messages.date') }}</label>
-                    <input type="date" name="entry_date" value="{{ old('entry_date', $today) }}" required
-                           class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
-                </div>
+                {{-- Date: partners always report today (server forces it); owner may backdate --}}
+                @if(auth()->user()->isOwner())
+                    <div>
+                        <label class="block text-sm font-medium mb-1">{{ __('messages.date') }}</label>
+                        <input type="date" name="entry_date" value="{{ old('entry_date', $today) }}" required
+                               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                @else
+                    <input type="hidden" name="entry_date" value="{{ $today }}">
+                    <p class="text-xs text-gray-500">📅 {{ __('messages.auto_today_hint') }}</p>
+                @endif
 
                 {{-- Optional note --}}
                 <div>

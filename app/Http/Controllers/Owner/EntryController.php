@@ -6,8 +6,7 @@ use App\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\ExpenseHead;
-use App\Models\PurchaseItem;
-use App\Models\SaleItem;
+use App\Models\Item;
 use App\Models\User;
 use App\Support\EntryTypes;
 use Illuminate\Database\Eloquent\Model;
@@ -47,7 +46,7 @@ class EntryController extends Controller
         $query = $modelClass::query()->with($config['relations'])->latest('entry_date')->latest('id');
 
         if ($type === 'expenses') {
-            $query->with('purchaseItem');
+            $query->with('item');
         }
 
         $status = $request->query('status', 'all');
@@ -63,13 +62,8 @@ class EntryController extends Controller
         // Active master items for the inline edit dropdowns.
         $items = match ($type) {
             'expenses' => ExpenseHead::query()->active()->orderBy('name')->get(),
-            'purchases' => PurchaseItem::query()->active()->orderBy('name')->get(),
-            default => SaleItem::query()->active()->orderBy('name')->get(),
+            default => Item::query()->active()->orderBy('name')->get(),
         };
-
-        $purchaseItems = $type === 'expenses'
-            ? PurchaseItem::query()->active()->orderBy('name')->get()
-            : collect();
 
         return view('owner.entries', [
             'type' => $type,
@@ -79,7 +73,7 @@ class EntryController extends Controller
             'partnerId' => $partnerId,
             'partners' => User::query()->partners()->orderBy('name')->get(),
             'items' => $items,
-            'purchaseItems' => $purchaseItems,
+            'allItems' => Item::query()->active()->orderBy('name')->get(),
         ]);
     }
 
@@ -149,7 +143,7 @@ class EntryController extends Controller
         if ($type === 'expenses') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:expense_heads,id'],
-                'purchase_item_id' => ['nullable', 'exists:purchase_items,id'],
+                'item_id' => ['nullable', 'exists:items,id'],
                 'amount' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
@@ -157,14 +151,14 @@ class EntryController extends Controller
 
             $model->update([
                 'expense_head_id' => $validated['head_id'],
-                'purchase_item_id' => $validated['purchase_item_id'] ?? null,
+                'item_id' => $validated['item_id'] ?? null,
                 'amount' => $validated['amount'],
                 'entry_date' => $validated['entry_date'],
                 'note' => $validated['note'] ?? null,
             ]);
         } elseif ($type === 'purchases') {
             $validated = $request->validate([
-                'head_id' => ['required', 'exists:purchase_items,id'],
+                'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'integer', 'min:1'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
@@ -172,7 +166,7 @@ class EntryController extends Controller
             ]);
 
             $model->update([
-                'purchase_item_id' => $validated['head_id'],
+                'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
@@ -181,7 +175,7 @@ class EntryController extends Controller
             ]);
         } else {
             $validated = $request->validate([
-                'head_id' => ['required', 'exists:sale_items,id'],
+                'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'integer', 'min:1'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
@@ -189,7 +183,7 @@ class EntryController extends Controller
             ]);
 
             $model->update([
-                'sale_item_id' => $validated['head_id'],
+                'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),

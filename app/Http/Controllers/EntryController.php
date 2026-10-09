@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Expense;
+use App\Models\Item;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\Sale;
 use App\Support\EntryTypes;
 use Illuminate\Database\Eloquent\Model;
@@ -73,16 +73,10 @@ class EntryController extends Controller
 
         $config = EntryTypes::config($type);
 
-        /** @var class-string<Model>|null $itemsClass */
-        $itemsClass = $config['items'];
-
         return view('entries.create', [
             'type' => $type,
             'config' => $config,
-            'items' => $itemsClass::query()->active()->orderBy('name')->get(),
-            'purchaseItems' => $type === 'expenses'
-                ? PurchaseItem::query()->active()->orderBy('name')->get()
-                : collect(),
+            'items' => Item::query()->active()->orderBy('name')->get(),
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -108,59 +102,66 @@ class EntryController extends Controller
         if ($type === 'expenses') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:expense_heads,id'],
-                'purchase_item_id' => ['nullable', 'exists:purchase_items,id'],
+                'item_id' => ['nullable', 'exists:items,id'],
                 'amount' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
+            // Partners cannot backdate: entries always land on today.
+            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+
             Expense::query()->create([
                 'user_id' => $user->id,
                 'expense_head_id' => $validated['head_id'],
-                'purchase_item_id' => $validated['purchase_item_id'] ?? null,
+                'item_id' => $validated['item_id'] ?? null,
                 'amount' => $validated['amount'],
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $entryDate,
                 'status' => $status,
                 ...$confirmed,
             ]);
         } elseif ($type === 'purchases') {
             $validated = $request->validate([
-                'head_id' => ['required', 'exists:purchase_items,id'],
+                'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'integer', 'min:1'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
+            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+
             Purchase::query()->create([
                 'user_id' => $user->id,
-                'purchase_item_id' => $validated['head_id'],
+                'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $entryDate,
                 'status' => $status,
                 ...$confirmed,
             ]);
         } else {
             $validated = $request->validate([
-                'head_id' => ['required', 'exists:sale_items,id'],
+                'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'integer', 'min:1'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => ['required', 'date'],
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
+            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+
             Sale::query()->create([
                 'user_id' => $user->id,
-                'sale_item_id' => $validated['head_id'],
+                'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $entryDate,
                 'status' => $status,
                 ...$confirmed,
             ]);

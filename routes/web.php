@@ -12,10 +12,12 @@ use App\Http\Controllers\Owner\PartnerController as OwnerPartnerController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
 use App\Http\Controllers\Owner\ProductionController as OwnerProductionController;
 use App\Http\Controllers\Owner\ReportController as OwnerReportController;
+use App\Http\Controllers\Owner\StockLossController as OwnerStockLossController;
 use App\Http\Controllers\Owner\WithdrawalController as OwnerWithdrawalController;
 use App\Http\Controllers\PartnerCommissionController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StockLossController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -56,6 +58,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/productions', [ProductionController::class, 'index'])->name('productions.index');
     Route::post('/productions', [ProductionController::class, 'store'])->name('productions.store');
 
+    // Partner stock-loss reports (pending until the owner confirms).
+    Route::get('/stock-losses', [StockLossController::class, 'index'])->name('stock-losses.index');
+    Route::post('/stock-losses', [StockLossController::class, 'store'])->name('stock-losses.store');
+
     // Partner entries (own only — scoped by user_id in the controller).
     Route::get('/entries/{type}', [EntryController::class, 'index'])->name('entries.index');
     Route::get('/entries/{type}/create', [EntryController::class, 'create'])->name('entries.create');
@@ -71,6 +77,13 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/productions/{production}/confirm', [OwnerProductionController::class, 'confirm'])->name('productions.confirm');
         Route::patch('/productions/{production}/reject', [OwnerProductionController::class, 'reject'])->name('productions.reject');
         Route::delete('/productions/{production}', [OwnerProductionController::class, 'destroy'])->name('productions.destroy');
+
+        // Stock losses (theft, rot, damage — reduce stock at average cost).
+        Route::get('/stock-losses', [OwnerStockLossController::class, 'index'])->name('stock-losses.index');
+        Route::post('/stock-losses', [OwnerStockLossController::class, 'store'])->name('stock-losses.store');
+        Route::patch('/stock-losses/{stock_loss}/confirm', [OwnerStockLossController::class, 'confirm'])->name('stock-losses.confirm');
+        Route::patch('/stock-losses/{stock_loss}/reject', [OwnerStockLossController::class, 'reject'])->name('stock-losses.reject');
+        Route::delete('/stock-losses/{stock_loss}', [OwnerStockLossController::class, 'destroy'])->name('stock-losses.destroy');
         Route::post('/allowances', [OwnerPartnerController::class, 'storeAllowance'])->name('allowances.store');
         Route::delete('/allowances/{allowance}', [OwnerPartnerController::class, 'destroyAllowance'])->name('allowances.destroy');
 

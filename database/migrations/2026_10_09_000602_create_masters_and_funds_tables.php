@@ -14,23 +14,16 @@ return new class extends Migration
         Schema::create('expense_heads', function (Blueprint $table): void {
             $table->id();
             $table->string('name')->unique();
+            $table->string('cost_type')->default('general'); // general | product (product costs join stock)
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
 
-        Schema::create('purchase_items', function (Blueprint $table): void {
+        Schema::create('items', function (Blueprint $table): void {
             $table->id();
             $table->string('name')->unique();
             $table->string('unit')->default('pcs'); // kg, gram, tola, pcs, ml
-            $table->boolean('is_active')->default(true);
-            $table->timestamps();
-        });
-
-        Schema::create('sale_items', function (Blueprint $table): void {
-            $table->id();
-            $table->string('name')->unique();
             $table->decimal('default_price', 10, 2)->default(0);
-            $table->string('unit')->default('pcs'); // kg, gram, tola, pcs, ml
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
@@ -57,9 +50,7 @@ return new class extends Migration
     {
         Schema::dropIfExists('payouts');
         Schema::dropIfExists('investments');
-        Schema::dropIfExists('sale_items');
-        Schema::dropIfExists('purchase_items');
+        Schema::dropIfExists('items');
         Schema::dropIfExists('expense_heads');
-        // unit column drops with the tables
     }
 };

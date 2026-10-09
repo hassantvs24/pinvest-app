@@ -3,8 +3,8 @@
 namespace Database\Factories;
 
 use App\EntryStatus;
+use App\Models\Item;
 use App\Models\Purchase;
-use App\Models\PurchaseItem;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,7 +20,7 @@ class PurchaseFactory extends Factory
 
         return [
             'user_id' => User::factory(),
-            'purchase_item_id' => PurchaseItem::factory(),
+            'item_id' => Item::factory(),
             'quantity' => $quantity,
             'unit_price' => $unitPrice,
             'total' => round($quantity * $unitPrice, 2),

@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Owner;
 use App\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
+use App\Models\Item;
 use App\Models\Production;
-use App\Models\PurchaseItem;
-use App\Models\SaleItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 /**
@@ -28,12 +28,11 @@ class ProductionController extends Controller
     {
         return view('owner.productions', [
             'productions' => Production::query()
-                ->with(['outputs.saleItem', 'components.purchaseItem', 'user'])
+                ->with(['outputs.item', 'components.item', 'user'])
                 ->orderByDesc('entry_date')
                 ->orderByDesc('id')
                 ->paginate(15),
-            'saleItems' => SaleItem::query()->active()->orderBy('name')->get(),
-            'purchaseItems' => PurchaseItem::query()->active()->orderBy('name')->get(),
+            'items' => Item::query()->active()->orderBy('name')->get(),
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -60,12 +59,21 @@ class ProductionController extends Controller
             'entry_date' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:1000'],
             'outputs' => ['required', 'array', 'min:1'],
-            'outputs.*.sale_item_id' => ['required', 'distinct', 'exists:sale_items,id'],
+            'outputs.*.item_id' => ['required', 'distinct', 'exists:items,id'],
             'outputs.*.quantity' => ['required', 'integer', 'min:1'],
             'components' => ['nullable', 'array', 'min:0'],
-            'components.*.purchase_item_id' => ['required', 'distinct', 'exists:purchase_items,id'],
+            'components.*.item_id' => ['required', 'distinct', 'exists:items,id'],
             'components.*.quantity' => ['required', 'integer', 'min:1'],
         ]);
+
+        $componentIds = array_column($validated['components'] ?? [], 'item_id');
+        $outputIds = array_column($validated['outputs'], 'item_id');
+
+        if (array_intersect($componentIds, $outputIds) !== []) {
+            throw ValidationException::withMessages([
+                'components' => __('messages.production_circular_item'),
+            ]);
+        }
 
         DB::transaction(function () use ($request, $validated): void {
             $production = Production::query()->create([
@@ -80,14 +88,14 @@ class ProductionController extends Controller
 
             foreach ($validated['outputs'] as $output) {
                 $production->outputs()->create([
-                    'sale_item_id' => $output['sale_item_id'],
+                    'item_id' => $output['item_id'],
                     'quantity' => $output['quantity'],
                 ]);
             }
 
             foreach ($validated['components'] ?? [] as $component) {
                 $production->components()->create([
-                    'purchase_item_id' => $component['purchase_item_id'],
+                    'item_id' => $component['item_id'],
                     'quantity' => $component['quantity'],
                 ]);
             }
