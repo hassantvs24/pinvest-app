@@ -1,0 +1,26 @@
+---
+# cPanel Git deployment configuration.
+# Docs: https://docs.cpanel.net/knowledge-base/web-services/guide-to-git/
+#
+# HOW IT WORKS: after "Deploy HEAD Commit", cPanel runs the tasks below on
+# the server. This syncs the repo into public_html. The app's root
+# .htaccess already forwards every request into public/, so the whole
+# repository can live inside public_html safely.
+#
+# BEFORE FIRST DEPLOY:
+#   1. Replace CPANEL_USERNAME below with your actual cPanel username.
+#   2. On the server, create .env (copy .env.example) and set:
+#        APP_ENV=production, APP_DEBUG=false, APP_KEY= (php artisan key:generate)
+#        DB_CONNECTION=sqlite (or MySQL credentials)
+#   3. Create the sqlite database file: touch database/database.sqlite
+#   4. Run: composer install --no-dev --optimize-autoloader
+#   5. Run: php artisan key:generate && php artisan migrate --force
+#   6. Ensure storage/ is writable: chmod -R 775 storage bootstrap/cache
+#
+# Excluded from sync on purpose:
+#   .env / database.sqlite / storage  -> live server data, never overwritten
+#   .git / node_modules / tests       -> not needed on the server
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/CPANEL_USERNAME/public_html
+    - /bin/rsync -av --delete --exclude='.git' --exclude='node_modules' --exclude='tests' --exclude='.env' --exclude='storage' --exclude='database/database.sqlite' ./ $DEPLOYPATH/
