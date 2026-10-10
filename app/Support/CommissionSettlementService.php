@@ -2,7 +2,7 @@
 
 namespace App\Support;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
@@ -15,6 +15,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Owner-managed commission periods.
@@ -38,21 +39,23 @@ class CommissionSettlementService
      */
     public static function openPeriod(?string $label, Carbon $openedAt, ?float $openingCash, ?float $investmentAmount, ?string $note): CommissionPeriod
     {
-        if ($investmentAmount !== null && $investmentAmount > 0) {
-            Investment::query()->create([
-                'amount' => $investmentAmount,
-                'note' => __('messages.opening_investment_note', ['label' => $label ?? $openedAt->format('d M Y')]),
-                'invested_at' => $openedAt->toDateString(),
-            ]);
-        }
+        return DB::transaction(function () use ($label, $openedAt, $openingCash, $investmentAmount, $note): CommissionPeriod {
+            if ($investmentAmount !== null && $investmentAmount > 0) {
+                Investment::query()->create([
+                    'amount' => $investmentAmount,
+                    'note' => __('messages.opening_investment_note', ['label' => $label ?? $openedAt->format('d M Y')]),
+                    'invested_at' => $openedAt->toDateString(),
+                ]);
+            }
 
-        return CommissionPeriod::query()->create([
-            'label' => $label,
-            'opened_at' => $openedAt,
-            'opening_cash' => $openingCash,
-            'note' => $note,
-            'status' => 'open',
-        ]);
+            return CommissionPeriod::query()->create([
+                'label' => $label,
+                'opened_at' => $openedAt,
+                'opening_cash' => $openingCash,
+                'note' => $note,
+                'status' => 'open',
+            ]);
+        });
     }
 
     /**
@@ -85,60 +88,63 @@ class CommissionSettlementService
 
     /**
      * The date a cycle's accounts actually start from. When a previous
-     * cycle was closed on/after this cycle's opened_at (overlap or
-     * same-day reopen), counting starts the day AFTER that close — so
-     * no entry is ever counted in two cycles, and days left between
-     * cycles fall into the next one instead of vanishing.
+     * cycle exists, counting starts the day after its close — so no
+     * entry is ever counted in two cycles, and days left between cycles
+     * fall into the next one instead of vanishing. A same-day reopen
+     * (opened_at on the close date) keeps counting from the reopen day
+     * itself, so entries made after the reopen are never stranded
+     * between cycles.
      */
     public static function effectiveStart(CommissionPeriod $period): Carbon
     {
-        // Accounts start the day after the latest closed cycle. That
-        // prevents double-counting on overlap/same-day reopen and pulls
-        // gap days (between close and reopen) into the new cycle.
         $latestClosed = CommissionPeriod::query()
             ->closed()
             ->orderByDesc('closed_at')
             ->value('closed_at');
 
-        return $latestClosed !== null
-            ? Carbon::parse($latestClosed)->addDay()
-            : $period->opened_at->copy();
+        if ($latestClosed === null) {
+            return $period->opened_at->copy();
+        }
+
+        return $period->opened_at->copy()->min(Carbon::parse($latestClosed)->addDay());
     }
 
     public static function closePeriod(CommissionPeriod $period, Carbon $closedAt): array
     {
-        $profit = self::periodProfit(self::effectiveStart($period), $closedAt);
+        return DB::transaction(function () use ($period, $closedAt): array {
+            $profit = self::periodProfit(self::effectiveStart($period), $closedAt);
 
-        $period->update([
-            'status' => 'closed',
-            'profit' => $profit,
-            'closed_at' => $closedAt,
-        ]);
+            $period->update([
+                'status' => 'closed',
+                'profit' => $profit,
+                'closed_at' => $closedAt,
+            ]);
 
-        $created = 0;
+            $created = 0;
 
-        foreach (self::settlementRows($profit) as $row) {
-            $settlement = CommissionSettlement::query()->firstOrCreate(
-                [
-                    'user_id' => $row['user']->id,
-                    'commission_period_id' => $period->id,
-                ],
-                [
-                    'period_start' => $period->opened_at->copy(),
-                    'period_end' => $closedAt->copy(),
-                    'business_profit' => $profit,
-                    'commission_rate' => $row['rate'],
-                    'amount' => $row['amount'],
-                    'status' => 'pending',
-                ],
-            );
+            foreach (self::settlementRows($profit) as $row) {
+                $settlement = CommissionSettlement::query()->firstOrCreate(
+                    [
+                        'user_id' => $row['user']->id,
+                        'commission_period_id' => $period->id,
+                    ],
+                    [
+                        'period_start' => self::effectiveStart($period),
+                        'period_end' => $closedAt->copy(),
+                        'business_profit' => $profit,
+                        'commission_rate' => $row['rate'],
+                        'amount' => $row['amount'],
+                        'status' => 'pending',
+                    ],
+                );
 
-            if ($settlement->wasRecentlyCreated) {
-                $created++;
+                if ($settlement->wasRecentlyCreated) {
+                    $created++;
+                }
             }
-        }
 
-        return ['profit' => $profit, 'created' => $created];
+            return ['profit' => $profit, 'created' => $created];
+        });
     }
 
     /**
@@ -262,7 +268,7 @@ class CommissionSettlementService
                 $production->type_icon = '🏭';
                 $production->type_item_relation = null;
                 $production->type_item_name = $production->outputs
-                    ->map(fn ($output): string => $output->item->name.' × '.$output->quantity)
+                    ->map(fn ($output): string => $output->item->name.' × '.ItemUnits::formatQuantity((float) $output->quantity))
                     ->implode(', ');
                 $production->amount = $production->extra_cost;
             });
@@ -275,7 +281,7 @@ class CommissionSettlementService
                 $loss->type_label = __('messages.stock_loss');
                 $loss->type_icon = '📉';
                 $loss->type_item_relation = null;
-                $loss->type_item_name = ($loss->item->name ?? '—').' × '.$loss->quantity;
+                $loss->type_item_name = ($loss->item->name ?? '—').' × '.ItemUnits::formatQuantity((float) $loss->quantity);
                 $loss->amount = 0;
             });
 

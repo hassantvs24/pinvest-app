@@ -32,7 +32,7 @@
 
             <div>
                 <label class="block text-sm font-medium mb-1">{{ __('messages.mobile_number') }}</label>
-                <input type="text" name="phone" value="{{ old('phone') }}" required placeholder="01XXXXXXXXX"
+                <input type="text" name="phone" value="{{ old('phone') }}" required placeholder="{{ __('messages.phone_placeholder') }}"
                        class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
 

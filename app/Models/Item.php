@@ -22,6 +22,17 @@ class Item extends Model
     use HasFactory;
 
     /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'default_price' => 'decimal:2',
+            'is_active' => 'boolean',
+        ];
+    }
+
+    /**
      * Scope: only active items (shown in dropdowns).
      */
     public function scopeActive(Builder $query): Builder

@@ -1,13 +1,13 @@
 <?php
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
+use App\Enums\UserRole;
 use App\Models\Item;
 use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\User;
 use App\Support\InventoryService;
-use App\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

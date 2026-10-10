@@ -49,26 +49,26 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-blue-600">
             <div class="text-sm text-gray-500">💵 {{ __('messages.my_sales') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['sales'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['sales']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-violet-600">
             <div class="text-sm text-gray-500">
                 🤝 {{ __('messages.my_commission') }}{{ $commissionEstimated ? ' '.__('messages.estimated_hint') : '' }}
             </div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['commission'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['commission']) }}</div>
             <div class="text-xs text-gray-500">{{ $commissionRate }}% · ⏳ {{ __('messages.commission_due') }}:
                 <a href="{{ route('commissions.index') }}" class="font-bold text-orange-600 underline">
-                    ৳{{ number_format($pendingCommission, 2) }}
+                    {{ \App\Support\Money::format($pendingCommission) }}
                 </a>
             </div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-orange-500">
             <div class="text-sm text-gray-500">🛒 {{ __('messages.my_purchase') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['purchase'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['purchase']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-rose-500">
             <div class="text-sm text-gray-500">💸 {{ __('messages.my_expense') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['expense'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['expense']) }}</div>
         </div>
     </div>
 
@@ -83,12 +83,12 @@
                         · {{ $lastSettlement->period_start->format('d M') }} – {{ $lastSettlement->period_end->format('d M Y') }}
                     </div>
                     <div class="text-xs text-gray-500">
-                        📈 {{ __('messages.period_profit') }}: ৳{{ number_format((float) $lastSettlement->business_profit, 2) }}
+                        📈 {{ __('messages.period_profit') }}: {{ \App\Support\Money::format((float) $lastSettlement->business_profit) }}
                         · 🤝 {{ $lastSettlement->commission_rate }}%
                     </div>
                 </div>
                 <div class="text-right shrink-0">
-                    <div class="text-xl font-bold">৳{{ number_format((float) $lastSettlement->amount, 2) }}</div>
+                    <div class="text-xl font-bold">{{ \App\Support\Money::format((float) $lastSettlement->amount) }}</div>
                     @if($lastSettlement->status === 'paid')
                         <span class="text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">✅ {{ __('messages.paid') }}</span>
                     @else

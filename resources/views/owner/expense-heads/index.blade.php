@@ -10,11 +10,11 @@
     <div class="grid grid-cols-2 gap-3 mb-4">
         <div class="bg-white rounded-xl shadow p-4">
             <div class="text-xs text-gray-500">{{ __('messages.expense_total') }}</div>
-            <div class="text-lg font-bold">৳{{ number_format($confirmedGrand, 2) }}</div>
+            <div class="text-lg font-bold">{{ \App\Support\Money::format($confirmedGrand) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4">
             <div class="text-xs text-gray-500">⏳ {{ __('messages.expense_pending_total') }}</div>
-            <div class="text-lg font-bold text-yellow-700">৳{{ number_format($pendingGrand, 2) }}</div>
+            <div class="text-lg font-bold text-yellow-700">{{ \App\Support\Money::format($pendingGrand) }}</div>
         </div>
     </div>
 
@@ -38,11 +38,11 @@
                                     {{ $row['confirmed_count'] }} {{ __('messages.entry_count') }}
                                     ・{{ __('messages.expense_share') }} {{ number_format($row['share'], 1) }}%
                                     @if($row['pending_count'] > 0)
-                                        ・⏳ {{ $row['pending_count'] }} (৳{{ number_format($row['pending_total'], 2) }})
+                                        ・⏳ {{ $row['pending_count'] }} ({{ \App\Support\Money::format($row['pending_total']) }})
                                     @endif
                                 </div>
                             </div>
-                            <div class="text-right shrink-0 font-bold">৳{{ number_format($row['confirmed_total'], 2) }}</div>
+                            <div class="text-right shrink-0 font-bold">{{ \App\Support\Money::format($row['confirmed_total']) }}</div>
                         </a>
                     </li>
                 @endforeach

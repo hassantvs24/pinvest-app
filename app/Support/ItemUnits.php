@@ -94,6 +94,15 @@ class ItemUnits
     }
 
     /**
+     * Format a quantity for display: up to 3 decimals, trailing zeros
+     * trimmed (2.500 → "2.5", 12 → "12").
+     */
+    public static function formatQuantity(float $quantity): string
+    {
+        return rtrim(rtrim(number_format($quantity, 3), '0'), '.');
+    }
+
+    /**
      * Validation rule fragment, e.g. "in:kg,gram,tola,pcs,ml".
      */
     public static function rule(): string

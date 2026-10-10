@@ -9,10 +9,10 @@
     <div class="bg-white rounded-xl shadow p-4 mb-4 border-l-4 border-violet-600">
         <div class="text-sm text-gray-500">🤝 {{ __('messages.commission_due') }}</div>
         <div class="text-3xl font-bold {{ $pendingDue > 0 ? 'text-orange-600' : 'text-green-600' }}">
-            ৳{{ number_format($pendingDue, 2) }}
+            {{ \App\Support\Money::format($pendingDue) }}
         </div>
         <div class="text-xs text-gray-500 mt-1">
-            {{ __('messages.total') }} {{ __('messages.my_commission') }}: ৳{{ number_format($earnedTotal, 2) }}
+            {{ __('messages.total') }} {{ __('messages.my_commission') }}: {{ \App\Support\Money::format($earnedTotal) }}
         </div>
 
         @if($pendingDue > 0)
@@ -41,12 +41,12 @@
                         🗓️ {{ $settlement->period?->label ?: $settlement->period_start->format('d M Y').' – '.$settlement->period_end->format('d M Y') }}
                     </div>
                     <div class="text-sm text-gray-500">
-                        📈 {{ __('messages.period_profit') }}: ৳{{ number_format((float) $settlement->business_profit, 2) }}
+                        📈 {{ __('messages.period_profit') }}: {{ \App\Support\Money::format((float) $settlement->business_profit) }}
                         · 🤝 {{ $settlement->commission_rate }}%
                     </div>
                 </div>
                 <div class="text-right shrink-0">
-                    <div class="text-lg font-bold">৳{{ number_format((float) $settlement->amount, 2) }}</div>
+                    <div class="text-lg font-bold">{{ \App\Support\Money::format((float) $settlement->amount) }}</div>
                     @if($settlement->status === 'paid')
                         <span class="inline-block text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">✅ {{ __('messages.paid') }}</span>
                     @else

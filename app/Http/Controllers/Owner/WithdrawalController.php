@@ -7,6 +7,7 @@ use App\Models\OwnerWithdrawal;
 use App\Support\BusinessStats;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -40,15 +41,19 @@ class WithdrawalController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $cashInHand = BusinessStats::all()['cash_in_hand'];
+        // Read the cash position and insert atomically, so two parallel
+        // withdrawals cannot both pass the check and overdraw the cash.
+        DB::transaction(function () use ($validated): void {
+            $cashInHand = BusinessStats::all()['cash_in_hand'];
 
-        if ((float) $validated['amount'] > $cashInHand) {
-            throw ValidationException::withMessages([
-                'amount' => __('messages.withdrawal_exceeds_cash', ['cash' => number_format($cashInHand, 2)]),
-            ]);
-        }
+            if ((float) $validated['amount'] > $cashInHand) {
+                throw ValidationException::withMessages([
+                    'amount' => __('messages.withdrawal_exceeds_cash', ['cash' => number_format($cashInHand, 2)]),
+                ]);
+            }
 
-        OwnerWithdrawal::query()->create($validated);
+            OwnerWithdrawal::query()->create($validated);
+        });
 
         return back()->with('success', __('messages.withdrawal_added'));
     }

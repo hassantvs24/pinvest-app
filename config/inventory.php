@@ -17,4 +17,16 @@ return [
         'gram' => 1.0,
         'tola' => (float) env('INVENTORY_TOLA_GRAMS', 11.664),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Languages
+    |--------------------------------------------------------------------------
+    |
+    | Interface languages offered by the language picker. The first one
+    | is the app default.
+    |
+    */
+
+    'languages' => ['bn', 'en'],
 ];

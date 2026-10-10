@@ -30,11 +30,11 @@
                                     </div>
                                     <div class="text-xs text-gray-600">
                                         <span class="inline-flex items-center gap-1.5"><x-avatar :user="$entry->user" size="20" /> {{ $entry->user->name }}</span>
-                                        · 📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
+                                        · 📅 {{ \App\Support\DateFormats::date($entry->entry_date) }}
                                         🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
                                     </div>
                                 </div>
-                                <div class="font-bold shrink-0">৳{{ number_format((float) ($entry->amount ?? $entry->total), 2) }}</div>
+                                <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) ($entry->amount ?? $entry->total)) }}</div>
                             </li>
                         @endforeach
                     </ul>
@@ -45,31 +45,31 @@
             <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 mb-4 text-sm">
                 <li class="px-4 py-2 flex items-center justify-between">
                     <span>💰 {{ __('messages.total_sales') }}</span>
-                    <span class="font-bold text-emerald-700">৳{{ number_format($stats['sales'], 2) }}</span>
+                    <span class="font-bold text-emerald-700">{{ \App\Support\Money::format($stats['sales']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
                     <span>🏷️ {{ __('messages.cost_of_goods_sold') }}</span>
-                    <span class="font-bold text-indigo-700">−৳{{ number_format($stats['cogs'], 2) }}</span>
+                    <span class="font-bold text-indigo-700">−{{ \App\Support\Money::format($stats['cogs']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
                     <span>🛒 {{ __('messages.total_purchase') }} <span class="text-xs text-gray-400">({{ __('messages.cash_reference') }})</span></span>
-                    <span class="font-bold text-orange-700">৳{{ number_format($stats['purchase'], 2) }}</span>
+                    <span class="font-bold text-orange-700">{{ \App\Support\Money::format($stats['purchase']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
                     <span>📦 {{ __('messages.product_expense') }}</span>
-                    <span class="font-bold text-violet-700">৳{{ number_format($stats['product_expense'], 2) }}</span>
+                    <span class="font-bold text-violet-700">{{ \App\Support\Money::format($stats['product_expense']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
                     <span>🧾 {{ __('messages.general_expense') }}</span>
-                    <span class="font-bold text-red-700">−৳{{ number_format($stats['expense'], 2) }}</span>
+                    <span class="font-bold text-red-700">−{{ \App\Support\Money::format($stats['expense']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
                     <span>📉 {{ __('messages.stock_loss') }}</span>
-                    <span class="font-bold text-red-700">−৳{{ number_format($stats['stock_loss'], 2) }}</span>
+                    <span class="font-bold text-red-700">−{{ \App\Support\Money::format($stats['stock_loss']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between bg-gray-50">
                     <span>🏪 {{ __('messages.stock_value') }}</span>
-                    <span class="font-bold text-teal-700">৳{{ number_format($stats['stock_value'], 2) }}</span>
+                    <span class="font-bold text-teal-700">{{ \App\Support\Money::format($stats['stock_value']) }}</span>
                 </li>
             </ul>
 
@@ -89,7 +89,7 @@
             <div class="rounded-xl p-4 mb-4 {{ $profit >= 0 ? 'bg-green-50 border border-green-300' : 'bg-red-50 border border-red-300' }}">
                 <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>
                 <div class="text-3xl font-bold {{ $profit >= 0 ? 'text-green-700' : 'text-red-700' }}">
-                    ৳{{ number_format($profit, 2) }}
+                    {{ \App\Support\Money::format($profit) }}
                 </div>
             </div>
 
@@ -103,16 +103,16 @@
                                 <span class="font-medium inline-flex items-center gap-1.5"><x-avatar :user="$row['user']" size="20" /> {{ $row['user']->name }}</span>
                                 <span class="text-xs text-violet-600">🤝 {{ $row['rate'] }}%</span>
                             </div>
-                            <div class="font-bold">৳{{ number_format($row['amount'], 2) }}</div>
+                            <div class="font-bold">{{ \App\Support\Money::format($row['amount']) }}</div>
                         </li>
                     @endforeach
                     <li class="px-4 py-2 flex items-center justify-between text-sm bg-violet-50 font-bold">
                         <div>🤝 {{ __('messages.total_commission') }}</div>
-                        <div>৳{{ number_format($totalCommission, 2) }}</div>
+                        <div>{{ \App\Support\Money::format($totalCommission) }}</div>
                     </li>
                     <li class="px-4 py-2 flex items-center justify-between text-sm bg-emerald-50 font-bold">
                         <div>👔 {{ __('messages.owner_share') }}</div>
-                        <div class="{{ $ownerShare >= 0 ? 'text-emerald-700' : 'text-red-700' }}">৳{{ number_format($ownerShare, 2) }}</div>
+                        <div class="{{ $ownerShare >= 0 ? 'text-emerald-700' : 'text-red-700' }}">{{ \App\Support\Money::format($ownerShare) }}</div>
                     </li>
                 </ul>
             @elseif($profit <= 0)

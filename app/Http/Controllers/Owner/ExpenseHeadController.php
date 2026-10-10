@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Owner;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use App\Models\ExpenseHead;

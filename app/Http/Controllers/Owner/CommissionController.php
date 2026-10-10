@@ -57,12 +57,10 @@ class CommissionController extends Controller
      */
     public function openPeriod(Request $request): RedirectResponse
     {
-        abort_if(CommissionPeriod::query()->open()->exists(), 409);
-
-        // A new cycle cannot start inside a previous closed one — that
-        // would count the same entries in two cycles. Reopening the same
-        // day the previous cycle closed is fine (the effective start
-        // shifts to the next day automatically).
+        // A new cycle must start strictly AFTER the latest closed one.
+        // Same-day reopen is impossible to account for correctly at date
+        // granularity (day-close entries would count twice, or the rest
+        // of the day's entries would vanish from every cycle).
         $latestClosedAt = CommissionPeriod::query()
             ->closed()
             ->orderByDesc('closed_at')
@@ -70,7 +68,7 @@ class CommissionController extends Controller
 
         $openedAtRules = ['required', 'date', 'before_or_equal:today'];
         if ($latestClosedAt !== null) {
-            $openedAtRules[] = 'after_or_equal:'.Carbon::parse($latestClosedAt)->format('Y-m-d');
+            $openedAtRules[] = 'after:'.Carbon::parse($latestClosedAt)->format('Y-m-d');
         }
 
         $validated = $request->validate([
@@ -81,13 +79,18 @@ class CommissionController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        CommissionSettlementService::openPeriod(
-            $validated['label'] ?? null,
-            Carbon::parse($validated['opened_at']),
-            isset($validated['opening_cash']) ? (float) $validated['opening_cash'] : null,
-            isset($validated['investment_amount']) ? (float) $validated['investment_amount'] : null,
-            $validated['note'] ?? null,
-        );
+        // Lock against a concurrent open creating a second open cycle.
+        DB::transaction(function () use ($validated): void {
+            abort_if(CommissionPeriod::query()->open()->lockForUpdate()->exists(), 409);
+
+            CommissionSettlementService::openPeriod(
+                $validated['label'] ?? null,
+                Carbon::parse($validated['opened_at']),
+                isset($validated['opening_cash']) ? (float) $validated['opening_cash'] : null,
+                isset($validated['investment_amount']) ? (float) $validated['investment_amount'] : null,
+                $validated['note'] ?? null,
+            );
+        });
 
         return back()->with('success', __('messages.period_opened'));
     }
@@ -177,7 +180,12 @@ class CommissionController extends Controller
 
         abort_unless($payoutRequest->status === 'pending', 409);
 
-        DB::transaction(function () use ($payoutRequest): void {
+        $approved = true;
+
+        DB::transaction(function () use ($payoutRequest, &$approved): void {
+            $payoutRequest->refresh();
+            abort_unless($payoutRequest->status === 'pending', 409);
+
             $settlements = CommissionSettlement::query()
                 ->pending()
                 ->where('user_id', $payoutRequest->user_id)
@@ -189,6 +197,16 @@ class CommissionController extends Controller
             if ($total <= 0) {
                 // Nothing left to pay — close the request without a payout.
                 $payoutRequest->update(['status' => 'rejected']);
+
+                return;
+            }
+
+            // Paying commission is cash out — never pay beyond the cash
+            // actually in hand.
+            $cashInHand = BusinessStats::all()['cash_in_hand'];
+
+            if ($total > $cashInHand) {
+                $approved = false;
 
                 return;
             }
@@ -206,6 +224,12 @@ class CommissionController extends Controller
 
             $payoutRequest->update(['status' => 'approved', 'amount' => $total]);
         });
+
+        if ($approved === false) {
+            return back()->with('error', __('messages.payout_exceeds_cash', [
+                'cash' => number_format(BusinessStats::all()['cash_in_hand'], 2),
+            ]));
+        }
 
         return back()->with('success', __('messages.payout_approved'));
     }

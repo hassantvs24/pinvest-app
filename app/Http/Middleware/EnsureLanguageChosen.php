@@ -16,7 +16,10 @@ class EnsureLanguageChosen
     {
         $user = $request->user();
 
-        if ($user && $user->preferred_language === null && ! $request->is('select-language*')) {
+        if ($user && $user->preferred_language === null
+            && ! $request->is('select-language*')
+            && ! $request->routeIs('logout')
+        ) {
             return redirect()->route('language.show');
         }
 

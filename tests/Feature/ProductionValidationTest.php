@@ -1,12 +1,12 @@
 <?php
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
+use App\Enums\UserRole;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\User;
-use App\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

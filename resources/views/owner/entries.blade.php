@@ -52,7 +52,7 @@
                         <div class="text-sm text-gray-500 inline-flex items-center gap-1.5"><x-avatar :user="$entry->user" size="22" /> {{ $entry->user->name }}</div>
                         @if($type !== 'expenses')
                             <div class="text-sm text-gray-500">
-                                {{ $entry->quantity }} {{ \App\Support\ItemUnits::label($entry->{$config['relations'][1]}->unit ?? null) }} × ৳{{ number_format((float) $entry->unit_price, 2) }}
+                                {{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }} {{ \App\Support\ItemUnits::label($entry->{$config['relations'][1]}->unit ?? null) }} × {{ \App\Support\Money::format((float) $entry->unit_price) }}
                             </div>
                         @endif
                         @if($entry->note)
@@ -62,13 +62,13 @@
                             <div class="text-sm text-gray-500">📦 {{ $entry->item->name }}</div>
                         @endif
                         <div class="text-sm text-gray-500">
-                            📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }}
+                            📅 {{ \App\Support\DateFormats::date($entry->entry_date) }}
                             🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
                         </div>
                     </div>
                     <div class="text-right shrink-0">
                         <div class="text-lg font-bold">
-                            ৳{{ number_format((float) ($type === 'expenses' ? $entry->amount : $entry->total), 2) }}
+                            {{ \App\Support\Money::format((float) ($type === 'expenses' ? $entry->amount : $entry->total)) }}
                         </div>
                         @php $st = $entry->status->value; @endphp
                         <span class="inline-block mt-1 text-xs px-2 py-1 rounded-full
@@ -148,7 +148,7 @@
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.quantity') }}</label>
-                                <input type="number" name="quantity" min="1" step="1" value="{{ $entry->quantity }}" required
+                                <input type="number" name="quantity" min="0.001" step="any" value="{{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}" required
                                        class="w-full border border-gray-300 rounded-lg px-3 py-3">
                             </div>
                             <div>

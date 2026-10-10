@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Owner;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
@@ -223,6 +223,7 @@ class ReportController extends Controller
     private function entryDetailRows(string $entryModel, ?string $from, ?string $to): Collection
     {
         return $entryModel::query()
+            ->with($entryModel === Expense::class ? 'expenseHead' : 'item')
             ->where('status', EntryStatus::Confirmed->value)
             ->when($from, fn ($q) => $q->whereDate('entry_date', '>=', $from))
             ->when($to, fn ($q) => $q->whereDate('entry_date', '<=', $to))

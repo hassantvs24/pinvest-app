@@ -9,13 +9,13 @@
     <div class="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between gap-2">
         <div>
             <h1 class="text-lg font-bold">{{ $item->name }}</h1>
-            <p class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: ৳{{ number_format($summary['avg_cost'], 2) }}/{{ \App\Support\ItemUnits::label($item->unit) }}</p>
+            <p class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: {{ \App\Support\Money::format($summary['avg_cost']) }}/{{ \App\Support\ItemUnits::label($item->unit) }}</p>
         </div>
         <div class="text-right">
             <div class="text-2xl font-bold {{ $summary['base_quantity'] <= 0.00001 ? 'text-red-600' : 'text-emerald-700' }}">
                 {{ rtrim(rtrim(number_format($summary['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}
             </div>
-            <div class="text-xs text-gray-500">= ৳{{ number_format($summary['value'], 2) }}</div>
+            <div class="text-xs text-gray-500">= {{ \App\Support\Money::format($summary['value']) }}</div>
         </div>
     </div>
 
@@ -27,35 +27,35 @@
                 <span>🛒 {{ __('messages.total_purchase') }}</span>
                 <span class="text-right">
                     <span class="font-bold">{{ rtrim(rtrim(number_format($totals['purchase']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
-                    <span class="text-xs text-gray-500">= ৳{{ number_format($totals['purchase']['amount'], 2) }}</span>
+                    <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['purchase']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
                 <span>💵 {{ __('messages.total_sales') }}</span>
                 <span class="text-right">
                     <span class="font-bold">{{ rtrim(rtrim(number_format($totals['sale']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
-                    <span class="text-xs text-gray-500">= ৳{{ number_format($totals['sale']['amount'], 2) }}</span>
+                    <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['sale']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
                 <span>🏭 {{ __('messages.ledger_production_in') }}</span>
                 <span class="text-right">
                     <span class="font-bold text-emerald-700">+{{ rtrim(rtrim(number_format($totals['production_in']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
-                    <span class="text-xs text-gray-500">= ৳{{ number_format($totals['production_in']['amount'], 2) }}</span>
+                    <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['production_in']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
                 <span>🏭 {{ __('messages.ledger_production_out') }}</span>
                 <span class="text-right">
                     <span class="font-bold text-red-600">−{{ rtrim(rtrim(number_format($totals['production_out']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
-                    <span class="text-xs text-gray-500">= ৳{{ number_format($totals['production_out']['amount'], 2) }}</span>
+                    <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['production_out']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
                 <span>📉 {{ __('messages.stock_loss') }}</span>
                 <span class="text-right">
                     <span class="font-bold text-red-600">−{{ rtrim(rtrim(number_format($totals['stock-loss']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
-                    <span class="text-xs text-gray-500">= ৳{{ number_format($totals['stock-loss']['amount'], 2) }}</span>
+                    <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['stock-loss']['amount']) }}</span>
                 </span>
             </li>
         </ul>
@@ -68,7 +68,7 @@
             <ul class="space-y-0.5">
                 @foreach($pending as $sale)
                     <li>
-                        📅 {{ $sale['date']->format(\App\Support\DateFormats::DATE) }}
+                        📅 {{ \App\Support\DateFormats::date($sale['date']) }}
                         − {{ rtrim(rtrim(number_format($sale['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}
                         @if($sale['note'])<span class="text-xs">({{ $sale['note'] }})</span>@endif
                     </li>
@@ -87,7 +87,7 @@
                 @foreach($rows as $row)
                     <li class="px-4 py-2 text-sm flex items-center justify-between gap-2">
                         <div class="min-w-0">
-                            <span class="text-gray-500">📅 {{ $row['date']->format(\App\Support\DateFormats::DATE) }}</span>
+                            <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($row['date']) }}</span>
                             @if($row['direction'] === 'in')
                                 <span class="text-emerald-700 font-bold">+{{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</span>
                                 @if($row['kind'] === 'production')
@@ -106,8 +106,8 @@
                             @if($row['unit_price'] !== null)
                                 <span class="text-xs text-gray-600">
                                     @if($row['kind'] === 'production' || $row['kind'] === 'stock-loss')💰 {{ __('messages.ledger_cost') }}@endif
-                                    ৳{{ number_format($row['unit_price'], 2) }}/{{ \App\Support\ItemUnits::label($item->unit) }}
-                                    = <span class="font-bold">৳{{ number_format($row['total'], 2) }}</span>
+                                    {{ \App\Support\Money::format($row['unit_price']) }}/{{ \App\Support\ItemUnits::label($item->unit) }}
+                                    = <span class="font-bold">{{ \App\Support\Money::format($row['total']) }}</span>
                                 </span>
                             @endif
                             @if($row['note'])<span class="text-xs text-gray-500">{{ $row['note'] }}</span>@endif

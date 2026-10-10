@@ -1,7 +1,8 @@
 <?php
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Enums\ExpenseCostType;
+use App\Enums\UserRole;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
@@ -22,7 +23,6 @@ use App\Support\CommissionSettlementService;
 use App\Support\DateFormats;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
-use App\UserRole;
 use Database\Seeders\DefaultDataSeeder;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -1925,15 +1925,20 @@ it('blocks opening a cycle inside a previously closed one', function (): void {
         'opened_at' => now()->subDays(15)->format('Y-m-d'),
     ])->assertSessionHasErrors('opened_at');
 
-    // Same-day reopen is allowed.
+    // Reopening on the close day itself is rejected (one day cannot
+    // belong to two cycles); the following day is allowed.
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->subDays(10)->format('Y-m-d'),
+    ])->assertSessionHasErrors('opened_at');
+
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opened_at' => now()->subDays(9)->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors()->assertRedirect();
 
     expect(CommissionPeriod::query()->open()->count())->toBe(1);
 });
 
-it('does not double-count entries when a cycle is reopened the same day', function (): void {
+it('rejects reopening a cycle on the same day the previous one closed', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10]);
     $item = Item::factory()->create(['unit' => 'pcs']);
@@ -1951,13 +1956,16 @@ it('does not double-count entries when a cycle is reopened the same day', functi
     ])->assertRedirect();
     expect((float) CommissionPeriod::sole()->profit)->toBe(1000.0);
 
-    // Reopen the same day: cycle B must not see today's sale again.
+    // Same-day reopen is rejected: at date granularity the same day
+    // cannot belong to two cycles (its entries would either count
+    // twice or vanish from every cycle). A new cycle starts the
+    // following day at the earliest.
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->format('Y-m-d'),
-    ])->assertSessionDoesntHaveErrors();
+    ])->assertSessionHasErrors('opened_at');
 
-    $periodB = CommissionPeriod::query()->open()->sole();
-    expect(CommissionSettlementService::runningProfit($periodB))->toBe(0.0);
+    expect(CommissionPeriod::query()->open()->count())->toBe(0);
+    expect((float) CommissionPeriod::sole()->profit)->toBe(1000.0);
 });
 
 it('absorbs entries from the gap between cycles into the next one', function (): void {

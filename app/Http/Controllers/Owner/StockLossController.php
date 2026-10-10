@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Owner;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
@@ -11,6 +11,7 @@ use App\Support\InventoryService;
 use App\Support\ItemUnits;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -39,12 +40,12 @@ class StockLossController extends Controller
 
         $validated = $request->validate([
             'item_id' => ['required', 'exists:items,id'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'numeric', 'min:0.001'],
             'entry_date' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $error = $this->stockOverflowError((int) $validated['item_id'], (int) $validated['quantity']);
+        $error = $this->stockOverflowError((int) $validated['item_id'], (float) $validated['quantity']);
         if ($error !== null) {
             return back()->withInput()->withErrors(['quantity' => $error]);
         }
@@ -67,7 +68,7 @@ class StockLossController extends Controller
      * Stock-overdraft error message when a loss no longer fits, or null
      * when it does. Pending losses (like pending sales) reserve stock.
      */
-    private function stockOverflowError(int $itemId, int $quantity, ?int $excludeLossId = null): ?string
+    private function stockOverflowError(int $itemId, float $quantity, ?int $excludeLossId = null): ?string
     {
         $item = Item::query()->findOrFail($itemId);
         $available = InventoryService::availableQuantity($item, excludeLossId: $excludeLossId);
@@ -85,18 +86,32 @@ class StockLossController extends Controller
     public function confirm(StockLoss $stockLoss): RedirectResponse
     {
         abort_unless(CommissionPeriod::query()->open()->exists(), 409);
-        abort_unless($stockLoss->status === EntryStatus::Pending, 409);
 
-        $error = $this->stockOverflowError((int) $stockLoss->item_id, (int) $stockLoss->quantity, (int) $stockLoss->id);
+        // Re-check the stock under a row lock so two simultaneous
+        // confirms cannot write off the same units twice.
+        $error = null;
+
+        DB::transaction(function () use ($stockLoss, &$error): void {
+            $stockLoss = StockLoss::query()->lockForUpdate()->findOrFail($stockLoss->id);
+
+            abort_unless($stockLoss->status === EntryStatus::Pending, 409);
+
+            $error = $this->stockOverflowError((int) $stockLoss->item_id, (float) $stockLoss->quantity, (int) $stockLoss->id);
+
+            if ($error !== null) {
+                return;
+            }
+
+            $stockLoss->update([
+                'status' => EntryStatus::Confirmed,
+                'confirmed_by' => request()->user()->id,
+                'confirmed_at' => now(),
+            ]);
+        });
+
         if ($error !== null) {
             return back()->with('error', $error);
         }
-
-        $stockLoss->update([
-            'status' => EntryStatus::Confirmed,
-            'confirmed_by' => request()->user()->id,
-            'confirmed_at' => now(),
-        ]);
 
         return back()->with('success', __('messages.entry_confirmed'));
     }

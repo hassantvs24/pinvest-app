@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Owner;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
@@ -62,10 +62,10 @@ class ProductionController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
             'outputs' => ['required', 'array', 'min:1'],
             'outputs.*.item_id' => ['required', 'distinct', 'exists:items,id'],
-            'outputs.*.quantity' => ['required', 'integer', 'min:1'],
+            'outputs.*.quantity' => ['required', 'numeric', 'min:0.001'],
             'components' => ['nullable', 'array', 'min:0'],
             'components.*.item_id' => ['required', 'distinct', 'exists:items,id'],
-            'components.*.quantity' => ['required', 'integer', 'min:1'],
+            'components.*.quantity' => ['required', 'numeric', 'min:0.001'],
         ]);
 
         $componentIds = array_column($validated['components'] ?? [], 'item_id');
@@ -121,25 +121,38 @@ class ProductionController extends Controller
     public function confirm(Production $production): RedirectResponse
     {
         abort_unless($this->cycleOpen(), 409);
-        abort_unless($production->status === EntryStatus::Pending, 409);
 
         // Stock and prices may have moved since the partner submitted —
-        // re-validate both checks before anything starts counting.
-        $error = InventoryService::validateProduction(
-            $production->components->map(fn ($c): array => ['item_id' => $c->item_id, 'quantity' => (int) $c->quantity])->all(),
-            $production->outputs->map(fn ($o): array => ['item_id' => $o->item_id, 'quantity' => (int) $o->quantity])->all(),
-            (float) $production->extra_cost,
-            excludeProductionId: $production->id,
-        );
+        // re-validate both checks under a row lock so two simultaneous
+        // confirms cannot oversell the same units.
+        $error = null;
+
+        DB::transaction(function () use ($production, &$error): void {
+            $production = Production::query()->lockForUpdate()->findOrFail($production->id);
+
+            abort_unless($production->status === EntryStatus::Pending, 409);
+
+            $error = InventoryService::validateProduction(
+                $production->components->map(fn ($c): array => ['item_id' => $c->item_id, 'quantity' => (float) $c->quantity])->all(),
+                $production->outputs->map(fn ($o): array => ['item_id' => $o->item_id, 'quantity' => (float) $o->quantity])->all(),
+                (float) $production->extra_cost,
+                excludeProductionId: $production->id,
+            );
+
+            if ($error !== null) {
+                return;
+            }
+
+            $production->update([
+                'status' => EntryStatus::Confirmed,
+                'confirmed_by' => request()->user()->id,
+                'confirmed_at' => now(),
+            ]);
+        });
+
         if ($error !== null) {
             return back()->with('error', $error);
         }
-
-        $production->update([
-            'status' => EntryStatus::Confirmed,
-            'confirmed_by' => request()->user()->id,
-            'confirmed_at' => now(),
-        ]);
 
         return back()->with('success', __('messages.entry_confirmed'));
     }

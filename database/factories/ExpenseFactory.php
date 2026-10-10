@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\User;

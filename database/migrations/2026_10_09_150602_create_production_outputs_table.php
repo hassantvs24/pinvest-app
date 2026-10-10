@@ -17,7 +17,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('production_id')->constrained()->cascadeOnDelete();
             $table->foreignId('item_id')->constrained()->cascadeOnDelete();
-            $table->unsignedInteger('quantity');
+            $table->decimal('quantity', 12, 3, true);
             $table->timestamps();
 
             $table->index(['item_id', 'production_id']);

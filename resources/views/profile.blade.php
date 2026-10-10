@@ -21,7 +21,7 @@
                 @endif
                 <li class="py-3 flex justify-between">
                     <span class="text-gray-500">🌐 {{ __('messages.language') }}</span>
-                    <span class="font-medium">{{ $user->preferred_language === 'en' ? '🇬🇧 English' : '🇧🇩 বাংলা' }}</span>
+                    <span class="font-medium">{{ $user->preferred_language === 'en' ? __('messages.language_en') : __('messages.language_bn') }}</span>
                 </li>
             </ul>
         </div>
@@ -30,7 +30,7 @@
             <a href="{{ route('commissions.index') }}"
                class="flex items-center justify-between bg-white rounded-2xl shadow-lg p-4 font-bold text-emerald-700 hover:bg-emerald-50">
                 <span>🤝 {{ __('messages.my_commission') }}</span>
-                <span class="text-xs font-normal text-gray-500">{{ __('messages.commission_due') }}: ৳{{ number_format($commissionDue, 2) }} →</span>
+                <span class="text-xs font-normal text-gray-500">{{ __('messages.commission_due') }}: {{ \App\Support\Money::format($commissionDue) }} →</span>
             </a>
         @endif
 

@@ -2,7 +2,7 @@
 
 namespace App\Support;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Enums\ExpenseCostType;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;

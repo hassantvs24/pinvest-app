@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\UserRole;
+use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;

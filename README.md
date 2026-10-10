@@ -42,7 +42,7 @@ php artisan migrate:fresh --seed
 
 - Fresh শুরুর পর **Partners page থেকে partner-দের commission rate সেট করতে ভুলবেন না** — rate 0 থাকলে কমিশন হিসাব হয় না
 - প্রত্যেকে প্রথম লগইনে **Profile → পাসওয়ার্ড বদলান**
-- নতুন style যোগ করলে: `npm run build` (Tailwind CDN ব্যবহার করা হয়, সাধারণত দরকার হয় না)
+- Blade/markup বদলে UI আপডেট করলে: `npm run build` (Tailwind CDN ব্যবহার করা হয়, সাধারণত দরকার হয় না)
 
 ## ডকুমেন্টেশন
 

@@ -17,7 +17,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('item_id')->nullable()->constrained()->nullOnDelete();
-            $table->unsignedInteger('quantity');
+            $table->decimal('quantity', 12, 3, true);
             $table->text('note')->nullable();
             $table->date('entry_date');
             $table->string('status')->default('pending');

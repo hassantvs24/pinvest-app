@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\StockLoss;
@@ -41,7 +41,7 @@ class StockLossController extends Controller
 
         $validated = $request->validate([
             'item_id' => ['required', 'exists:items,id'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'numeric', 'min:0.001'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 

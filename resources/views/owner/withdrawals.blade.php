@@ -5,12 +5,12 @@
 @section('content')
     <div class="bg-white rounded-xl shadow p-4 mb-4 border-l-4 border-amber-600">
         <div class="text-sm text-gray-500">🏦 {{ __('messages.total_withdrawn') }}</div>
-        <div class="text-2xl font-bold">৳{{ number_format($total, 2) }}</div>
+        <div class="text-2xl font-bold">{{ \App\Support\Money::format($total) }}</div>
     </div>
 
     <div class="bg-white rounded-xl shadow p-4 mb-4 border-l-4 border-emerald-700">
         <div class="text-sm text-gray-500">💵 {{ __('messages.cash_in_hand') }}</div>
-        <div class="text-2xl font-bold text-emerald-700">৳{{ number_format($cashInHand, 2) }}</div>
+        <div class="text-2xl font-bold text-emerald-700">{{ \App\Support\Money::format($cashInHand) }}</div>
         <p class="text-xs text-gray-500 mt-1">{{ __('messages.withdrawal_cash_hint') }}</p>
     </div>
 
@@ -49,7 +49,7 @@
                     @endif
                     <div class="text-sm text-gray-500">📅 {{ $withdrawal->withdrawn_at->format('d M Y') }}</div>
                 </div>
-                <div class="text-lg font-bold shrink-0">৳{{ number_format((float) $withdrawal->amount, 2) }}</div>
+                <div class="text-lg font-bold shrink-0">{{ \App\Support\Money::format((float) $withdrawal->amount) }}</div>
             </div>
         @empty
             <div class="bg-white rounded-xl shadow p-8 text-center text-gray-500">🏦 {{ __('messages.no_entries') }}</div>

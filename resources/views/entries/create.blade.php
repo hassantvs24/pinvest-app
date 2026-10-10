@@ -30,7 +30,7 @@
                                     data-available="{{ $type === 'sales' ? ($available[$item->id] ?? 0) : '' }}"
                                     data-cost-type="{{ $type === 'expenses' ? ($item->cost_type?->value ?? '') : '' }}"
                                     {{ old('head_id') == $item->id ? 'selected' : '' }}>
-                                {{ $item->name }}{{ $type === 'sales' ? ' (৳'.number_format((float) $item->default_price, 2).')' : '' }}{{ $config['has_unit'] ? ' ('.\App\Support\ItemUnits::label($item->unit).')' : '' }}
+                                {{ $item->name }}{{ $type === 'sales' ? ' ('.\App\Support\Money::format((float) $item->default_price).')' : '' }}{{ $config['has_unit'] ? ' ('.\App\Support\ItemUnits::label($item->unit).')' : '' }}
                             </option>
                         @endforeach
                     </select>
@@ -74,7 +74,7 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }} <span id="unit_label" class="text-emerald-700 font-bold"></span></label>
-                            <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="1" step="1" required
+                            <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         </div>
                         <div>
@@ -110,7 +110,7 @@
                 </div>
 
                 @if(auth()->user()->isOwner() && in_array($type, ['purchases', 'expenses'], true))
-                    <p class="text-xs text-gray-500">💵 {{ __('messages.current_cash') }}: ৳{{ number_format((float) $cashInHand, 2) }}</p>
+                    <p class="text-xs text-gray-500">💵 {{ __('messages.current_cash') }}: {{ \App\Support\Money::format((float) $cashInHand) }}</p>
                     <p id="cash_overdraw_hint" class="hidden text-xs bg-red-50 border border-red-300 text-red-700 rounded-lg px-3 py-2"></p>
                 @endif
 

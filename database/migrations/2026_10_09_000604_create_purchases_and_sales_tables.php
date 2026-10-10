@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('item_id')->constrained()->cascadeOnDelete();
-            $table->unsignedInteger('quantity');
+            $table->decimal('quantity', 12, 3, true); // fractional weights allowed (e.g. 1.5 tola)
             $table->decimal('unit_price', 12, 2);
             $table->decimal('total', 12, 2);
             $table->text('note')->nullable();
@@ -27,13 +27,14 @@ return new class extends Migration
 
             $table->index(['user_id', 'status']);
             $table->index('status');
+            $table->index('entry_date');
         });
 
         Schema::create('sales', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('item_id')->constrained()->cascadeOnDelete();
-            $table->unsignedInteger('quantity');
+            $table->decimal('quantity', 12, 3, true);
             $table->decimal('unit_price', 12, 2);
             $table->decimal('total', 12, 2);
             $table->text('note')->nullable();
@@ -45,6 +46,7 @@ return new class extends Migration
 
             $table->index(['user_id', 'status']);
             $table->index('status');
+            $table->index('entry_date');
         });
     }
 

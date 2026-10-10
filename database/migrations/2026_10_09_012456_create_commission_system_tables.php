@@ -28,6 +28,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index('status');
+            $table->index('opened_at');
         });
 
         Schema::create('commission_settlements', function (Blueprint $table): void {

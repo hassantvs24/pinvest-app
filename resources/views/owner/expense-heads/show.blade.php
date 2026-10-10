@@ -14,11 +14,11 @@
             </span>
             <p class="text-xs text-gray-500 mt-1">
                 {{ $count }} {{ __('messages.entry_count') }}
-                ・{{ __('messages.avg_per_entry') }} ৳{{ $count > 0 ? number_format($total / $count, 2) : '0.00' }}
+                ・{{ __('messages.avg_per_entry') }} {{ $count > 0 ? \App\Support\Money::format($total / $count) : \App\Support\Money::SYMBOL.'0.00' }}
             </p>
         </div>
         <div class="text-right">
-            <div class="text-2xl font-bold">৳{{ number_format($total, 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($total) }}</div>
             <div class="text-xs text-gray-500">{{ __('messages.expense_total') }}</div>
         </div>
     </div>
@@ -30,8 +30,8 @@
             <ul class="space-y-0.5">
                 @foreach($pending as $expense)
                     <li>
-                        📅 {{ $expense->entry_date->format(\App\Support\DateFormats::DATE) }}
-                        − ৳{{ number_format((float) $expense->amount, 2) }}
+                        📅 {{ \App\Support\DateFormats::date($expense->entry_date) }}
+                        − {{ \App\Support\Money::format((float) $expense->amount) }}
                         @if($expense->user)・{{ $expense->user->name }}@endif
                         @if($expense->note) <span class="text-xs">({{ $expense->note }})</span>@endif
                     </li>
@@ -50,14 +50,14 @@
                 @foreach($rows as $expense)
                     <li class="px-4 py-2 text-sm flex items-center justify-between gap-2">
                         <div class="min-w-0">
-                            <span class="text-gray-500">📅 {{ $expense->entry_date->format(\App\Support\DateFormats::DATE) }}</span>
+                            <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($expense->entry_date) }}</span>
                             @if($expense->user)<span class="text-xs text-gray-500">{{ $expense->user->name }}</span>@endif
                             @if($expense->item)
                                 <span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">📦 {{ $expense->item->name }}</span>
                             @endif
                             @if($expense->note)<span class="text-xs text-gray-500">{{ $expense->note }}</span>@endif
                         </div>
-                        <div class="font-bold shrink-0 text-red-600">−৳{{ number_format((float) $expense->amount, 2) }}</div>
+                        <div class="font-bold shrink-0 text-red-600">−{{ \App\Support\Money::format((float) $expense->amount) }}</div>
                     </li>
                 @endforeach
             </ul>

@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Models\RegistrationAllow;
 use App\Models\User;
-use App\UserRole;
+use App\Support\CommissionSettlementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -110,11 +111,23 @@ class PartnerController extends Controller
     }
 
     /**
-     * Delete a partner (and their entries via cascade).
+     * Delete a partner (and their entries via cascade). Blocked while
+     * the partner still has unpaid commission — deleting would erase
+     * earned-but-unpaid money and make the books disagree.
      */
     public function destroy(int $partner): RedirectResponse
     {
-        User::query()->partners()->findOrFail($partner)->delete();
+        $user = User::query()->partners()->findOrFail($partner);
+        $pendingDue = CommissionSettlementService::pendingDue($user->id);
+
+        if ($pendingDue > 0) {
+            return back()->with('error', __('messages.partner_delete_blocked_due', [
+                'name' => $user->name,
+                'amount' => number_format($pendingDue, 2),
+            ]));
+        }
+
+        $user->delete();
 
         return back()->with('success', __('messages.partner_deleted'));
     }

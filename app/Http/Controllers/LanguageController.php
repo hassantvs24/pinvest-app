@@ -23,7 +23,7 @@ class LanguageController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'language' => ['required', 'in:bn,en'],
+            'language' => ['required', 'in:'.implode(',', config('inventory.languages'))],
         ]);
 
         $request->user()->update(['preferred_language' => $validated['language']]);

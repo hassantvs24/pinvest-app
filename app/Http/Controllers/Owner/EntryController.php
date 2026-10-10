@@ -2,19 +2,21 @@
 
 namespace App\Http\Controllers\Owner;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\ExpenseHead;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\BusinessStats;
+use App\Support\CommissionSettlementService;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
@@ -25,14 +27,16 @@ class EntryController extends Controller
     /**
      * Find an entry of the given type or 404.
      */
-    private function findEntry(string $type, int $id): Model
+    private function findEntry(string $type, int $id, bool $lock = false): Model
     {
         $config = EntryTypes::config($type);
 
         /** @var class-string<Model> $modelClass */
         $modelClass = $config['model'];
 
-        return $modelClass::query()->findOrFail($id);
+        return $modelClass::query()
+            ->when($lock, fn ($query) => $query->lockForUpdate())
+            ->findOrFail($id);
     }
 
     /**
@@ -93,11 +97,30 @@ class EntryController extends Controller
     }
 
     /**
+     * Entry-date rules: entries must land inside the current open cycle —
+     * never inside a closed one (stored closed-cycle profit must stay
+     * reproducible) and never in the future.
+     *
+     * @return array<int, string>
+     */
+    private function entryDateRules(): array
+    {
+        $rules = ['required', 'date', 'before_or_equal:today'];
+        $openPeriod = CommissionPeriod::query()->open()->latest('id')->first();
+
+        if ($openPeriod !== null) {
+            $rules[] = 'after_or_equal:'.CommissionSettlementService::effectiveStart($openPeriod)->format('Y-m-d');
+        }
+
+        return $rules;
+    }
+
+    /**
      * Stock-overdraft error message when a sale no longer fits, or null
      * when it does. Pending sales reserve stock, so available stock is
      * on hand minus the other pending sales of the same item.
      */
-    private function stockOverflowError(string $type, int $itemId, int $quantity, ?int $excludeSaleId = null): ?string
+    private function stockOverflowError(string $type, int $itemId, float $quantity, ?int $excludeSaleId = null): ?string
     {
         if ($type !== 'sales') {
             return null;
@@ -125,18 +148,34 @@ class EntryController extends Controller
             return back()->with('warning', __('messages.confirm_blocked_no_period'));
         }
 
-        $model = $this->findEntry($type, $entry);
+        $model = null;
+        $error = null;
 
-        $error = $this->stockOverflowError($type, (int) $model->item_id, (int) $model->quantity, (int) $model->id);
+        // Lock the row so two simultaneous confirms cannot both pass
+        // the stock check for the last units of an item.
+        DB::transaction(function () use ($type, $entry, $request, &$model, &$error): void {
+            $model = $this->findEntry($type, $entry, lock: true);
+
+            abort_unless($model->status === EntryStatus::Pending, 409);
+
+            if ($type === 'sales') {
+                $error = $this->stockOverflowError($type, (int) $model->item_id, (float) $model->quantity, (int) $model->id);
+            }
+
+            if ($error !== null) {
+                return;
+            }
+
+            $model->update([
+                'status' => EntryStatus::Confirmed,
+                'confirmed_by' => $request->user()->id,
+                'confirmed_at' => now(),
+            ]);
+        });
+
         if ($error !== null) {
             return back()->with('error', $error);
         }
-
-        $model->update([
-            'status' => EntryStatus::Confirmed,
-            'confirmed_by' => $request->user()->id,
-            'confirmed_at' => now(),
-        ]);
 
         $redirect = back()->with('success', __('messages.entry_confirmed'));
 
@@ -195,7 +234,7 @@ class EntryController extends Controller
                 'head_id' => ['required', 'exists:expense_heads,id'],
                 'item_id' => ['nullable', 'exists:items,id'],
                 'amount' => ['required', 'numeric', 'min:0.01'],
-                'entry_date' => ['required', 'date'],
+                'entry_date' => $this->entryDateRules(),
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
@@ -209,9 +248,9 @@ class EntryController extends Controller
         } elseif ($type === 'purchases') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
-                'quantity' => ['required', 'integer', 'min:1'],
+                'quantity' => ['required', 'numeric', 'min:0.001'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
-                'entry_date' => ['required', 'date'],
+                'entry_date' => $this->entryDateRules(),
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
@@ -226,13 +265,13 @@ class EntryController extends Controller
         } else {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
-                'quantity' => ['required', 'integer', 'min:1'],
+                'quantity' => ['required', 'numeric', 'min:0.001'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
-                'entry_date' => ['required', 'date'],
+                'entry_date' => $this->entryDateRules(),
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $error = $this->stockOverflowError($type, (int) $validated['head_id'], (int) $validated['quantity'], (int) $model->id);
+            $error = $this->stockOverflowError($type, (int) $validated['head_id'], (float) $validated['quantity'], (int) $model->id);
             if ($error !== null) {
                 return back()->with('error', $error);
             }

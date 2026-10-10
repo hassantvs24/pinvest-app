@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use Database\Factories\ExpenseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;

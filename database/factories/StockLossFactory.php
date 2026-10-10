@@ -2,7 +2,7 @@
 
 namespace Database\Factories;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\Item;
 use App\Models\StockLoss;
 use App\Models\User;

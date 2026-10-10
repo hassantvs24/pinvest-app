@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use Database\Factories\StockLossFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +22,7 @@ class StockLoss extends Model
     protected function casts(): array
     {
         return [
-            'quantity' => 'integer',
+            'quantity' => 'decimal:3',
             'entry_date' => 'date',
             'status' => EntryStatus::class,
             'confirmed_at' => 'datetime',

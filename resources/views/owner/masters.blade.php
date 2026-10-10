@@ -27,7 +27,7 @@
                     <input type="text" name="name" placeholder="{{ __('messages.item_name') }}" required
                            class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2">
                     @if($section['has_price'])
-                        <input type="number" name="default_price" placeholder="{{ __('messages.default_price') }} (৳)" step="0.01" min="0" required
+                        <input type="number" name="default_price" placeholder="{{ __('messages.default_price') }} ({{ \App\Support\Money::SYMBOL }})" step="0.01" min="0" required
                                class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2">
                     @endif
                     @if($section['has_unit'])
@@ -57,7 +57,7 @@
                                     {{ $item->name }}
                                 </div>
                                 @if($section['has_price'])
-                                    <div class="text-xs text-gray-500">৳{{ number_format((float) $item->default_price, 2) }}</div>
+                                    <div class="text-xs text-gray-500">{{ \App\Support\Money::format((float) $item->default_price) }}</div>
                                 @endif
                                 @if($section['has_unit'])
                                     <div class="text-xs text-emerald-700">⚖️ {{ \App\Support\ItemUnits::label($item->unit) }}</div>

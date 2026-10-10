@@ -3,11 +3,11 @@
 namespace Database\Seeders;
 
 use App\Enums\ExpenseCostType;
+use App\Enums\UserRole;
 use App\Models\ExpenseHead;
 use App\Models\Item;
 use App\Models\RegistrationAllow;
 use App\Models\User;
-use App\UserRole;
 use Illuminate\Database\Seeder;
 
 /**

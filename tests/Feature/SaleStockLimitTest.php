@@ -1,13 +1,13 @@
 <?php
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
+use App\Enums\UserRole;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\StockLoss;
 use App\Models\User;
-use App\UserRole;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -127,7 +127,7 @@ it('blocks the owner from editing a sale beyond available stock', function (): v
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 
-    expect($sale->fresh()->quantity)->toBe(3);
+    expect((float) $sale->fresh()->quantity)->toBe(3.0);
 });
 
 it('blocks the owner from editing a pending sale above what is left', function (): void {
@@ -154,7 +154,7 @@ it('blocks the owner from editing a pending sale above what is left', function (
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 
-    expect($sale->fresh()->quantity)->toBe(2);
+    expect((float) $sale->fresh()->quantity)->toBe(2.0);
 });
 
 it('blocks a partner stock loss above available stock', function (): void {

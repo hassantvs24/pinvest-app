@@ -12,11 +12,11 @@
                 @csrf
                 <button type="submit" name="language" value="bn"
                         class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-2xl rounded-xl py-4">
-                    🇧🇩 বাংলা
+                    {{ __('messages.language_bn') }}
                 </button>
                 <button type="submit" name="language" value="en"
                         class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-2xl rounded-xl py-4">
-                    🇬🇧 English
+                    {{ __('messages.language_en') }}
                 </button>
             </form>
         </div>

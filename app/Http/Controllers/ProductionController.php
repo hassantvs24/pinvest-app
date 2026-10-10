@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\Production;
@@ -51,14 +51,13 @@ class ProductionController extends Controller
 
         $validated = $request->validate([
             'extra_cost' => ['nullable', 'numeric', 'min:0'],
-            'entry_date' => ['required', 'date'],
             'note' => ['nullable', 'string', 'max:1000'],
             'outputs' => ['required', 'array', 'min:1'],
             'outputs.*.item_id' => ['required', 'distinct', 'exists:items,id'],
-            'outputs.*.quantity' => ['required', 'integer', 'min:1'],
+            'outputs.*.quantity' => ['required', 'numeric', 'min:0.001'],
             'components' => ['nullable', 'array', 'min:0'],
             'components.*.item_id' => ['required', 'distinct', 'exists:items,id'],
-            'components.*.quantity' => ['required', 'integer', 'min:1'],
+            'components.*.quantity' => ['required', 'numeric', 'min:0.001'],
         ]);
 
         $this->guardCircularItems($validated);

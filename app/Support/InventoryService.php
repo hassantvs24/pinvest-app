@@ -2,7 +2,7 @@
 
 namespace App\Support;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Enums\ExpenseCostType;
 use App\Models\Expense;
 use App\Models\Item;
@@ -212,8 +212,8 @@ class InventoryService
      * reserve their materials), and the finished goods must be worth
      * at least what the run consumes. Returns an error message or null.
      *
-     * @param  array<int, array{item_id: int, quantity: int}>  $components
-     * @param  array<int, array{item_id: int, quantity: int}>  $outputs
+     * @param  array<int, array{item_id: int, quantity: float}>  $components
+     * @param  array<int, array{item_id: int, quantity: float}>  $outputs
      */
     public static function validateProduction(
         array $components,
@@ -400,13 +400,38 @@ class InventoryService
             $totals[$key]['amount'] += $row['total'] ?? 0.0;
         }
 
+        // Stock currently reserved by pending entries (they do not move
+        // stock yet, but hold it): sales, stock losses and production
+        // raw materials — everything `pendingReservations` counts.
         $pending = Sale::query()->pending()->where('item_id', $item->id)
             ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
             ->map(fn (Sale $sale): array => [
                 'date' => $sale->entry_date,
                 'quantity' => (float) $sale->quantity,
                 'note' => self::ledgerNote($sale->user?->name, $sale->note),
-            ])->all();
+            ])
+            ->merge(StockLoss::query()->pending()->where('item_id', $item->id)
+                ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
+                ->map(fn (StockLoss $loss): array => [
+                    'date' => $loss->entry_date,
+                    'quantity' => (float) $loss->quantity,
+                    'note' => __('messages.stock_loss').' — '.self::ledgerNote($loss->user?->name, $loss->note),
+                ]))
+            ->merge(ProductionComponent::query()
+                ->where('item_id', $item->id)
+                ->whereHas('production', function ($query) use ($asOf): void {
+                    $query->where('status', EntryStatus::Pending->value)
+                        ->whereDate('entry_date', '<=', $asOf);
+                })
+                ->with(['production.user'])->get()
+                ->map(fn (ProductionComponent $component): array => [
+                    'date' => $component->production->entry_date,
+                    'quantity' => (float) $component->quantity,
+                    'note' => __('messages.productions').' #'.$component->production_id.' — '.($component->production->user?->name ?? ''),
+                ]))
+            ->sortByDesc(fn (array $row) => $row['date']->getTimestamp())
+            ->values()
+            ->all();
 
         return ['rows' => $rows, 'pending' => $pending, 'totals' => $totals];
     }

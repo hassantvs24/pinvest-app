@@ -24,9 +24,9 @@
             <ul class="text-sm text-gray-600 space-y-1 mb-3">
                 <li>📅 {{ __('messages.opened_on') }}: {{ $openPeriod->opened_at->format('d M Y') }}</li>
                 @if($openPeriod->opening_cash !== null)
-                    <li>🏦 {{ __('messages.opening_cash') }}: ৳{{ number_format((float) $openPeriod->opening_cash, 2) }}</li>
+                    <li>🏦 {{ __('messages.opening_cash') }}: {{ \App\Support\Money::format((float) $openPeriod->opening_cash) }}</li>
                 @endif
-                <li>🏦 {{ __('messages.cash_in_hand') }}: ৳{{ number_format($cashInHand, 2) }}</li>
+                <li>🏦 {{ __('messages.cash_in_hand') }}: {{ \App\Support\Money::format($cashInHand) }}</li>
                 @if($openPeriod->note)
                     <li>📝 {{ $openPeriod->note }}</li>
                 @endif
@@ -89,7 +89,7 @@
                         <div class="font-bold inline-flex items-center gap-1.5"><x-avatar :user="$request->user" size="24" /> {{ $request->user->name }}</div>
                         <div class="text-sm text-gray-500">📅 {{ $request->created_at->format('d M Y') }}</div>
                     </div>
-                    <div class="text-xl font-bold text-violet-700 shrink-0">৳{{ number_format((float) $request->amount, 2) }}</div>
+                    <div class="text-xl font-bold text-violet-700 shrink-0">{{ \App\Support\Money::format((float) $request->amount) }}</div>
                 </div>
                 <div class="flex gap-2 mt-3">
                     <form method="POST" action="{{ route('owner.commissions.approve', ['request' => $request->id]) }}" class="js-confirm-approve">
@@ -135,7 +135,7 @@
                     </div>
                     <div class="text-right shrink-0">
                         <div class="text-lg font-bold {{ ($period->profit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                            ৳{{ number_format((float) $period->profit, 2) }}
+                            {{ \App\Support\Money::format((float) $period->profit) }}
                         </div>
                         <div class="text-xs text-gray-500">
                             @if(($period->profit ?? 0) >= 0)
@@ -163,12 +163,12 @@
                     <div class="font-bold inline-flex items-center gap-1.5"><x-avatar :user="$settlement->user" size="22" /> {{ $settlement->user->name }}</div>
                     <div class="text-sm text-gray-500">
                         🗓️ {{ $settlement->period?->label ?: $settlement->period_start->format('d M').' – '.$settlement->period_end->format('d M Y') }}
-                        · 📈 ৳{{ number_format((float) $settlement->business_profit, 2) }}
+                        · 📈 {{ \App\Support\Money::format((float) $settlement->business_profit) }}
                         · 🤝 {{ $settlement->commission_rate }}%
                     </div>
                 </div>
                 <div class="text-right shrink-0">
-                    <div class="text-lg font-bold">৳{{ number_format((float) $settlement->amount, 2) }}</div>
+                    <div class="text-lg font-bold">{{ \App\Support\Money::format((float) $settlement->amount) }}</div>
                     @if($settlement->status === 'paid')
                         <span class="inline-block text-xs px-2 py-1 rounded-full bg-green-100 text-green-800">✅ {{ __('messages.paid') }}</span>
                     @else

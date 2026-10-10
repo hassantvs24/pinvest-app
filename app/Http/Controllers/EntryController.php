@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Expense;
 use App\Models\Item;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Support\BusinessStats;
+use App\Support\CommissionSettlementService;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
@@ -31,6 +32,29 @@ class EntryController extends Controller
     private function openPeriod(): ?CommissionPeriod
     {
         return CommissionPeriod::query()->open()->latest('id')->first();
+    }
+
+    /**
+     * Entry-date rules for the owner: entries must land inside the
+     * current open cycle (never inside a closed one — stored closed-cycle
+     * profit must stay reproducible) and never in the future. Partners
+     * always report today, so their date is only sanity-checked.
+     *
+     * @return array<int, string>
+     */
+    private function entryDateRules(?CommissionPeriod $period, bool $isOwner): array
+    {
+        $rules = ['required', 'date'];
+
+        if ($isOwner) {
+            $rules[] = 'before_or_equal:today';
+
+            if ($period !== null) {
+                $rules[] = 'after_or_equal:'.CommissionSettlementService::effectiveStart($period)->format('Y-m-d');
+            }
+        }
+
+        return $rules;
     }
 
     /**
@@ -121,13 +145,14 @@ class EntryController extends Controller
         $confirmed = $user->isOwner()
             ? ['confirmed_by' => $user->id, 'confirmed_at' => now()]
             : ['confirmed_by' => null, 'confirmed_at' => null];
+        $entryDateRules = $this->entryDateRules($this->openPeriod(), $user->isOwner());
 
         if ($type === 'expenses') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:expense_heads,id'],
                 'item_id' => ['nullable', 'exists:items,id'],
                 'amount' => ['required', 'numeric', 'min:0.01'],
-                'entry_date' => ['required', 'date'],
+                'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
@@ -147,9 +172,9 @@ class EntryController extends Controller
         } elseif ($type === 'purchases') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
-                'quantity' => ['required', 'integer', 'min:1'],
+                'quantity' => ['required', 'numeric', 'min:0.001'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
-                'entry_date' => ['required', 'date'],
+                'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
@@ -169,9 +194,9 @@ class EntryController extends Controller
         } else {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
-                'quantity' => ['required', 'integer', 'min:1'],
+                'quantity' => ['required', 'numeric', 'min:0.001'],
                 'unit_price' => ['required', 'numeric', 'min:0.01'],
-                'entry_date' => ['required', 'date'],
+                'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 

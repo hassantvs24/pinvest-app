@@ -24,7 +24,7 @@
                                     <option value="{{ $item->id }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
-                            <input type="number" name="outputs[0][quantity]" min="1" step="1" required placeholder="{{ __('messages.quantity') }}"
+                            <input type="number" name="outputs[0][quantity]" min="0.001" step="any" required placeholder="{{ __('messages.quantity') }}"
                                    class="border border-gray-300 rounded-lg px-3 py-3">
                             <button type="button" class="js-remove-output bg-red-100 text-red-700 rounded-lg font-bold" title="{{ __('messages.remove') }}">✕</button>
                         </div>
@@ -56,13 +56,13 @@
                     <label class="block text-sm font-medium mb-1">🧵 {{ __('messages.input_items') }} ({{ __('messages.optional') }})</label>
                     <div id="component_rows" class="space-y-2">
                         <div class="component-row grid grid-cols-[1fr_110px_44px] gap-2">
-                            <select name="components[0][item_id]" required class="js-component-select border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                            <select name="components[0][item_id]" class="js-component-select border border-gray-300 rounded-lg px-3 py-3 bg-white">
                                 <option value="">{{ __('messages.item') }}</option>
                                 @foreach($items as $item)
                                     <option value="{{ $item->id }}" data-available="{{ $available[$item->id] ?? 0 }}" data-unit="{{ \App\Support\ItemUnits::label($item->unit) }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
-                            <input type="number" name="components[0][quantity]" min="1" step="1" required placeholder="{{ __('messages.quantity') }}"
+                            <input type="number" name="components[0][quantity]" min="0.001" step="any" placeholder="{{ __('messages.quantity') }}"
                                    class="border border-gray-300 rounded-lg px-3 py-3">
                             <button type="button" class="js-remove-row bg-red-100 text-red-700 rounded-lg font-bold" title="{{ __('messages.remove') }}">✕</button>
                         </div>
@@ -93,9 +93,9 @@
                 <div class="bg-white rounded-xl shadow p-4">
                     <div class="flex items-start justify-between gap-2">
                         <div class="min-w-0">
-                            <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->item->name.' × '.$o->quantity)->implode(', ') }}</div>
+                            <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->item->name.' × '.\App\Support\ItemUnits::formatQuantity((float) $o->quantity))->implode(', ') }}</div>
                             <div class="text-sm text-gray-500">
-                                📅 {{ $production->entry_date->format(\App\Support\DateFormats::DATE) }}
+                                📅 {{ \App\Support\DateFormats::date($production->entry_date) }}
                                 · 👤 {{ $production->user->name }}
                                 @php $pst = $production->status->value; @endphp
                                 <span class="inline-block text-xs px-2 py-0.5 rounded-full
@@ -106,11 +106,11 @@
                             @foreach($production->components as $component)
                                 <div class="text-sm text-gray-600">
                                     🧵 {{ $component->item->name ?? '—' }}
-                                    — {{ $component->quantity }} {{ \App\Support\ItemUnits::label($component->item->unit ?? null) }}
+                                    — {{ \App\Support\ItemUnits::formatQuantity((float) $component->quantity) }} {{ \App\Support\ItemUnits::label($component->item->unit ?? null) }}
                                 </div>
                             @endforeach
                             @if((float) $production->extra_cost > 0)
-                                <div class="text-sm text-violet-700">🧾 {{ __('messages.extra_cost') }}: ৳{{ number_format((float) $production->extra_cost, 2) }}</div>
+                                <div class="text-sm text-violet-700">🧾 {{ __('messages.extra_cost') }}: {{ \App\Support\Money::format((float) $production->extra_cost) }}</div>
                             @endif
                             @if($production->note)
                                 <div class="text-sm text-gray-500">📝 {{ $production->note }}</div>
@@ -173,11 +173,10 @@
                 $('#component_rows').append($row);
             });
 
-            // Remove a raw-material row (keep at least one).
+            // Remove a raw-material row (rows are optional — zero is fine).
             $(document).on('click', '.js-remove-row', function () {
-                if ($('.component-row').length > 1) {
-                    $(this).closest('.component-row').remove();
-                }
+                $(this).closest('.component-row').remove();
+                updateComponentHint();
             });
 
             // Live hint: how much of the selected material is available.

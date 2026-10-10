@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use Database\Factories\PurchaseFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +22,7 @@ class Purchase extends Model
     protected function casts(): array
     {
         return [
-            'quantity' => 'integer',
+            'quantity' => 'decimal:3',
             'unit_price' => 'decimal:2',
             'total' => 'decimal:2',
             'entry_date' => 'date',
@@ -62,13 +62,5 @@ class Purchase extends Model
     public function confirmedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'confirmed_by');
-    }
-
-    /**
-     * Formatted total for display, e.g. "৳1,200".
-     */
-    public function formattedTotal(): string
-    {
-        return '৳'.number_format((float) $this->total, 2);
     }
 }

@@ -9,6 +9,7 @@ use App\Models\PayoutRequest;
 use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
+use App\Models\StockLoss;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
@@ -27,8 +28,12 @@ class DashboardController extends Controller
         $openPeriod = CommissionPeriod::query()->open()->latest('id')->first();
 
         // While a cycle runs, dashboards show that cycle's figures
-        // (opened_at → today); without one they show lifetime totals.
-        $from = $openPeriod?->opened_at->format('Y-m-d');
+        // (effective start → today); without one they show lifetime
+        // totals. The effective start follows the latest closed cycle,
+        // so a same-day reopen never double-counts.
+        $from = $openPeriod
+            ? CommissionSettlementService::effectiveStart($openPeriod)->format('Y-m-d')
+            : null;
         $to = $openPeriod ? now()->format('Y-m-d') : null;
         $profit = $openPeriod ? CommissionSettlementService::runningProfit($openPeriod) : null;
 
@@ -55,6 +60,7 @@ class DashboardController extends Controller
                     'purchases' => Purchase::query()->pending()->count(),
                     'sales' => Sale::query()->pending()->count(),
                     'productions' => Production::query()->pending()->count(),
+                    'stock_losses' => StockLoss::query()->pending()->count(),
                 ],
                 'pendingPayoutRequests' => PayoutRequest::query()->pending()->count(),
                 'leaderboard' => User::query()

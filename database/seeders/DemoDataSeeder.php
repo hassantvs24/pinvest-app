@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\EntryStatus;
+use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
@@ -68,7 +68,9 @@ class DemoDataSeeder extends Seeder
             $period = CommissionPeriod::query()->create([
                 'label' => $start->format('F Y'),
                 'opened_at' => $start,
-                'opening_cash' => $i === 10 ? 100000 : null,
+                // The initial capital lives in the Investment above —
+                // counting it again here as opening cash would double it.
+                'opening_cash' => null,
                 'status' => 'open',
             ]);
 
@@ -170,7 +172,7 @@ class DemoDataSeeder extends Seeder
                     'quantity' => 1,
                     'unit_price' => 15000,
                     'total' => 15000,
-                    'note' => 'অয়েল পুনবিক্রি',
+                    'note' => 'অয়েল পুনঃবিক্রি',
                     'entry_date' => $mid->copy()->addDays(2),
                     'status' => EntryStatus::Confirmed,
                     'confirmed_by' => $owner->id,

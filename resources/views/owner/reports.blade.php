@@ -55,7 +55,7 @@
                 📅 {{ $selectedCycle->opened_at->format('d M Y') }} – {{ $selectedCycle->closed_at?->format('d M Y') ?? now()->format('d M Y') }}
                 · {{ trans_choice(__('messages.period_days'), $openDays, ['count' => $openDays]) }}
                 @if($selectedCycle->opening_cash !== null)
-                    · 🏦 {{ __('messages.opening_cash') }}: ৳{{ number_format((float) $selectedCycle->opening_cash, 2) }}
+                    · 🏦 {{ __('messages.opening_cash') }}: {{ \App\Support\Money::format((float) $selectedCycle->opening_cash) }}
                 @endif
                 @if($selectedCycle->note)
                     · 💬 {{ $selectedCycle->note }}
@@ -74,55 +74,55 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">💰 {{ __('messages.total_investment') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['investment'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['investment']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-orange-500">
             <div class="text-sm text-gray-500">🛒 {{ __('messages.total_purchase') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['purchase'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['purchase']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-rose-500">
             <div class="text-sm text-gray-500">💸 {{ __('messages.total_expense') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['expense'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['expense']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-blue-600">
             <div class="text-sm text-gray-500">💵 {{ __('messages.total_sales') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['sales'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['sales']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-violet-600">
             <div class="text-sm text-gray-500">🤝 {{ __('messages.total_commission') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['commission'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['commission']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-slate-600">
             <div class="text-sm text-gray-500">💳 {{ __('messages.total_payout') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['payout'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['payout']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 {{ $stats['net_profit'] >= 0 ? 'border-green-500' : 'border-red-500' }}">
             <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>
             <div class="text-2xl font-bold {{ $stats['net_profit'] >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                ৳{{ number_format($stats['net_profit'], 2) }}
+                {{ \App\Support\Money::format($stats['net_profit']) }}
             </div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 {{ $ownerShare >= 0 ? 'border-emerald-700' : 'border-red-500' }}">
             <div class="text-sm text-gray-500">👔 {{ __('messages.owner_share') }}</div>
             <div class="text-2xl font-bold {{ $ownerShare >= 0 ? 'text-emerald-700' : 'text-red-600' }}">
-                ৳{{ number_format($ownerShare, 2) }}
+                {{ \App\Support\Money::format($ownerShare) }}
             </div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-teal-600">
             <div class="text-sm text-gray-500">🏪 {{ __('messages.stock_value') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['stock_value'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['stock_value']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-indigo-600">
             <div class="text-sm text-gray-500">🏷️ {{ __('messages.cost_of_goods_sold') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['cogs'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['cogs']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-red-400">
             <div class="text-sm text-gray-500">📉 {{ __('messages.stock_loss') }}</div>
-            <div class="text-2xl font-bold">৳{{ number_format($stats['stock_loss'], 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['stock_loss']) }}</div>
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-700">
             <div class="text-sm text-gray-500">🏦 {{ __('messages.cash_in_hand') }} ({{ __('messages.all_time') }})</div>
-            <div class="text-2xl font-bold">৳{{ number_format($lifetimeCashInHand, 2) }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($lifetimeCashInHand) }}</div>
         </div>
     </div>
 
@@ -131,7 +131,7 @@
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="font-bold">💰 {{ __('messages.total_investment') }}</span>
-            <span class="font-bold">৳{{ number_format($stats['investment'], 2) }}</span>
+            <span class="font-bold">{{ \App\Support\Money::format($stats['investment']) }}</span>
         </div>
         @if($investments->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">💰 {{ __('messages.no_entries') }}</div>
@@ -143,7 +143,7 @@
                             <div class="font-medium truncate">{{ $investment->note ?? '—' }}</div>
                             <div class="text-gray-500">📅 {{ $investment->invested_at->format('d M Y') }}</div>
                         </div>
-                        <div class="font-bold shrink-0">৳{{ number_format((float) $investment->amount, 2) }}</div>
+                        <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) $investment->amount) }}</div>
                     </li>
                 @endforeach
             </ul>
@@ -155,7 +155,7 @@
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="font-bold">💵 {{ __('messages.total_sales') }}</span>
-            <span class="font-bold">৳{{ number_format($stats['sales'], 2) }}</span>
+            <span class="font-bold">{{ \App\Support\Money::format($stats['sales']) }}</span>
         </div>
         @if($salesByItem->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">💵 {{ __('messages.no_entries') }}</div>
@@ -164,7 +164,7 @@
                 @foreach($salesByItem as $row)
                     <li class="px-4 py-2 flex items-center justify-between gap-2 text-sm">
                         <div>{{ $row['name'] }} <span class="text-gray-500">{{ $row['quantity'] }} {{ $row['unit'] }}</span></div>
-                        <div class="font-bold shrink-0">৳{{ number_format($row['total'], 2) }}</div>
+                        <div class="font-bold shrink-0">{{ \App\Support\Money::format($row['total']) }}</div>
                     </li>
                 @endforeach
             </ul>
@@ -178,11 +178,11 @@
                     @foreach($salesDetails as $entry)
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
-                                <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($entry->entry_date) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
                                 {{ $entry->item->name ?? '—' }}
-                                <span class="text-gray-500">× {{ $entry->quantity }}</span>
+                                <span class="text-gray-500">× {{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}</span>
                             </div>
-                            <div class="font-bold shrink-0">৳{{ number_format((float) $entry->total, 2) }}</div>
+                            <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) $entry->total) }}</div>
                         </li>
                     @endforeach
                 </ul>
@@ -206,8 +206,8 @@
                             </span>
                         </div>
                         <div class="text-right">
-                            <div class="font-bold">৳{{ number_format($row['value'], 2) }}</div>
-                            <div class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: ৳{{ number_format($row['avg_cost'], 2) }}/{{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
+                            <div class="font-bold">{{ \App\Support\Money::format($row['value']) }}</div>
+                            <div class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: {{ \App\Support\Money::format($row['avg_cost']) }}/{{ \App\Support\ItemUnits::label($row['item']->unit) }}</div>
                         </div>
                     </li>
                 @endforeach
@@ -219,7 +219,7 @@
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="font-bold">🛒 {{ __('messages.total_purchase') }}</span>
-            <span class="font-bold">৳{{ number_format($stats['purchase'], 2) }}</span>
+            <span class="font-bold">{{ \App\Support\Money::format($stats['purchase']) }}</span>
         </div>
         @if($purchasesByItem->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">🛒 {{ __('messages.no_entries') }}</div>
@@ -228,7 +228,7 @@
                 @foreach($purchasesByItem as $row)
                     <li class="px-4 py-2 flex items-center justify-between gap-2 text-sm">
                         <div>{{ $row['name'] }} <span class="text-gray-500">{{ $row['quantity'] }} {{ $row['unit'] }}</span></div>
-                        <div class="font-bold shrink-0">৳{{ number_format($row['total'], 2) }}</div>
+                        <div class="font-bold shrink-0">{{ \App\Support\Money::format($row['total']) }}</div>
                     </li>
                 @endforeach
             </ul>
@@ -242,11 +242,11 @@
                     @foreach($purchaseDetails as $entry)
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
-                                <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($entry->entry_date) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
                                 {{ $entry->item->name ?? '—' }}
-                                <span class="text-gray-500">× {{ $entry->quantity }}</span>
+                                <span class="text-gray-500">× {{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}</span>
                             </div>
-                            <div class="font-bold shrink-0">৳{{ number_format((float) $entry->total, 2) }}</div>
+                            <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) $entry->total) }}</div>
                         </li>
                     @endforeach
                 </ul>
@@ -259,7 +259,7 @@
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="font-bold">💸 {{ __('messages.total_expense') }}</span>
-            <span class="font-bold">৳{{ number_format($stats['expense'], 2) }}</span>
+            <span class="font-bold">{{ \App\Support\Money::format($stats['expense']) }}</span>
         </div>
         @if($expensesByHead->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">💸 {{ __('messages.no_entries') }}</div>
@@ -268,7 +268,7 @@
                 @foreach($expensesByHead as $row)
                     <li class="px-4 py-2 flex items-center justify-between gap-2 text-sm">
                         <div>{{ $row['name'] }}</div>
-                        <div class="font-bold shrink-0">৳{{ number_format($row['total'], 2) }}</div>
+                        <div class="font-bold shrink-0">{{ \App\Support\Money::format($row['total']) }}</div>
                     </li>
                 @endforeach
             </ul>
@@ -282,10 +282,10 @@
                     @foreach($expenseDetails as $entry)
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
-                                <span class="text-gray-500">📅 {{ $entry->entry_date->format(\App\Support\DateFormats::DATE) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($entry->entry_date) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
                                 {{ $entry->expenseHead->name ?? '—' }}
                             </div>
-                            <div class="font-bold shrink-0">৳{{ number_format((float) $entry->amount, 2) }}</div>
+                            <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) $entry->amount) }}</div>
                         </li>
                     @endforeach
                 </ul>
@@ -307,13 +307,13 @@
                             <div class="text-xs text-violet-600 font-bold">🤝 {{ $partner['commission_rate'] }}%</div>
                         </div>
                         <div class="grid grid-cols-3 gap-2 text-sm">
-                            <div><span class="text-gray-500">💵</span> ৳{{ number_format($partner['sales'], 2) }}</div>
-                            <div><span class="text-gray-500">🤝</span> ৳{{ number_format($partner['commission'], 2) }}</div>
-                            <div><span class="text-gray-500">🛒</span> ৳{{ number_format($partner['purchase'], 2) }}</div>
-                            <div><span class="text-gray-500">💸</span> ৳{{ number_format($partner['expense'], 2) }}</div>
-                            <div><span class="text-gray-500">💳</span> ৳{{ number_format($partner['payout'], 2) }}</div>
+                            <div><span class="text-gray-500">💵</span> {{ \App\Support\Money::format($partner['sales']) }}</div>
+                            <div><span class="text-gray-500">🤝</span> {{ \App\Support\Money::format($partner['commission']) }}</div>
+                            <div><span class="text-gray-500">🛒</span> {{ \App\Support\Money::format($partner['purchase']) }}</div>
+                            <div><span class="text-gray-500">💸</span> {{ \App\Support\Money::format($partner['expense']) }}</div>
+                            <div><span class="text-gray-500">💳</span> {{ \App\Support\Money::format($partner['payout']) }}</div>
                             <div class="font-bold {{ $partner['commission_due'] > 0 ? 'text-orange-600' : 'text-green-600' }}">
-                                ⏳ ৳{{ number_format($partner['commission_due'], 2) }}
+                                ⏳ {{ \App\Support\Money::format($partner['commission_due']) }}
                             </div>
                         </div>
                     </li>
@@ -331,7 +331,7 @@
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="font-bold">🤝 {{ __('messages.total_commission') }}</span>
-            <span class="font-bold">৳{{ number_format($stats['commission'], 2) }}</span>
+            <span class="font-bold">{{ \App\Support\Money::format($stats['commission']) }}</span>
         </div>
         @if($settlements->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">🤝 {{ __('messages.no_commission') }}</div>
@@ -343,12 +343,12 @@
                             <div class="font-medium">👤 {{ $settlement->user->name }}</div>
                             <div class="text-gray-500">
                                 📅 {{ $settlement->period_start->format('d M') }} – {{ $settlement->period_end->format('d M Y') }}
-                                · 📈 ৳{{ number_format((float) $settlement->business_profit, 2) }}
+                                · 📈 {{ \App\Support\Money::format((float) $settlement->business_profit) }}
                                 · {{ $settlement->commission_rate }}%
                             </div>
                         </div>
                         <div class="text-right shrink-0">
-                            <div class="font-bold">৳{{ number_format((float) $settlement->amount, 2) }}</div>
+                            <div class="font-bold">{{ \App\Support\Money::format((float) $settlement->amount) }}</div>
                             @if($settlement->status === 'paid')
                                 <span class="text-xs text-green-700">✅ {{ __('messages.paid') }}</span>
                             @else
@@ -366,7 +366,7 @@
     <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="font-bold">🏦 {{ __('messages.total_withdrawn') }}</span>
-            <span class="font-bold">৳{{ number_format($stats['withdrawal'], 2) }}</span>
+            <span class="font-bold">{{ \App\Support\Money::format($stats['withdrawal']) }}</span>
         </div>
         @if($withdrawals->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">🏦 {{ __('messages.no_entries') }}</div>
@@ -378,7 +378,7 @@
                             <div class="font-medium truncate">{{ $withdrawal->note ?? '—' }}</div>
                             <div class="text-gray-500">📅 {{ $withdrawal->withdrawn_at->format('d M Y') }}</div>
                         </div>
-                        <div class="font-bold shrink-0">৳{{ number_format((float) $withdrawal->amount, 2) }}</div>
+                        <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) $withdrawal->amount) }}</div>
                     </li>
                 @endforeach
             </ul>

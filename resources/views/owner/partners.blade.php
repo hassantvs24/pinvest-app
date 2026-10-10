@@ -11,7 +11,7 @@
         <form method="POST" action="{{ route('owner.allowances.store') }}" class="flex gap-2 mb-4">
             @csrf
             <input type="text" name="identifier" value="{{ old('identifier') }}" required
-                   placeholder="01XXXXXXXXX / email@example.com"
+                   placeholder="{{ __('messages.identifier_placeholder') }}"
                    class="flex-1 border border-gray-300 rounded-lg px-3 py-3 min-w-0">
             <button type="submit" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg px-4 py-3 shrink-0">
                 💾 {{ __('messages.save') }}
