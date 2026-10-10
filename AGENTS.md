@@ -40,6 +40,24 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 === boost rules ===
 
+# Android APK (Capacitor)
+
+This app ships as an Android APK via Capacitor. The APK is a WebView shell that loads the deployed site URL (`server.url` in `capacitor.config.json`) — server-side updates appear in the app without rebuilding the APK.
+
+- `android/` — generated native project (do not hand-edit; recreated by `npx cap add android`)
+- `public/js/capacitor-native.js` — status bar/splash/back-button/keyboard/offline polish; auto no-ops in normal browsers
+- `scripts/generate-app-assets.mjs` — regenerates launcher icons + splash screens from `public/icon.svg` (uses `sharp`; `@capacitor/assets` is broken on Node 24)
+
+Build the debug APK (Git Bash):
+
+```bash
+npm run build && npx cap sync android
+cd android && JAVA_HOME="/c/Program Files/Android/Android Studio/jbr" ./gradlew.bat assembleDebug
+# Output: android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Requires `ANDROID_HOME` pointing at the Android SDK and JDK 17+ (Android Studio's bundled JBR works — see `JAVA_HOME` above).
+
 # Laravel Boost
 
 ## Tools

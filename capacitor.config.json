@@ -1,0 +1,24 @@
+{
+  "appId": "com.kushiaraspeed.pinvest",
+  "appName": "Agor",
+  "webDir": "public/build",
+  "backgroundColor": "#047857",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "url": "https://agor.kushiaraseed.com",
+    "cleartext": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "backgroundColor": "#047857",
+      "androidSplashResourceName": "splash"
+    },
+    "Keyboard": {
+      "resizeOnFullScreen": true
+    }
+  }
+}

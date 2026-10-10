@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Agor</string>
+    <string name="title_activity_main">Agor</string>
+    <string name="package_name">com.kushiaraspeed.pinvest</string>
+    <string name="custom_url_scheme">com.kushiaraspeed.pinvest</string>
+</resources>
