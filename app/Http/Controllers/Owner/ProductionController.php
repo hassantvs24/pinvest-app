@@ -7,9 +7,11 @@ use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
 use App\Models\Production;
+use App\Support\CommissionSettlementService;
 use App\Support\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -22,6 +24,36 @@ use Illuminate\View\View;
  */
 class ProductionController extends Controller
 {
+    /**
+     * Owner date-picker rules: today or a past day, never on/inside a
+     * closed cycle (backdated entries land at midnight of the picked
+     * day). The picked day resolves to the exact current moment when it
+     * is today, midnight of that day otherwise.
+     *
+     * @return array<int, string>
+     */
+    private function entryDateRules(): array
+    {
+        $rules = ['required', 'date', 'before_or_equal:'.now()->toDateString()];
+
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+
+        if ($latestClosed !== null) {
+            $rules[] = 'after:'.$latestClosed->toDateString();
+        } elseif (($openPeriod = CommissionPeriod::query()->open()->latest('id')->first()) !== null) {
+            $rules[] = 'after_or_equal:'.$openPeriod->opened_at->toDateString();
+        }
+
+        return $rules;
+    }
+
+    private function entryMoment(string $date): Carbon
+    {
+        $picked = Carbon::parse($date);
+
+        return $picked->toDateString() === now()->toDateString() ? now() : $picked->startOfDay();
+    }
+
     /**
      * List productions (newest first) with the create form data.
      */
@@ -58,7 +90,7 @@ class ProductionController extends Controller
 
         $validated = $request->validate([
             'extra_cost' => ['nullable', 'numeric', 'min:0'],
-            'entry_date' => ['required', 'date'],
+            'entry_date' => $this->entryDateRules(),
             'note' => ['nullable', 'string', 'max:1000'],
             'outputs' => ['required', 'array', 'min:1'],
             'outputs.*.item_id' => ['required', 'distinct', 'exists:items,id'],
@@ -91,7 +123,7 @@ class ProductionController extends Controller
                 'user_id' => $request->user()->id,
                 'extra_cost' => $validated['extra_cost'] ?? 0,
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $this->entryMoment($validated['entry_date']),
                 'status' => EntryStatus::Confirmed,
                 'confirmed_by' => $request->user()->id,
                 'confirmed_at' => now(),

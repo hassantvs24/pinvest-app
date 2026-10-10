@@ -23,7 +23,7 @@ class Expense extends Model
     {
         return [
             'amount' => 'decimal:2',
-            'entry_date' => 'date',
+            'entry_date' => 'datetime',
             'status' => EntryStatus::class,
             'confirmed_at' => 'datetime',
         ];

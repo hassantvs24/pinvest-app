@@ -52,41 +52,31 @@ class CommissionController extends Controller
     }
 
     /**
-     * Open a new cycle (only one open at a time). Optionally records
-     * opening cash and an opening investment entry.
+     * Open a new cycle (only one open at a time). The cycle starts at
+     * this exact moment, so closing a cycle and opening the next one
+     * the SAME DAY is fine — everything up to the previous close stays
+     * in the old cycle, everything after it falls into the new one.
+     * Optionally records opening cash and an opening investment entry.
      */
     public function openPeriod(Request $request): RedirectResponse
     {
-        // A new cycle must start strictly AFTER the latest closed one.
-        // Same-day reopen is impossible to account for correctly at date
-        // granularity (day-close entries would count twice, or the rest
-        // of the day's entries would vanish from every cycle).
-        $latestClosedAt = CommissionPeriod::query()
-            ->closed()
-            ->orderByDesc('closed_at')
-            ->value('closed_at');
-
-        $openedAtRules = ['required', 'date', 'before_or_equal:today'];
-        if ($latestClosedAt !== null) {
-            $openedAtRules[] = 'after:'.Carbon::parse($latestClosedAt)->format('Y-m-d');
-        }
-
         $validated = $request->validate([
             'label' => ['nullable', 'string', 'max:255'],
-            'opened_at' => $openedAtRules,
-            'opening_cash' => ['nullable', 'numeric', 'min:0'],
             'investment_amount' => ['nullable', 'numeric', 'min:0.01'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $openedAt = now();
+
         // Lock against a concurrent open creating a second open cycle.
-        DB::transaction(function () use ($validated): void {
+        DB::transaction(function () use ($validated, $openedAt): void {
             abort_if(CommissionPeriod::query()->open()->lockForUpdate()->exists(), 409);
+            abort_if(CommissionSettlementService::latestClosedDate() !== null
+                && $openedAt->lessThanOrEqualTo(CommissionSettlementService::latestClosedDate()), 409);
 
             CommissionSettlementService::openPeriod(
                 $validated['label'] ?? null,
-                Carbon::parse($validated['opened_at']),
-                isset($validated['opening_cash']) ? (float) $validated['opening_cash'] : null,
+                $openedAt,
                 isset($validated['investment_amount']) ? (float) $validated['investment_amount'] : null,
                 $validated['note'] ?? null,
             );
@@ -107,7 +97,7 @@ class CommissionController extends Controller
             return redirect()->route('owner.commissions.index');
         }
 
-        $closedAt = Carbon::today();
+        $closedAt = now();
         $stats = CommissionSettlementService::periodStats(CommissionSettlementService::effectiveStart($period), $closedAt);
         $profit = $stats['profit'];
         $rows = CommissionSettlementService::settlementRows($profit);
@@ -143,16 +133,7 @@ class CommissionController extends Controller
                 ->with('warning', trans_choice(__('messages.close_blocked_pending'), $pendingCount, ['count' => $pendingCount]));
         }
 
-        $validated = $request->validate([
-            'closed_at' => [
-                'required',
-                'date',
-                'after_or_equal:'.$period->opened_at->format('Y-m-d'),
-                'before_or_equal:today',
-            ],
-        ]);
-
-        $result = CommissionSettlementService::closePeriod($period, Carbon::parse($validated['closed_at']));
+        $result = CommissionSettlementService::closePeriod($period, now());
 
         if ($result['profit'] <= 0) {
             return redirect()

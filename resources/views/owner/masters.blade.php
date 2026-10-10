@@ -27,7 +27,7 @@
                     <input type="text" name="name" placeholder="{{ __('messages.item_name') }}" required
                            class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2">
                     @if($section['has_price'])
-                        <input type="number" name="default_price" placeholder="{{ __('messages.default_price') }} ({{ \App\Support\Money::SYMBOL }})" step="0.01" min="0" required
+                        <input type="text" inputmode="decimal" name="default_price" placeholder="{{ __('messages.default_price') }} ({{ \App\Support\Money::SYMBOL }})" step="0.01" min="0" required
                                class="w-full border border-gray-300 rounded-lg px-3 py-3 mb-2">
                     @endif
                     @if($section['has_unit'])
@@ -92,7 +92,7 @@
                                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
                                 @if($section['has_price'])
                                     @php $priceLocked = $group === 'items' && $priceLockedIds->contains($item->id); @endphp
-                                    <input type="number" name="default_price" step="0.01" min="0" value="{{ (float) $item->default_price }}"
+                                    <input type="text" inputmode="decimal" name="default_price" step="0.01" min="0" value="{{ (float) $item->default_price }}"
                                            {{ $priceLocked ? 'readonly' : 'required' }}
                                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm {{ $priceLocked ? 'bg-gray-100 text-gray-500' : '' }}">
                                     @if($priceLocked)

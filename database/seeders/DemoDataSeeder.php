@@ -69,8 +69,7 @@ class DemoDataSeeder extends Seeder
                 'label' => $start->format('F Y'),
                 'opened_at' => $start,
                 // The initial capital lives in the Investment above —
-                // counting it again here as opening cash would double it.
-                'opening_cash' => null,
+                // counting it again here would double it.
                 'status' => 'open',
             ]);
 

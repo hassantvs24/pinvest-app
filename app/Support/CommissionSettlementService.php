@@ -37,9 +37,9 @@ class CommissionSettlementService
      * Open a new commission period. Optionally records an opening
      * investment entry at the same time.
      */
-    public static function openPeriod(?string $label, Carbon $openedAt, ?float $openingCash, ?float $investmentAmount, ?string $note): CommissionPeriod
+    public static function openPeriod(?string $label, Carbon $openedAt, ?float $investmentAmount, ?string $note): CommissionPeriod
     {
-        return DB::transaction(function () use ($label, $openedAt, $openingCash, $investmentAmount, $note): CommissionPeriod {
+        return DB::transaction(function () use ($label, $openedAt, $investmentAmount, $note): CommissionPeriod {
             if ($investmentAmount !== null && $investmentAmount > 0) {
                 Investment::query()->create([
                     'amount' => $investmentAmount,
@@ -51,7 +51,6 @@ class CommissionSettlementService
             return CommissionPeriod::query()->create([
                 'label' => $label,
                 'opened_at' => $openedAt,
-                'opening_cash' => $openingCash,
                 'note' => $note,
                 'status' => 'open',
             ]);
@@ -87,13 +86,12 @@ class CommissionSettlementService
     }
 
     /**
-     * The date a cycle's accounts actually start from. When a previous
-     * cycle exists, counting starts the day after its close — so no
-     * entry is ever counted in two cycles, and days left between cycles
-     * fall into the next one instead of vanishing. A same-day reopen
-     * (opened_at on the close date) keeps counting from the reopen day
-     * itself, so entries made after the reopen are never stranded
-     * between cycles.
+     * The moment a cycle's accounts actually start from. When a previous
+     * cycle exists, counting starts one second after its close — so no
+     * entry is ever counted in two cycles, and moments left between
+     * cycles (the gap) fall into the next one instead of vanishing. A
+     * same-day reopen therefore absorbs everything after the previous
+     * close, while everything up to the close stays in the old cycle.
      */
     public static function effectiveStart(CommissionPeriod $period): Carbon
     {
@@ -106,7 +104,21 @@ class CommissionSettlementService
             return $period->opened_at->copy();
         }
 
-        return $period->opened_at->copy()->min(Carbon::parse($latestClosed)->addDay());
+        return Carbon::parse($latestClosed)->addSecond();
+    }
+
+    /**
+     * The date of the most recent cycle close, if any (for backdate
+     * validation of manually dated entries).
+     */
+    public static function latestClosedDate(): ?Carbon
+    {
+        $latestClosed = CommissionPeriod::query()
+            ->closed()
+            ->orderByDesc('closed_at')
+            ->value('closed_at');
+
+        return $latestClosed === null ? null : Carbon::parse($latestClosed);
     }
 
     public static function closePeriod(CommissionPeriod $period, Carbon $closedAt): array
@@ -162,14 +174,14 @@ class CommissionSettlementService
     {
         $sales = (float) Sale::query()
             ->where('status', EntryStatus::Confirmed->value)
-            ->whereDate('entry_date', '>=', $start)
-            ->whereDate('entry_date', '<=', $end)
+            ->where('entry_date', '>=', $start)
+            ->where('entry_date', '<=', $end)
             ->sum('total');
 
         $purchase = (float) Purchase::query()
             ->where('status', EntryStatus::Confirmed->value)
-            ->whereDate('entry_date', '>=', $start)
-            ->whereDate('entry_date', '<=', $end)
+            ->where('entry_date', '>=', $start)
+            ->where('entry_date', '<=', $end)
             ->sum('total');
 
         $expenseTotals = self::expenseTotals($start, $end);
@@ -203,8 +215,8 @@ class CommissionSettlementService
 
         foreach (Expense::query()
             ->where('status', EntryStatus::Confirmed->value)
-            ->whereDate('entry_date', '>=', $start)
-            ->whereDate('entry_date', '<=', $end)
+            ->where('entry_date', '>=', $start)
+            ->where('entry_date', '<=', $end)
             ->with('expenseHead')
             ->get() as $expense) {
             if ($expense->expenseHead?->cost_type?->addsToStock()) {
@@ -294,11 +306,11 @@ class CommissionSettlementService
 
     /**
      * Confirmed profit of the running (open) cycle so far,
-     * from its opening date up to today.
+     * from its effective start up to this moment.
      */
     public static function runningProfit(CommissionPeriod $period): float
     {
-        return self::periodProfit(self::effectiveStart($period), Carbon::today());
+        return self::periodProfit(self::effectiveStart($period), now());
     }
 
     /**

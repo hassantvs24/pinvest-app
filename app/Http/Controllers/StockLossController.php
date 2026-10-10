@@ -62,7 +62,7 @@ class StockLossController extends Controller
             'item_id' => $validated['item_id'],
             'quantity' => $validated['quantity'],
             'note' => $validated['note'] ?? null,
-            'entry_date' => now()->format('Y-m-d'), // partners always report today
+            'entry_date' => now(), // entry moment captured automatically
             'status' => EntryStatus::Pending,
         ]);
 

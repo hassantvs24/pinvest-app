@@ -76,7 +76,7 @@ class ProductionController extends Controller
                 'user_id' => $request->user()->id,
                 'extra_cost' => $validated['extra_cost'] ?? 0,
                 'note' => $validated['note'] ?? null,
-                'entry_date' => now()->format('Y-m-d'), // partners always report today
+                'entry_date' => now(), // entry moment captured automatically
                 'status' => EntryStatus::Pending,
             ]);
 

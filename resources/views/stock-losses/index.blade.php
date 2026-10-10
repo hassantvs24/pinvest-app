@@ -25,7 +25,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }}</label>
-                        <input type="number" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
+                        <input type="text" inputmode="decimal" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     </div>
                     <div>
@@ -52,7 +52,7 @@
                 <div class="bg-white rounded-xl shadow p-4">
                     <div class="font-bold">📉 {{ $loss->item->name ?? '—' }} × {{ \App\Support\ItemUnits::formatQuantity((float) $loss->quantity) }} {{ \App\Support\ItemUnits::label($loss->item->unit ?? null) }}</div>
                     <div class="text-sm text-gray-500">
-                        📅 {{ \App\Support\DateFormats::date($loss->entry_date) }}
+                        📅 {{ \App\Support\DateFormats::dateTime($loss->entry_date) }}
                         @php $lst = $loss->status->value; @endphp
                         <span class="inline-block text-xs px-2 py-0.5 rounded-full
                             {{ $lst === 'pending' ? 'bg-yellow-100 text-yellow-800' : ($lst === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800') }}">

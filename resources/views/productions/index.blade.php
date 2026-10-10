@@ -24,7 +24,7 @@
                                     <option value="{{ $item->id }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
-                            <input type="number" name="outputs[0][quantity]" min="0.001" step="any" required placeholder="{{ __('messages.quantity') }}"
+                            <input type="text" inputmode="decimal" name="outputs[0][quantity]" min="0.001" step="any" required placeholder="{{ __('messages.quantity') }}"
                                    class="border border-gray-300 rounded-lg px-3 py-3">
                             <button type="button" class="js-remove-output bg-red-100 text-red-700 rounded-lg font-bold" title="{{ __('messages.remove') }}">✕</button>
                         </div>
@@ -40,7 +40,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-sm font-medium mb-1">🧾 {{ __('messages.extra_cost') }} ({{ __('messages.optional') }})</label>
-                        <input type="number" name="extra_cost" value="{{ old('extra_cost') }}" step="0.01" min="0"
+                        <input type="text" inputmode="decimal" name="extra_cost" value="{{ old('extra_cost') }}" step="0.01" min="0"
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mt-1">⚠️ {{ __('messages.labour_double_count_hint') }}</p>
                     </div>
@@ -60,7 +60,7 @@
                                     <option value="{{ $item->id }}" data-available="{{ $available[$item->id] ?? 0 }}" data-unit="{{ \App\Support\ItemUnits::label($item->unit) }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
-                            <input type="number" name="components[0][quantity]" min="0.001" step="any" placeholder="{{ __('messages.quantity') }}"
+                            <input type="text" inputmode="decimal" name="components[0][quantity]" min="0.001" step="any" placeholder="{{ __('messages.quantity') }}"
                                    class="border border-gray-300 rounded-lg px-3 py-3">
                             <button type="button" class="js-remove-row bg-red-100 text-red-700 rounded-lg font-bold" title="{{ __('messages.remove') }}">✕</button>
                         </div>
@@ -91,7 +91,7 @@
                 <div class="bg-white rounded-xl shadow p-4">
                     <div class="font-bold">👕 {{ $production->outputs->map(fn ($o) => $o->item->name.' × '.\App\Support\ItemUnits::formatQuantity((float) $o->quantity))->implode(', ') }}</div>
                     <div class="text-sm text-gray-500">
-                        📅 {{ \App\Support\DateFormats::date($production->entry_date) }}
+                        📅 {{ \App\Support\DateFormats::dateTime($production->entry_date) }}
                         @php $pst = $production->status->value; @endphp
                         <span class="inline-block text-xs px-2 py-0.5 rounded-full
                             {{ $pst === 'pending' ? 'bg-yellow-100 text-yellow-800' : ($pst === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800') }}">

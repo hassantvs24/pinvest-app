@@ -40,4 +40,19 @@ class DateFormats
 
         return strtr($formatted, self::BENGALI_MONTHS);
     }
+
+    /**
+     * Format a moment (date + time) with the app's display formats,
+     * translating month names when the active locale is Bengali.
+     */
+    public static function dateTime(Carbon $moment): string
+    {
+        $formatted = $moment->format(self::DATE.', '.self::TIME);
+
+        if (app()->getLocale() !== 'bn') {
+            return $formatted;
+        }
+
+        return strtr($formatted, self::BENGALI_MONTHS);
+    }
 }

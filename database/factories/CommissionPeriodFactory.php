@@ -15,7 +15,6 @@ class CommissionPeriodFactory extends Factory
         return [
             'label' => null,
             'opened_at' => now()->startOfMonth()->subMonth(),
-            'opening_cash' => null,
             'note' => null,
             'status' => 'closed',
             'profit' => null,

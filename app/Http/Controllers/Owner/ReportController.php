@@ -71,7 +71,7 @@ class ReportController extends Controller
                 : 0,
             'ownerShare' => $periodStats['net_profit'],
             'stats' => $periodStats,
-            'stockRows' => InventoryService::stockRows(Carbon::parse($to ?? now()->format('Y-m-d'))),
+            'stockRows' => InventoryService::stockRows(Carbon::parse($to ?? now()->toDateString())->endOfDay()),
             'lifetimeCashInHand' => $lifetime['cash_in_hand'],
             'lifetimeInvestment' => $lifetime['investment'],
             'partners' => $this->partnerRows($from, $to),

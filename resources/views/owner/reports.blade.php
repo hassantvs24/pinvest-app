@@ -54,9 +54,6 @@
             <div class="text-sm text-gray-600">
                 📅 {{ $selectedCycle->opened_at->format('d M Y') }} – {{ $selectedCycle->closed_at?->format('d M Y') ?? now()->format('d M Y') }}
                 · {{ trans_choice(__('messages.period_days'), $openDays, ['count' => $openDays]) }}
-                @if($selectedCycle->opening_cash !== null)
-                    · 🏦 {{ __('messages.opening_cash') }}: {{ \App\Support\Money::format((float) $selectedCycle->opening_cash) }}
-                @endif
                 @if($selectedCycle->note)
                     · 💬 {{ $selectedCycle->note }}
                 @endif
@@ -178,7 +175,7 @@
                     @foreach($salesDetails as $entry)
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
-                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($entry->entry_date) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}</span>
                                 {{ $entry->item->name ?? '—' }}
                                 <span class="text-gray-500">× {{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}</span>
                             </div>
@@ -242,7 +239,7 @@
                     @foreach($purchaseDetails as $entry)
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
-                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($entry->entry_date) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}</span>
                                 {{ $entry->item->name ?? '—' }}
                                 <span class="text-gray-500">× {{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}</span>
                             </div>
@@ -282,7 +279,7 @@
                     @foreach($expenseDetails as $entry)
                         <li class="px-4 py-2 flex items-center justify-between gap-2 text-xs">
                             <div class="min-w-0">
-                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($entry->entry_date) }} 🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}</span>
+                                <span class="text-gray-500">📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}</span>
                                 {{ $entry->expenseHead->name ?? '—' }}
                             </div>
                             <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) $entry->amount) }}</div>

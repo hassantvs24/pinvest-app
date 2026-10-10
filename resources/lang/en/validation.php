@@ -20,6 +20,9 @@ return [
     'confirmed' => 'The :attribute confirmation does not match.',
     'email' => 'The :attribute field must be a valid email address.',
     'date' => 'The :attribute field must be a valid date.',
+    'after' => 'The :attribute field must be a date after :date.',
+    'after_or_equal' => 'The :attribute field must be a date after or equal to :date.',
+    'before_or_equal' => 'The :attribute field must be a date before or equal to :date.',
     'in' => 'The selected :attribute is invalid.',
     'boolean' => 'The :attribute field must be true or false.',
 
@@ -36,6 +39,8 @@ return [
         'unit_price' => 'unit price',
         'total' => 'total',
         'entry_date' => 'date',
+        'opened_at' => 'opening date',
+        'closed_at' => 'closing date',
         'invested_at' => 'date',
         'payout_date' => 'date',
         'note' => 'note',

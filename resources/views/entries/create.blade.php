@@ -50,9 +50,9 @@
                         <label class="block text-sm font-medium mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
                         <select name="item_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
                             <option value="">{{ __('messages.shared_across_products') }}</option>
-                            @foreach($items as $item)
-                                <option value="{{ $item->id }}" {{ old('item_id') == $item->id ? 'selected' : '' }}>
-                                    {{ $item->name }}
+                            @foreach(($allItems ?? []) as $product)
+                                <option value="{{ $product->id }}" {{ old('item_id') == $product->id ? 'selected' : '' }}>
+                                    {{ $product->name }}
                                 </option>
                             @endforeach
                         </select>
@@ -64,7 +64,7 @@
                 @if($type === 'expenses')
                     <div>
                         <label class="block text-sm font-medium mb-1">{{ __('messages.amount') }}</label>
-                        <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0" required
+                        <input type="text" inputmode="decimal" name="amount" value="{{ old('amount') }}" step="0.01" min="0" required
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     </div>
                 @endif
@@ -74,12 +74,12 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }} <span id="unit_label" class="text-emerald-700 font-bold"></span></label>
-                            <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
+                            <input type="text" inputmode="decimal" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-1">{{ __('messages.unit_price') }}</label>
-                            <input type="number" id="unit_price" name="unit_price" value="{{ old('unit_price') }}" step="0.01" min="0" required
+                            <input type="text" inputmode="decimal" id="unit_price" name="unit_price" value="{{ old('unit_price') }}" step="0.01" min="0" required
                                    class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                         </div>
                     </div>
@@ -91,15 +91,15 @@
                     </div>
                 @endif
 
-                {{-- Date: partners always report today (server forces it); owner may backdate --}}
+                {{-- Date: the moment is captured automatically (date + time of entry); the owner may backdate (day only) --}}
                 @if(auth()->user()->isOwner())
                     <div>
                         <label class="block text-sm font-medium mb-1">{{ __('messages.date') }}</label>
                         <input type="date" name="entry_date" value="{{ old('entry_date', $today) }}" required
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <p class="text-xs text-gray-500 mt-1">🕐 {{ __('messages.auto_time_hint') }}</p>
                     </div>
                 @else
-                    <input type="hidden" name="entry_date" value="{{ $today }}">
                     <p class="text-xs text-gray-500">📅 {{ __('messages.auto_today_hint') }}</p>
                 @endif
 

@@ -22,10 +22,7 @@
                 </span>
             </div>
             <ul class="text-sm text-gray-600 space-y-1 mb-3">
-                <li>📅 {{ __('messages.opened_on') }}: {{ $openPeriod->opened_at->format('d M Y') }}</li>
-                @if($openPeriod->opening_cash !== null)
-                    <li>🏦 {{ __('messages.opening_cash') }}: {{ \App\Support\Money::format((float) $openPeriod->opening_cash) }}</li>
-                @endif
+                <li>📅 {{ __('messages.opened_on') }}: {{ \App\Support\DateFormats::dateTime($openPeriod->opened_at) }}</li>
                 <li>🏦 {{ __('messages.cash_in_hand') }}: {{ \App\Support\Money::format($cashInHand) }}</li>
                 @if($openPeriod->note)
                     <li>📝 {{ $openPeriod->note }}</li>
@@ -42,6 +39,7 @@
         <div class="bg-white rounded-xl shadow p-4 mb-6">
             <h2 class="font-bold mb-1">🟢 {{ __('messages.open_period') }}</h2>
             <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.open_period_hint') }}</p>
+            <p class="text-xs bg-blue-50 border border-blue-200 text-blue-800 rounded-lg px-3 py-2 mb-3">🕐 {{ __('messages.auto_datetime_hint') }}</p>
             <form method="POST" action="{{ route('owner.commissions.open') }}" class="space-y-3">
                 @csrf
                 <div>
@@ -49,24 +47,12 @@
                     <input type="text" name="label" value="{{ old('label') }}" placeholder="{{ __('messages.period_label_placeholder') }}"
                            class="w-full border border-gray-300 rounded-lg px-3 py-3">
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">📅 {{ __('messages.opening_date') }}</label>
-                        <input type="date" name="opened_at" value="{{ old('opened_at', $today) }}" required
-                               class="w-full border border-gray-300 rounded-lg px-3 py-3">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-gray-500 mb-1">🏦 {{ __('messages.opening_cash') }} {{ __('messages.optional') }}</label>
-                        <input type="number" name="opening_cash" step="0.01" min="0" value="{{ old('opening_cash') }}"
-                               class="w-full border border-gray-300 rounded-lg px-3 py-3">
-                    </div>
-                </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">💰 {{ __('messages.opening_investment') }} {{ __('messages.optional') }}</label>
-                    <input type="number" name="investment_amount" step="0.01" min="0.01" value="{{ old('investment_amount') }}"
+                    <input type="text" inputmode="decimal" name="investment_amount" step="0.01" min="0.01" value="{{ old('investment_amount') }}"
                            class="w-full border border-gray-300 rounded-lg px-3 py-3">
                 </div>
-                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2">💡 {{ __('messages.opening_money_hint') }}</p>
+                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2">💡 {{ __('messages.opening_investment_hint') }}</p>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.note') }} {{ __('messages.optional') }}</label>
                     <textarea name="note" rows="2" class="w-full border border-gray-300 rounded-lg px-3 py-3">{{ old('note') }}</textarea>
@@ -130,7 +116,7 @@
                             🔒 {{ $period->label ?: $period->opened_at->format('M Y') }}
                         </div>
                         <div class="text-sm text-gray-500">
-                            📅 {{ $period->opened_at->format('d M') }} – {{ $period->closed_at->format('d M Y') }}
+                            📅 {{ \App\Support\DateFormats::dateTime($period->opened_at) }} – {{ \App\Support\DateFormats::dateTime($period->closed_at) }}
                         </div>
                     </div>
                     <div class="text-right shrink-0">
@@ -162,7 +148,7 @@
                 <div>
                     <div class="font-bold inline-flex items-center gap-1.5"><x-avatar :user="$settlement->user" size="22" /> {{ $settlement->user->name }}</div>
                     <div class="text-sm text-gray-500">
-                        🗓️ {{ $settlement->period?->label ?: $settlement->period_start->format('d M').' – '.$settlement->period_end->format('d M Y') }}
+                        🗓️ {{ $settlement->period?->label ?: \App\Support\DateFormats::dateTime($settlement->period_start).' – '.\App\Support\DateFormats::dateTime($settlement->period_end) }}
                         · 📈 {{ \App\Support\Money::format((float) $settlement->business_profit) }}
                         · 🤝 {{ $settlement->commission_rate }}%
                     </div>

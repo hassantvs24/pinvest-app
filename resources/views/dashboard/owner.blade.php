@@ -41,9 +41,6 @@
             </div>
             <div class="text-sm text-gray-600">
                 📅 {{ __('messages.opened_on') }}: {{ $openPeriod->opened_at->format('d M Y') }}
-                @if($openPeriod->opening_cash !== null)
-                    · 🏦 {{ __('messages.opening_cash') }}: {{ \App\Support\Money::format((float) $openPeriod->opening_cash) }}
-                @endif
             </div>
             <div class="text-sm font-bold text-emerald-700 mt-1">🔒 {{ __('messages.click_to_close') }}</div>
         </a>

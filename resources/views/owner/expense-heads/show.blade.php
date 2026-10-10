@@ -30,7 +30,7 @@
             <ul class="space-y-0.5">
                 @foreach($pending as $expense)
                     <li>
-                        📅 {{ \App\Support\DateFormats::date($expense->entry_date) }}
+                        📅 {{ \App\Support\DateFormats::dateTime($expense->entry_date) }}
                         − {{ \App\Support\Money::format((float) $expense->amount) }}
                         @if($expense->user)・{{ $expense->user->name }}@endif
                         @if($expense->note) <span class="text-xs">({{ $expense->note }})</span>@endif
@@ -50,7 +50,7 @@
                 @foreach($rows as $expense)
                     <li class="px-4 py-2 text-sm flex items-center justify-between gap-2">
                         <div class="min-w-0">
-                            <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($expense->entry_date) }}</span>
+                            <span class="text-gray-500">📅 {{ \App\Support\DateFormats::dateTime($expense->entry_date) }}</span>
                             @if($expense->user)<span class="text-xs text-gray-500">{{ $expense->user->name }}</span>@endif
                             @if($expense->item)
                                 <span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">📦 {{ $expense->item->name }}</span>

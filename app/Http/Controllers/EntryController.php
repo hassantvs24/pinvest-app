@@ -16,6 +16,7 @@ use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 /**
@@ -35,26 +36,48 @@ class EntryController extends Controller
     }
 
     /**
-     * Entry-date rules for the owner: entries must land inside the
-     * current open cycle (never inside a closed one — stored closed-cycle
-     * profit must stay reproducible) and never in the future. Partners
-     * always report today, so their date is only sanity-checked.
+     * Entry-moment rules for the owner's optional date picker: the date
+     * may be today or any past day, but never on/inside a closed cycle
+     * (backdated entries land at midnight of the picked day, so the day
+     * right after a close is the earliest allowed backdate). Partners
+     * never pick a date — their entries always happen right now.
      *
      * @return array<int, string>
      */
-    private function entryDateRules(?CommissionPeriod $period, bool $isOwner): array
+    private function entryDateRules(bool $isOwner): array
     {
-        $rules = ['required', 'date'];
+        if (! $isOwner) {
+            return ['nullable', 'date'];
+        }
 
-        if ($isOwner) {
-            $rules[] = 'before_or_equal:today';
+        $rules = ['nullable', 'date', 'before_or_equal:'.now()->toDateString()];
 
-            if ($period !== null) {
-                $rules[] = 'after_or_equal:'.CommissionSettlementService::effectiveStart($period)->format('Y-m-d');
-            }
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+        $openPeriod = $this->openPeriod();
+
+        if ($latestClosed !== null) {
+            $rules[] = 'after:'.$latestClosed->toDateString();
+        } elseif ($openPeriod !== null) {
+            $rules[] = 'after_or_equal:'.$openPeriod->opened_at->toDateString();
         }
 
         return $rules;
+    }
+
+    /**
+     * The moment a new entry happened: right now by default. A past
+     * picked date is stored as midnight of that day; picking today
+     * keeps the exact current moment.
+     */
+    private function entryMoment(?string $date): Carbon
+    {
+        $picked = $date !== null && $date !== '' ? Carbon::parse($date) : null;
+
+        if ($picked === null || $picked->toDateString() === now()->toDateString()) {
+            return now();
+        }
+
+        return $picked->startOfDay();
     }
 
     /**
@@ -119,6 +142,11 @@ class EntryController extends Controller
             'type' => $type,
             'config' => $config,
             'items' => $items,
+            // The expense form's optional related-product picker lists
+            // products (master items), not expense heads.
+            'allItems' => $type === 'expenses'
+                ? Item::query()->active()->orderBy('name')->get()
+                : null,
             'available' => $available,
             // Owners see their cash position so overspending warns upfront.
             'cashInHand' => $request->user()->isOwner()
@@ -145,7 +173,7 @@ class EntryController extends Controller
         $confirmed = $user->isOwner()
             ? ['confirmed_by' => $user->id, 'confirmed_at' => now()]
             : ['confirmed_by' => null, 'confirmed_at' => null];
-        $entryDateRules = $this->entryDateRules($this->openPeriod(), $user->isOwner());
+        $entryDateRules = $this->entryDateRules($user->isOwner());
 
         if ($type === 'expenses') {
             $validated = $request->validate([
@@ -156,8 +184,9 @@ class EntryController extends Controller
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            // Partners cannot backdate: entries always land on today.
-            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+            // The entry moment is always "now"; the owner's picked
+            // date only decides the day (today = exact moment).
+            $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
             Expense::query()->create([
                 'user_id' => $user->id,
@@ -165,7 +194,7 @@ class EntryController extends Controller
                 'item_id' => $validated['item_id'] ?? null,
                 'amount' => $validated['amount'],
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $entryDate,
+                'entry_date' => $entryMoment,
                 'status' => $status,
                 ...$confirmed,
             ]);
@@ -178,7 +207,7 @@ class EntryController extends Controller
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+            $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
             Purchase::query()->create([
                 'user_id' => $user->id,
@@ -187,7 +216,7 @@ class EntryController extends Controller
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $entryDate,
+                'entry_date' => $entryMoment,
                 'status' => $status,
                 ...$confirmed,
             ]);
@@ -200,7 +229,7 @@ class EntryController extends Controller
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+            $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
             $item = Item::query()->findOrFail($validated['head_id']);
             $available = InventoryService::availableQuantity($item);
@@ -221,7 +250,7 @@ class EntryController extends Controller
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $entryDate,
+                'entry_date' => $entryMoment,
                 'status' => $status,
                 ...$confirmed,
             ]);

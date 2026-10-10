@@ -16,6 +16,7 @@ use App\Support\ItemUnits;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -97,22 +98,42 @@ class EntryController extends Controller
     }
 
     /**
-     * Entry-date rules: entries must land inside the current open cycle —
-     * never inside a closed one (stored closed-cycle profit must stay
-     * reproducible) and never in the future.
+     * Entry-date rules for edits: today or any past day, never on/inside
+     * a closed cycle (backdated entries land at midnight of the picked
+     * day, so the day right after a close is the earliest backdate).
      *
      * @return array<int, string>
      */
     private function entryDateRules(): array
     {
-        $rules = ['required', 'date', 'before_or_equal:today'];
+        $rules = ['required', 'date', 'before_or_equal:'.now()->toDateString()];
+
+        $latestClosed = CommissionSettlementService::latestClosedDate();
         $openPeriod = CommissionPeriod::query()->open()->latest('id')->first();
 
-        if ($openPeriod !== null) {
-            $rules[] = 'after_or_equal:'.CommissionSettlementService::effectiveStart($openPeriod)->format('Y-m-d');
+        if ($latestClosed !== null) {
+            $rules[] = 'after:'.$latestClosed->toDateString();
+        } elseif ($openPeriod !== null) {
+            $rules[] = 'after_or_equal:'.$openPeriod->opened_at->toDateString();
         }
 
         return $rules;
+    }
+
+    /**
+     * Resolves the edit form's date: an unchanged day keeps the stored
+     * moment (exact time preserved), a changed day lands at that day's
+     * midnight.
+     */
+    private function editedEntryMoment(Model $model, string $date): Carbon
+    {
+        $picked = Carbon::parse($date);
+
+        if ($picked->toDateString() === $model->entry_date->toDateString()) {
+            return $model->entry_date->copy();
+        }
+
+        return $picked->startOfDay();
     }
 
     /**
@@ -242,7 +263,7 @@ class EntryController extends Controller
                 'expense_head_id' => $validated['head_id'],
                 'item_id' => $validated['item_id'] ?? null,
                 'amount' => $validated['amount'],
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $this->editedEntryMoment($model, $validated['entry_date']),
                 'note' => $validated['note'] ?? null,
             ]);
         } elseif ($type === 'purchases') {
@@ -259,7 +280,7 @@ class EntryController extends Controller
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $this->editedEntryMoment($model, $validated['entry_date']),
                 'note' => $validated['note'] ?? null,
             ]);
         } else {
@@ -281,7 +302,7 @@ class EntryController extends Controller
                 'quantity' => $validated['quantity'],
                 'unit_price' => $validated['unit_price'],
                 'total' => round($validated['quantity'] * $validated['unit_price'], 2),
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $this->editedEntryMoment($model, $validated['entry_date']),
                 'note' => $validated['note'] ?? null,
             ]);
         }

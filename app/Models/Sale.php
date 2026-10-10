@@ -25,7 +25,7 @@ class Sale extends Model
             'quantity' => 'decimal:3',
             'unit_price' => 'decimal:2',
             'total' => 'decimal:2',
-            'entry_date' => 'date',
+            'entry_date' => 'datetime',
             'status' => EntryStatus::class,
             'confirmed_at' => 'datetime',
         ];

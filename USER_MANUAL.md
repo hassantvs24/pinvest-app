@@ -91,12 +91,18 @@
 
 ## ৭. Cycle system — পুরো flow (Owner)
 
-1. **Commissions → Cycle open** (তারিখ + চাইলে লেবেল + শুরুর ক্যাশ)
+1. **Commissions → Cycle open** (চাইলে লেবেল + শুরুর বিনিয়োগ) — cycle **এই মুহূর্তেই** খুলে যায় (তারিখ + সময় স্বয়ংক্রিয়)
 2. চলমান cycle-এ সব entry হয়; **কোনো pending থাকলে cycle বন্ধ হবে না** (safety)
 3. **Close preview** দেখুন: বিক্রি, বিক্রি পণ্যের খরচ (COGS), ক্রয়, পণ্যের/সাধারণ খরচ, **মজুদের মূল্য**, নিট লাভ + প্রতি partner-এর হবে কমিশন — হলুদ **⚠️ সতর্কতা** থাকলে আগে ঠিক করুন
-4. **✅ Close confirm** → commission প্রতি partner-এর account-এ pending হিসেবে ঢুকে যায়
+4. **✅ Close confirm** → cycle **বন্ধের মুহূর্তে** seal হয়ে যায়; commission প্রতি partner-এর account-এ pending হিসেবে ঢুকে যায়
 5. Partner **My Commissions → উত্তোলন request** পাঠায়
 6. Owner **Commissions → request ✅ approve** → সব pending কমিশন পরিশোধ (নগদ থেকে কাটে)
+
+> **একই দিনে আবার cycle খোলা:** একটি cycle বন্ধ করে **ঠিক পরেই** নতুন cycle খোলা যায়। বন্ধের মুহূর্তের আগের সব entry পুরনো cycle-এ, পরের সব entry নতুন cycle-এ — দুটোর হিসাব আলাদা থাকে।
+
+> **Entry-র সময়:** প্রতিটি entry-র **তারিখ ও ঘড়ির সময়** entry করার মুহূর্তে স্বয়ংক্রিয়ভাবে save হয়। Owner প্রয়োজনে পুরনো **তারিখ** বসাতে পারেন (backdate); সময় নিজে থেকে থাকে।
+
+> **শুরুর টাকা (প্রথম দিন):** দোকানে আগে থেকে যে টাকা আছে, তা **Investments পেজে** entry দিন — হাতে নগদে যোগ হবে। Cycle খোলার ফর্মে শুধু চাইলে শুরুর **বিনিয়োগ** দেওয়া যায় (সেটাও Investments-এ entry হয়)।
 
 > **Loss cycle:** লাভ ≤ 0 হলে কেউ কমিশন পায় না — cycle close হয়, ক্ষতির হিসাব থাকে।
 

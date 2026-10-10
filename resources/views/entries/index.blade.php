@@ -49,7 +49,7 @@
                             <div class="text-sm text-gray-500">📝 {{ $entry->note }}</div>
                         @endif
                         <div class="text-sm text-gray-500">
-                            📅 {{ \App\Support\DateFormats::date($entry->entry_date) }}
+                            📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}
                             🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
                         </div>
                     </div>

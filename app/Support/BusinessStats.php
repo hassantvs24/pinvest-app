@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Enums\EntryStatus;
 use App\Enums\ExpenseCostType;
-use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\Investment;
@@ -25,7 +24,7 @@ use Illuminate\Support\Carbon;
  * until the goods are sold. Cash in hand stays cash-based and
  * subtracts partner payouts and owner profit withdrawals.
  *
- * @phpstan-type StatsArray array{investment: float, opening_cash: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_loss: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
+ * @phpstan-type StatsArray array{investment: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_loss: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
  */
 class BusinessStats
 {
@@ -50,7 +49,7 @@ class BusinessStats
         // keep their simple cash-basis figures.
         $cogs = $userId === null ? InventoryService::cogs(
             Carbon::parse($from ?? '1970-01-01'),
-            Carbon::parse($to ?? now()->format('Y-m-d')),
+            Carbon::parse($to ?? now()->toDateString())->endOfDay(),
         ) : 0.0;
         $generalExpense = $userId === null ? (float) Expense::query()
             ->where('status', EntryStatus::Confirmed->value)
@@ -59,7 +58,7 @@ class BusinessStats
             ->when($to, fn (Builder $q) => $q->whereDate('entry_date', '<=', $to))
             ->sum('amount') : $expense;
         $stockValue = $userId === null
-            ? InventoryService::stockValue(Carbon::parse($to ?? now()->format('Y-m-d')))
+            ? InventoryService::stockValue(Carbon::parse($to ?? now()->toDateString())->endOfDay())
             : 0.0;
 
         $commission = (float) CommissionSettlement::query()
@@ -77,13 +76,6 @@ class BusinessStats
             ->dateBetween($from, $to)
             ->sum('amount');
 
-        // Physical cash the cycles started with (per-cycle opening cash),
-        // scoped to the requested range like every other figure.
-        $openingCash = (float) CommissionPeriod::query()
-            ->when($from, fn (Builder $q) => $q->whereDate('opened_at', '>=', $from))
-            ->when($to, fn (Builder $q) => $q->whereDate('opened_at', '<=', $to))
-            ->sum('opening_cash');
-
         // Production labour is paid in cash as the run happens.
         $productionLabour = (float) Production::query()
             ->confirmed()
@@ -94,15 +86,14 @@ class BusinessStats
         // Lost stock costs profit (non-cash: stock value shrinks instead).
         $stockLoss = $userId === null ? InventoryService::stockLossCost(
             Carbon::parse($from ?? '1970-01-01'),
-            Carbon::parse($to ?? now()->format('Y-m-d')),
+            Carbon::parse($to ?? now()->toDateString())->endOfDay(),
         ) : 0.0;
 
         $netProfit = $sales - $cogs - $generalExpense - $stockLoss - $commission;
-        $cashInHand = $investment + $openingCash + $sales - $purchase - $expense - $productionLabour - $payout - $withdrawal;
+        $cashInHand = $investment + $sales - $purchase - $expense - $productionLabour - $payout - $withdrawal;
 
         return [
             'investment' => $investment,
-            'opening_cash' => $openingCash,
             'purchase' => $purchase,
             'cogs' => $cogs,
             'expense' => $expense,

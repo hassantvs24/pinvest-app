@@ -10,7 +10,7 @@
             <h1 class="text-xl font-bold mb-1">🔒 {{ __('messages.close_summary') }}</h1>
             <p class="text-sm text-gray-500 mb-4">
                 {{ $period->label ?: $period->opened_at->format('M Y') }} —
-                📅 {{ $period->opened_at->format('d M Y') }} → {{ $closedAt->format('d M Y') }}
+                📅 {{ \App\Support\DateFormats::dateTime($period->opened_at) }} → {{ \App\Support\DateFormats::dateTime($closedAt) }}
             </p>
 
             {{-- Blocking panel: unapproved entries must be resolved first --}}
@@ -30,8 +30,7 @@
                                     </div>
                                     <div class="text-xs text-gray-600">
                                         <span class="inline-flex items-center gap-1.5"><x-avatar :user="$entry->user" size="20" /> {{ $entry->user->name }}</span>
-                                        · 📅 {{ \App\Support\DateFormats::date($entry->entry_date) }}
-                                        🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
+                                        · 📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}
                                     </div>
                                 </div>
                                 <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) ($entry->amount ?? $entry->total)) }}</div>
@@ -126,7 +125,6 @@
                 <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-4">💡 {{ __('messages.close_preview_hint') }}</p>
                 <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
                     @csrf
-                    <input type="hidden" name="closed_at" value="{{ $closedAt->format('Y-m-d') }}">
                     <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl py-3">
                         ✅ {{ __('messages.confirm_close') }}
                     </button>

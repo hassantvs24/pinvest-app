@@ -296,9 +296,9 @@ class InventoryService
         $events = collect();
 
         Purchase::query()->confirmed()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->get()
             ->each(fn (Purchase $purchase) => $events->push([
-                'sort' => $purchase->entry_date->format('Y-m-d').'|0|p'.$purchase->id,
+                'sort' => $purchase->entry_date->format('Y-m-d H:i:s').'|0|p'.$purchase->id,
                 'date' => $purchase->entry_date,
                 'kind' => 'purchase',
                 'direction' => 'in',
@@ -308,7 +308,7 @@ class InventoryService
                 'note' => self::ledgerNote($purchase->user?->name, $purchase->note),
             ]));
 
-        Production::query()->confirmed()->whereDate('entry_date', '<=', $asOf)
+        Production::query()->confirmed()->where('entry_date', '<=', $asOf)
             ->where(function ($query) use ($item): void {
                 $query->whereHas('components', fn ($q) => $q->where('item_id', $item->id))
                     ->orWhereHas('outputs', fn ($q) => $q->where('item_id', $item->id));
@@ -318,7 +318,7 @@ class InventoryService
             ->each(function (Production $production) use ($events, $item): void {
                 foreach ($production->components->where('item_id', $item->id) as $component) {
                     $events->push([
-                        'sort' => $production->entry_date->format('Y-m-d').'|2|prc'.$production->id.'c'.$component->id,
+                        'sort' => $production->entry_date->format('Y-m-d H:i:s').'|2|prc'.$production->id.'c'.$component->id,
                         'date' => $production->entry_date,
                         'kind' => 'production',
                         'direction' => 'out',
@@ -330,7 +330,7 @@ class InventoryService
                 }
                 foreach ($production->outputs->where('item_id', $item->id) as $output) {
                     $events->push([
-                        'sort' => $production->entry_date->format('Y-m-d').'|2|pro'.$production->id.'o'.$output->id,
+                        'sort' => $production->entry_date->format('Y-m-d H:i:s').'|2|pro'.$production->id.'o'.$output->id,
                         'date' => $production->entry_date,
                         'kind' => 'production',
                         'direction' => 'in',
@@ -343,9 +343,9 @@ class InventoryService
             });
 
         Sale::query()->confirmed()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->get()
             ->each(fn (Sale $sale) => $events->push([
-                'sort' => $sale->entry_date->format('Y-m-d').'|3|s'.$sale->id,
+                'sort' => $sale->entry_date->format('Y-m-d H:i:s').'|3|s'.$sale->id,
                 'date' => $sale->entry_date,
                 'kind' => 'sale',
                 'direction' => 'out',
@@ -356,9 +356,9 @@ class InventoryService
             ]));
 
         StockLoss::query()->confirmed()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->get()
             ->each(fn (StockLoss $loss) => $events->push([
-                'sort' => $loss->entry_date->format('Y-m-d').'|4|l'.$loss->id,
+                'sort' => $loss->entry_date->format('Y-m-d H:i:s').'|4|l'.$loss->id,
                 'date' => $loss->entry_date,
                 'kind' => 'stock-loss',
                 'direction' => 'out',
@@ -404,14 +404,14 @@ class InventoryService
         // stock yet, but hold it): sales, stock losses and production
         // raw materials — everything `pendingReservations` counts.
         $pending = Sale::query()->pending()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
             ->map(fn (Sale $sale): array => [
                 'date' => $sale->entry_date,
                 'quantity' => (float) $sale->quantity,
                 'note' => self::ledgerNote($sale->user?->name, $sale->note),
             ])
             ->merge(StockLoss::query()->pending()->where('item_id', $item->id)
-                ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
+                ->where('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
                 ->map(fn (StockLoss $loss): array => [
                     'date' => $loss->entry_date,
                     'quantity' => (float) $loss->quantity,
@@ -421,7 +421,7 @@ class InventoryService
                 ->where('item_id', $item->id)
                 ->whereHas('production', function ($query) use ($asOf): void {
                     $query->where('status', EntryStatus::Pending->value)
-                        ->whereDate('entry_date', '<=', $asOf);
+                        ->where('entry_date', '<=', $asOf);
                 })
                 ->with(['production.user'])->get()
                 ->map(fn (ProductionComponent $component): array => [
@@ -583,13 +583,13 @@ class InventoryService
     {
         return Purchase::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with('item')
             ->get()
             ->map(fn (Purchase $purchase): array => [
                 'kind' => 'purchase',
                 'id' => 'p'.$purchase->id,
-                'date' => $purchase->entry_date->format('Y-m-d'),
+                'date' => $purchase->entry_date->format('Y-m-d H:i:s'),
                 'order' => 0,
                 'item_id' => $purchase->item_id,
                 'qty_base' => ItemUnits::toBase((float) $purchase->quantity, $purchase->item->unit),
@@ -607,13 +607,13 @@ class InventoryService
     {
         return Expense::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->whereHas('expenseHead', fn ($query) => $query->where('cost_type', ExpenseCostType::Product->value))
             ->get()
             ->map(fn (Expense $expense): array => [
                 'kind' => 'product-expense',
                 'id' => 'e'.$expense->id,
-                'date' => $expense->entry_date->format('Y-m-d'),
+                'date' => $expense->entry_date->format('Y-m-d H:i:s'),
                 'order' => 1,
                 'amount' => (float) $expense->amount,
                 'item_id' => $expense->item_id,
@@ -631,14 +631,14 @@ class InventoryService
     {
         return Production::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with(['components.item', 'outputs.item'])
             ->get()
             ->map(fn (Production $production): array => [
                 'kind' => 'production',
                 'id' => 'pr'.$production->id,
                 'num' => $production->id,
-                'date' => $production->entry_date->format('Y-m-d'),
+                'date' => $production->entry_date->format('Y-m-d H:i:s'),
                 'order' => 2,
                 'extra_cost' => (float) $production->extra_cost,
                 'components' => $production->components
@@ -669,13 +669,13 @@ class InventoryService
     {
         return Sale::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with('item')
             ->get()
             ->map(fn (Sale $sale): array => [
                 'kind' => 'sale',
                 'id' => 's'.$sale->id,
-                'date' => $sale->entry_date->format('Y-m-d'),
+                'date' => $sale->entry_date->format('Y-m-d H:i:s'),
                 'order' => 3,
                 'item_id' => $sale->item_id,
                 'qty_base' => ItemUnits::toBase((float) $sale->quantity, $sale->item->unit),
@@ -693,13 +693,13 @@ class InventoryService
     {
         return StockLoss::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with('item')
             ->get()
             ->map(fn (StockLoss $loss): array => [
                 'kind' => 'stock-loss',
                 'id' => 'l'.$loss->id,
-                'date' => $loss->entry_date->format('Y-m-d'),
+                'date' => $loss->entry_date->format('Y-m-d H:i:s'),
                 'order' => 4,
                 'item_id' => $loss->item_id,
                 'qty_base' => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit),

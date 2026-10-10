@@ -21,8 +21,8 @@ class CommissionSettlement extends Model
     protected function casts(): array
     {
         return [
-            'period_start' => 'date',
-            'period_end' => 'date',
+            'period_start' => 'datetime',
+            'period_end' => 'datetime',
             'business_profit' => 'decimal:2',
             'commission_rate' => 'decimal:2',
             'amount' => 'decimal:2',

@@ -62,7 +62,7 @@
                             <div class="text-sm text-gray-500">📦 {{ $entry->item->name }}</div>
                         @endif
                         <div class="text-sm text-gray-500">
-                            📅 {{ \App\Support\DateFormats::date($entry->entry_date) }}
+                            📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}
                             🕐 {{ $entry->created_at->format(\App\Support\DateFormats::TIME) }}
                         </div>
                     </div>
@@ -141,19 +141,19 @@
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.amount') }}</label>
-                            <input type="number" name="amount" step="0.01" min="0" value="{{ $entry->amount }}" required
+                            <input type="text" inputmode="decimal" name="amount" step="0.01" min="0" value="{{ $entry->amount }}" required
                                    class="w-full border border-gray-300 rounded-lg px-3 py-3">
                         </div>
                     @else
                         <div class="grid grid-cols-2 gap-3">
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.quantity') }}</label>
-                                <input type="number" name="quantity" min="0.001" step="any" value="{{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}" required
+                                <input type="text" inputmode="decimal" name="quantity" min="0.001" step="any" value="{{ \App\Support\ItemUnits::formatQuantity((float) $entry->quantity) }}" required
                                        class="w-full border border-gray-300 rounded-lg px-3 py-3">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-500 mb-1">{{ __('messages.unit_price') }}</label>
-                                <input type="number" name="unit_price" step="0.01" min="0" value="{{ $entry->unit_price }}" required
+                                <input type="text" inputmode="decimal" name="unit_price" step="0.01" min="0" value="{{ $entry->unit_price }}" required
                                        class="w-full border border-gray-300 rounded-lg px-3 py-3">
                             </div>
                         </div>

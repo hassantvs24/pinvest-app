@@ -43,7 +43,7 @@
 
                 <div>
                     <label class="block text-sm font-medium mb-1">{{ __('messages.commission_rate') }}</label>
-                    <input type="number" name="commission_rate" step="0.01" min="0" max="100"
+                    <input type="text" inputmode="decimal" name="commission_rate" step="0.01" min="0" max="100"
                            value="{{ old('commission_rate', $partner->commission_rate ?? 0) }}" required
                            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     <p class="text-xs text-gray-500 mt-1">💡 {{ __('messages.partner_rate_hint') }}</p>
