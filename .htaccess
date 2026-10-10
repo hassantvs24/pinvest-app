@@ -3,12 +3,6 @@
 # whose DocumentRoot is the project root: it disables the directory
 # listing and forwards every request into public/.
 
-# Never serve project files directly (safety net when mod_rewrite is off):
-# dotfiles (.env, .gitignore, ...) and build/config metadata stay hidden.
-<FilesMatch "(^\.|\.(env|json|lock|md|log|sqlite|dist|yml|yaml)$)">
-    Require all denied
-</FilesMatch>
-
 Options -Indexes
 
 <IfModule mod_rewrite.c>
