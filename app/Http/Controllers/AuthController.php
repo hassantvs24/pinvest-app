@@ -31,7 +31,10 @@ class AuthController extends Controller
         $credentials = $request->validate([
             'identifier' => ['required', 'string'],
             'password' => ['required', 'string'],
+            'remember' => ['nullable', 'boolean'],
         ]);
+
+        $remember = $request->boolean('remember');
 
         $identifier = trim($credentials['identifier']);
         $field = str_contains($identifier, '@') ? 'email' : 'phone';
@@ -50,7 +53,7 @@ class AuthController extends Controller
                 ->withErrors(['identifier' => __('messages.invalid_credentials')]);
         }
 
-        Auth::login($user);
+        Auth::login($user, $remember);
 
         if (! $user->is_active) {
             Auth::logout();

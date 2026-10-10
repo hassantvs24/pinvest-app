@@ -29,6 +29,7 @@ return [
     'mobile_number' => 'Mobile number',
     'email' => 'Email',
     'password' => 'Password',
+    'remember_me' => 'Remember me',
     'confirm_password' => 'Confirm password',
     'name' => 'Name',
     'already_have_account' => 'Have an account? Login',

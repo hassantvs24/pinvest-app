@@ -34,6 +34,12 @@
                        class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
             </div>
 
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="remember" id="remember" value="1"
+                       class="w-5 h-5 rounded border-gray-300 text-emerald-700 focus:ring-emerald-500" {{ old('remember') ? 'checked' : '' }}>
+                <label for="remember" class="text-sm text-gray-700">{{ __('messages.remember_me') }}</label>
+            </div>
+
             <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg rounded-lg py-3">
                 🚪 {{ __('messages.login') }}
             </button>

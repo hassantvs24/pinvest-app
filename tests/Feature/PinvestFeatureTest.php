@@ -56,6 +56,20 @@ it('logs in with email or mobile number', function (): void {
     $this->assertAuthenticatedAs($user);
 });
 
+it('queues a remember cookie only when remember me is checked', function (): void {
+    makeUser(['email' => 'r@b.com', 'phone' => '01700000003', 'password' => 'secret123']);
+    $recaller = auth()->guard()->getRecallerName();
+
+    // Without the checkbox: no remember cookie.
+    $this->post('/login', ['identifier' => 'r@b.com', 'password' => 'secret123'])
+        ->assertCookieMissing($recaller);
+    $this->post('/logout');
+
+    // With the checkbox: long-lived remember cookie is queued.
+    $this->post('/login', ['identifier' => 'r@b.com', 'password' => 'secret123', 'remember' => '1'])
+        ->assertCookie($recaller);
+});
+
 it('renders guest pages in Bangla by default and honors the saved preference', function (): void {
     // Guests (login/register) see Bangla, not English.
     $this->get('/login')

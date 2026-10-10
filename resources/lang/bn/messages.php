@@ -29,6 +29,7 @@ return [
     'mobile_number' => 'মোবাইল নম্বর',
     'email' => 'ইমেইল',
     'password' => 'পাসওয়ার্ড',
+    'remember_me' => 'আমাকে মনে রাখুন',
     'confirm_password' => 'পাসওয়ার্ড নিশ্চিত করুন',
     'name' => 'নাম',
     'already_have_account' => 'অ্যাকাউন্ট আছে? লগইন করুন',
