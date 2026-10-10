@@ -2,11 +2,13 @@
 <html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{{ config('app.name') }} — @yield('title', __('messages.dashboard'))</title>
     {{-- Tailwind CSS (CDN) + local jQuery — icon/avatars are offline SVG --}}
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="{{ asset('js/jquery.min.js') }}"></script>
+    {{-- Android APK (Capacitor) native feel: no-op in normal browsers --}}
+    <script src="{{ asset('js/capacitor-native.js') }}"></script>
     <link rel="icon" type="image/svg+xml" href="{{ asset('icon.svg') }}">
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; }
@@ -15,7 +17,7 @@
 <body class="bg-gray-100 text-gray-800 pb-20 md:pb-6">
 
     {{-- ===================== Sticky top header ===================== --}}
-    <header class="sticky top-0 z-40 bg-emerald-700 text-white shadow">
+    <header class="sticky top-0 z-40 bg-emerald-700 text-white shadow pt-[env(safe-area-inset-top)]">
         <div class="max-w-6xl mx-auto px-4">
             <div class="flex items-center justify-between h-14">
                 <a href="{{ route('dashboard') }}" class="flex items-center gap-2 font-bold text-lg">
@@ -89,7 +91,7 @@
     </main>
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
-    <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg">
+    <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg pb-[env(safe-area-inset-bottom)]">
         <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-8' : 'grid-cols-4' }} text-center text-xs">
             <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                 <div class="text-xl">🏠</div>{{ __('messages.home') }}

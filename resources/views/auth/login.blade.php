@@ -2,7 +2,7 @@
 <html lang="{{ app()->getLocale() }}">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{{ config('app.name') }} — {{ __('messages.login') }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>body { font-family: system-ui, -apple-system, sans-serif; }</style>
@@ -44,5 +44,7 @@
         </p>
     </div>
 
+    {{-- Android APK (Capacitor) native feel: no-op in normal browsers --}}
+    <script src="{{ asset('js/capacitor-native.js') }}"></script>
 </body>
 </html>
