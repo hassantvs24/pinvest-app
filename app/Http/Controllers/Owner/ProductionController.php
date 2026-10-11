@@ -231,6 +231,21 @@ class ProductionController extends Controller
     {
         abort_unless($this->cycleOpen(), 409);
 
+        // Refund the partner's held cash before deleting a confirmed run
+        // — the labour auto-spent movement stays in the immutable ledger,
+        // so the custody side must be given back to keep both in sync.
+        if ($production->status === EntryStatus::Confirmed
+            && ! $production->user->isOwner()
+            && (float) $production->extra_cost > 0) {
+            PartnerCashMovement::query()->create([
+                'user_id' => $production->user_id,
+                'type' => CashMovementType::Hold,
+                'amount' => (float) $production->extra_cost,
+                'note' => __('messages.custody_delete_refund', ['id' => $production->id]),
+                'occurred_at' => $production->entry_date,
+            ]);
+        }
+
         $production->delete();
 
         return back()->with('success', __('messages.production_deleted'));

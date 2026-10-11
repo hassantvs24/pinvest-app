@@ -435,6 +435,8 @@ return [
     'cash_adjustment_subtract' => 'Decrease (−)',
     'cash_adjustment_add' => 'Increase (+)',
     'cash_adjustment_note' => 'Cash adjustment (:sign:amount)',
+    'custody_correction_note' => 'Entry #id edited (:sign:amount)',
+    'custody_delete_refund' => 'Entry #id deleted (cash back to custody)',
     'partner_cash_spent_help' => 'Adjust the cash figure a partner holds. Pick the direction: "Decrease (−)" when the held cash shows too much, "Increase (+)" when too little — e.g. old entries from before auto-spending, or fixing a mistake. Normal purchases/expenses AND production labour deduct automatically on approval — nothing to enter here; use "Give" for new cash handed over.',
     'partner_cash_adjust' => 'Settle commission from held cash',
     'partner_cash_adjust_help' => 'Marks the commission as paid with money the partner already holds — no cash leaves the drawer. The FULL amount is settled; return any remainder separately.',

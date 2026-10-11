@@ -41,14 +41,18 @@
         $tabCount = $pendingSettlements->isNotEmpty() ? 4 : 3;
         $gridClass = $tabCount === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3';
         $tabs = [
-            ['id' => 'hold', 'icon' => '➕', 'label' => __('messages.partner_cash_tab_hold'), 'errorKey' => null],
-            ['id' => 'return', 'icon' => '⤵️', 'label' => __('messages.partner_cash_tab_return'), 'errorKey' => null],
-            ['id' => 'spent', 'icon' => '🧾', 'label' => __('messages.partner_cash_tab_spent'), 'errorKey' => null],
+            ['id' => 'hold', 'icon' => '➕', 'label' => __('messages.partner_cash_tab_hold')],
+            ['id' => 'return', 'icon' => '⤵️', 'label' => __('messages.partner_cash_tab_return')],
+            ['id' => 'spent', 'icon' => '🧾', 'label' => __('messages.partner_cash_tab_spent')],
         ];
         if ($pendingSettlements->isNotEmpty()) {
-            $tabs[] = ['id' => 'adjust', 'icon' => '🤝', 'label' => __('messages.partner_cash_tab_adjust'), 'errorKey' => 'commission_settlement_id'];
+            $tabs[] = ['id' => 'adjust', 'icon' => '🤝', 'label' => __('messages.partner_cash_tab_adjust')];
         }
-        $activeTab = collect($tabs)->first(fn ($t) => $t['errorKey'] && $errors->has($t['errorKey']))['id'] ?? 'hold';
+        // After a failed submit, reopen the tab the owner was on: the
+        // commission form is the only one with its own error field; the
+        // cash-adjustment form is identified by its direction select.
+        $activeTab = $errors->has('commission_settlement_id') ? 'adjust'
+            : (old('direction') !== null ? 'spent' : 'hold');
         $tabBtnActive = 'bg-cyan-600 text-white';
         $tabBtnInactive = 'bg-gray-100 text-gray-600 hover:bg-gray-200';
     @endphp
@@ -78,7 +82,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">{{ __('messages.amount') }}</label>
-                    <input type="text" inputmode="decimal" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
+                    <input type="number" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
                            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg">
                 </div>
                 <div>
@@ -111,7 +115,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">{{ __('messages.amount') }}</label>
-                    <input type="text" inputmode="decimal" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
+                    <input type="number" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
                            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg">
                 </div>
                 <div>
@@ -151,7 +155,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">{{ __('messages.amount') }}</label>
-                    <input type="text" inputmode="decimal" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
+                    <input type="number" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
                            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg">
                 </div>
                 <div>

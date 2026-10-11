@@ -350,6 +350,11 @@ class EntryController extends Controller
             return back()->with('error', $locked);
         }
 
+        // Capture the pre-edit total so a confirmed spending entry can
+        // sync the partner custody ledger afterwards (the auto-spent
+        // movement keeps its original amount — the delta is compensated).
+        $oldTotal = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+
         if ($type === 'expenses') {
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:expense_heads,id'],
@@ -407,7 +412,43 @@ class EntryController extends Controller
             ]);
         }
 
+        $this->syncCustodyOnEdit($type, $model, $oldTotal);
+
         return back()->with('success', __('messages.entry_updated'));
+    }
+
+    /**
+     * When a CONFIRMED spending entry's amount changed, the auto-spent
+     * movement still carries the original amount. Record the delta as a
+     * compensating movement so the partner custody ledger keeps matching
+     * the business cash. Owner-owned entries have no custody — skipped.
+     */
+    private function syncCustodyOnEdit(string $type, Model $model, float $oldTotal): void
+    {
+        if (! in_array($type, ['purchases', 'expenses'], true)
+            || $model->status !== EntryStatus::Confirmed
+            || $model->user->isOwner()) {
+            return;
+        }
+
+        $newTotal = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+        $delta = round($newTotal - $oldTotal, 2);
+
+        if (abs($delta) < 0.005) {
+            return;
+        }
+
+        PartnerCashMovement::query()->create([
+            'user_id' => $model->user_id,
+            'type' => $delta > 0 ? CashMovementType::Spent : CashMovementType::Hold,
+            'amount' => abs($delta),
+            'note' => __('messages.custody_correction_note', [
+                'id' => $model->id,
+                'sign' => $delta > 0 ? '+' : '−',
+                'amount' => number_format(abs($delta), 2),
+            ]),
+            'occurred_at' => $model->entry_date,
+        ]);
     }
 
     /**
@@ -421,13 +462,34 @@ class EntryController extends Controller
             return back()->with('warning', __('messages.confirm_blocked_no_period'));
         }
 
-        $locked = $this->closedCycleEntryError($this->findEntry($type, $entry));
+        $model = $this->findEntry($type, $entry);
+
+        $locked = $this->closedCycleEntryError($model);
 
         if ($locked !== null) {
             return back()->with('error', $locked);
         }
 
-        $this->findEntry($type, $entry)->delete();
+        // Give the held cash back before deleting a confirmed spending
+        // entry — the auto-spent movement stays in the immutable ledger,
+        // so the custody side must be refunded to keep both in sync.
+        if (in_array($type, ['purchases', 'expenses'], true)
+            && $model->status === EntryStatus::Confirmed
+            && ! $model->user->isOwner()) {
+            $amount = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+
+            if ($amount > 0) {
+                PartnerCashMovement::query()->create([
+                    'user_id' => $model->user_id,
+                    'type' => CashMovementType::Hold,
+                    'amount' => $amount,
+                    'note' => __('messages.custody_delete_refund', ['id' => $model->id]),
+                    'occurred_at' => $model->entry_date,
+                ]);
+            }
+        }
+
+        $model->delete();
 
         return back()->with('success', __('messages.entry_deleted'));
     }

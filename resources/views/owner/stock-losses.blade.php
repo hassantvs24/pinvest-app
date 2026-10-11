@@ -26,7 +26,7 @@
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }}</label>
-                        <input type="text" inputmode="decimal" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
+                        <input type="number" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
                                class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                     </div>
                     <div>

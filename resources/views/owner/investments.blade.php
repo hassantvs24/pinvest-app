@@ -15,7 +15,7 @@
             @csrf
             <div>
                 <label class="block text-sm font-medium mb-1">{{ __('messages.amount') }}</label>
-                <input type="text" inputmode="decimal" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
+                <input type="number" name="amount" step="0.01" min="0.01" value="{{ old('amount') }}" required
                        class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg">
             </div>
             <div>

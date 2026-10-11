@@ -49,7 +49,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-medium text-gray-500 mb-1">💰 {{ __('messages.opening_investment') }} {{ __('messages.optional') }}</label>
-                    <input type="text" inputmode="decimal" name="investment_amount" step="0.01" min="0.01" value="{{ old('investment_amount') }}"
+                    <input type="number" name="investment_amount" step="0.01" min="0.01" value="{{ old('investment_amount') }}"
                            class="w-full border border-gray-300 rounded-lg px-3 py-3">
                 </div>
                 <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2">💡 {{ __('messages.opening_investment_hint') }}</p>
