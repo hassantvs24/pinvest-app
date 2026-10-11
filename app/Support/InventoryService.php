@@ -11,6 +11,7 @@ use App\Models\ProductionComponent;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\StockLoss;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -58,6 +59,108 @@ class InventoryService
     public static function stockLossCost(Carbon $from, Carbon $to): float
     {
         return self::simulate($from, $to)['loss_cost'];
+    }
+
+    /**
+     * COGS and stock-loss cost per month (keyed by 'Y-m') for confirmed
+     * sales/losses whose entry date falls inside the given moments. Both
+     * buckets come from ONE simulation trace, so each sale is costed at
+     * its own date's moving average cost.
+     *
+     * @return array<string, array{cogs: float, stock_loss: float}>
+     */
+    public static function monthlyCosts(Carbon $from, Carbon $to): array
+    {
+        $fromPrefix = $from->format('Y-m-d H:i:s');
+        $buckets = [];
+
+        foreach (self::simulate(null, $to)['trace'] as $entry) {
+            $sort = $entry['sort'];
+
+            if (substr($sort, 0, 19) < $fromPrefix) {
+                continue;
+            }
+
+            $month = substr($sort, 0, 7);
+            $id = substr($sort, (int) strrpos($sort, '|') + 1);
+
+            if (str_starts_with($id, 's')) {
+                $buckets[$month]['cogs'] = ($buckets[$month]['cogs'] ?? 0.0) + $entry['cost'];
+            } elseif (str_starts_with($id, 'l')) {
+                $buckets[$month]['stock_loss'] = ($buckets[$month]['stock_loss'] ?? 0.0) + $entry['cost'];
+            }
+        }
+
+        return $buckets;
+    }
+
+    /**
+     * Sales, COGS and gross profit per item for confirmed sales between
+     * the given moments (inclusive). Each sale is costed at its own
+     * date's moving average cost (from the simulation trace), so margins
+     * stay accurate even when costs change over time.
+     *
+     * @return Collection<int, array{name: string, unit: string, quantity: float, sales: float, cogs: float, margin: float, margin_rate: float}>
+     */
+    public static function itemSalesPerformance(?Carbon $from = null, ?Carbon $to = null): Collection
+    {
+        $to ??= now();
+
+        $sales = Sale::query()
+            ->confirmed()
+            ->with('item')
+            ->when($from, fn (Builder $query) => $query->where('entry_date', '>=', $from))
+            ->where('entry_date', '<=', $to)
+            ->get();
+
+        if ($sales->isEmpty()) {
+            return collect();
+        }
+
+        $fromPrefix = $from?->format('Y-m-d H:i:s');
+        $costBySale = [];
+
+        foreach (self::simulate(null, $to)['trace'] as $entry) {
+            $sort = $entry['sort'];
+
+            if ($fromPrefix !== null && substr($sort, 0, 19) < $fromPrefix) {
+                continue;
+            }
+
+            $id = substr($sort, (int) strrpos($sort, '|') + 1);
+
+            if (str_starts_with($id, 's')) {
+                $costBySale[(int) substr($id, 1)] = $entry['cost'];
+            }
+        }
+
+        return $sales
+            ->groupBy('item_id')
+            ->map(function (Collection $group) use ($costBySale): array {
+                $salesTotal = 0.0;
+                $cogs = 0.0;
+                $quantity = 0.0;
+
+                foreach ($group as $sale) {
+                    $salesTotal += (float) $sale->total;
+                    $cogs += $costBySale[$sale->id] ?? 0.0;
+                    $quantity += (float) $sale->quantity;
+                }
+
+                $margin = $salesTotal - $cogs;
+
+                return [
+                    'name' => $group->first()->item->name ?? '—',
+                    'unit' => ItemUnits::label($group->first()->item->unit ?? null),
+                    'quantity' => $quantity,
+                    'sales' => $salesTotal,
+                    'cogs' => $cogs,
+                    'margin' => $margin,
+                    'margin_rate' => $salesTotal > 0.0 ? $margin / $salesTotal : 0.0,
+                ];
+            })
+            ->sortByDesc('sales')
+            ->values();
     }
 
     /**

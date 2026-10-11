@@ -63,6 +63,38 @@
         </div>
     @endif
 
+    {{-- Business health: what needs your attention --}}
+    <h2 class="section-title"><x-icon name="sparkles" class="w-5 h-5 text-emerald-600" /> {{ __('messages.business_health') }}</h2>
+    <div class="space-y-2 mb-6">
+        @foreach($insights as $insight)
+            @php
+                $toneClasses = [
+                    'danger' => 'border-l-red-500 bg-red-50',
+                    'warning' => 'border-l-amber-400 bg-amber-50',
+                    'success' => 'border-l-emerald-500 bg-emerald-50',
+                ];
+                $toneIcon = [
+                    'danger' => 'text-red-600',
+                    'warning' => 'text-amber-600',
+                    'success' => 'text-emerald-600',
+                ];
+            @endphp
+            <div class="card border-l-4 {{ $toneClasses[$insight['tone']] }} py-2.5">
+                <div class="flex items-start justify-between gap-3 text-sm">
+                    <div class="flex items-start gap-2">
+                        <x-icon :name="$insight['icon']" class="w-4 h-4 mt-0.5 {{ $toneIcon[$insight['tone']] }}" />
+                        <span class="{{ $insight['tone'] === 'danger' ? 'font-semibold text-red-800' : ($insight['tone'] === 'warning' ? 'text-amber-800' : 'text-emerald-800') }}">{{ $insight['message'] }}</span>
+                    </div>
+                    @if(!empty($insight['link']))
+                        <a href="{{ $insight['link'] }}" class="shrink-0 flex items-center gap-1 font-bold {{ $insight['tone'] === 'danger' ? 'text-red-700' : ($insight['tone'] === 'warning' ? 'text-amber-700' : 'text-emerald-700') }}">
+                            {{ $insight['link_label'] }} <x-icon name="arrow-right" class="w-3.5 h-3.5" />
+                        </a>
+                    @endif
+                </div>
+            </div>
+        @endforeach
+    </div>
+
     {{-- 1. Business summary for the period --}}
     <p class="text-xs text-gray-500 mb-3 flex items-start gap-1.5">
         <x-icon name="information-circle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.reports_intro_hint') }}
@@ -86,6 +118,78 @@
         <x-stat-card :label="__('messages.stock_loss')" :value="\App\Support\Money::format($stats['stock_loss'])" icon="arrow-trending-down" color="red" />
         <x-stat-card :label="__('messages.cash_in_hand').' ('.__('messages.all_time').')'" :value="\App\Support\Money::format($lifetimeCashInHand)" icon="building-library" color="emerald" />
     </div>
+
+    {{-- Key performance ratios --}}
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div class="card py-3">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('messages.profit_margin') }}</div>
+            <div class="text-xl font-extrabold {{ $ratios['profit_margin'] === null ? 'text-gray-400' : ($ratios['profit_margin'] >= 0 ? 'text-emerald-600' : 'text-red-600') }}">
+                {{ $ratios['profit_margin'] === null ? '—' : number_format($ratios['profit_margin'], 1).'%' }}
+            </div>
+            <div class="text-xs text-gray-500">{{ __('messages.profit_margin_hint') }}</div>
+        </div>
+        <div class="card py-3">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('messages.expense_ratio') }}</div>
+            <div class="text-xl font-extrabold {{ $ratios['expense_ratio'] === null ? 'text-gray-400' : ($ratios['expense_ratio'] <= 30 ? 'text-emerald-600' : 'text-amber-600') }}">
+                {{ $ratios['expense_ratio'] === null ? '—' : number_format($ratios['expense_ratio'], 1).'%' }}
+            </div>
+            <div class="text-xs text-gray-500">{{ __('messages.expense_ratio_hint') }}</div>
+        </div>
+        <div class="card py-3">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('messages.stock_months') }}</div>
+            <div class="text-xl font-extrabold {{ $ratios['stock_months'] === null ? 'text-gray-400' : ($ratios['stock_months'] <= 3 ? 'text-emerald-600' : 'text-amber-600') }}">
+                {{ $ratios['stock_months'] === null ? '—' : number_format($ratios['stock_months'], 1) }}
+            </div>
+            <div class="text-xs text-gray-500">{{ __('messages.stock_months_hint') }}</div>
+        </div>
+        <div class="card py-3">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-500">{{ __('messages.cash_after_commission') }}</div>
+            <div class="text-xl font-extrabold {{ $ratios['cash_after_commission'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                {{ \App\Support\Money::format($ratios['cash_after_commission']) }}
+            </div>
+            <div class="text-xs text-gray-500">{{ __('messages.cash_after_commission_hint') }}</div>
+        </div>
+    </div>
+
+    {{-- 6-month growth trend --}}
+    @if($trend->isNotEmpty())
+        <h2 class="section-title"><x-icon name="arrow-trending-up" class="w-5 h-5 text-emerald-600" /> {{ __('messages.six_month_trend') }}</h2>
+        <div class="card mb-6 overflow-hidden p-0">
+            <ul class="divide-y divide-gray-100">
+                @foreach($trend as $month)
+                    <li class="px-4 py-3">
+                        <div class="flex items-center justify-between gap-2 text-sm mb-1">
+                            <span class="font-bold text-gray-700">{{ $month['label'] }}</span>
+                            <div class="flex items-center gap-3 text-xs">
+                                <span class="text-blue-700 font-semibold">{{ __('messages.sales_short') }} {{ \App\Support\Money::format($month['sales']) }}</span>
+                                <span class="{{ $month['profit_negative'] ? 'text-red-600' : 'text-emerald-700' }} font-semibold">
+                                    {{ __('messages.profit_short') }} {{ \App\Support\Money::format($month['profit']) }}
+                                </span>
+                                @if($month['margin_rate'] !== null)
+                                    <span class="text-gray-500">{{ number_format($month['margin_rate'] * 100, 1) }}%</span>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                <div class="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500" style="width: {{ $month['sales_bar'] }}%"></div>
+                            </div>
+                            <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                                <div class="h-full rounded-full {{ $month['profit_negative'] ? 'bg-gradient-to-r from-red-500 to-rose-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500' }}" style="width: {{ $month['profit_bar'] }}%"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span><x-icon name="shopping-cart" class="w-3 h-3" /> {{ \App\Support\Money::format($month['purchase']) }}</span>
+                                <span><x-icon name="currency-dollar" class="w-3 h-3" /> {{ \App\Support\Money::format($month['expense']) }}</span>
+                            </div>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+            <div class="px-4 py-2 bg-gray-50 text-xs text-gray-500 border-t border-gray-100 flex items-center gap-2 flex-wrap">
+                <x-icon name="information-circle" class="w-3.5 h-3.5" /> {{ __('messages.trend_hint') }}
+            </div>
+        </div>
+    @endif
 
     {{-- 2. Investment report --}}
     <h2 class="section-title"><x-icon name="banknotes" class="w-5 h-5 text-emerald-600" /> {{ __('messages.investment_report') }}</h2>
@@ -118,14 +222,24 @@
             <span class="font-bold flex items-center gap-1.5"><x-icon name="banknotes" class="w-4 h-4 text-blue-600" /> {{ __('messages.total_sales') }}</span>
             <span class="font-bold">{{ \App\Support\Money::format($stats['sales']) }}</span>
         </div>
-        @if($salesByItem->isEmpty())
+        @if($productPerformance->isEmpty())
             <div class="px-4 py-6 text-center text-gray-500">{{ __('messages.no_entries') }}</div>
         @else
             <ul class="divide-y divide-gray-100">
-                @foreach($salesByItem as $row)
-                    <li class="px-4 py-2 flex items-center justify-between gap-2 text-sm">
-                        <div>{{ $row['name'] }} <span class="text-gray-500">{{ $row['quantity'] }} {{ $row['unit'] }}</span></div>
-                        <div class="font-bold shrink-0">{{ \App\Support\Money::format($row['total']) }}</div>
+                @foreach($productPerformance as $row)
+                    <li class="px-4 py-2.5">
+                        <div class="flex items-center justify-between gap-2 text-sm">
+                            <div class="min-w-0">
+                                <span class="font-medium">{{ $row['name'] }}</span>
+                                <span class="text-gray-500">{{ \App\Support\ItemUnits::formatQuantity($row['quantity']) }} {{ $row['unit'] }}</span>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <div class="font-bold">{{ \App\Support\Money::format($row['sales']) }}</div>
+                                <div class="text-xs {{ $row['margin'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">
+                                    {{ __('messages.profit_short') }} {{ \App\Support\Money::format($row['margin']) }} · {{ number_format($row['margin_rate'] * 100, 1) }}%
+                                </div>
+                            </div>
+                        </div>
                     </li>
                 @endforeach
             </ul>

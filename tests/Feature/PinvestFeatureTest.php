@@ -739,6 +739,53 @@ it('shows commission due per partner on the report (pending settlements)', funct
         ->assertSee('৳150.00'); // total earned
 });
 
+it('shows business health insights and per-product profit on the report', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000010']);
+    $item = Item::factory()->create(['name' => 'Gold ring']);
+
+    Purchase::factory()->create([
+        'item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 100,
+        'total' => 100,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDays(2),
+    ]);
+
+    Sale::factory()->create([
+        'user_id' => $partner->id,
+        'item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 120,
+        'total' => 120,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDay(),
+    ]);
+
+    CommissionSettlement::factory()->create([
+        'user_id' => $partner->id,
+        'amount' => 200,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($owner)->get('/owner/reports')
+        ->assertOk()
+        ->assertSee(__('messages.business_health'))
+        ->assertSee(__('messages.insight_commission_over_cash', ['due' => '৳200.00', 'cash' => '৳20.00']), escape: false)
+        ->assertSee('Gold ring')
+        ->assertSee('৳20.00 · 16.7%') // per-product gross profit 120 − 100
+        ->assertSee(__('messages.six_month_trend'));
+});
+
+it('shows an all-good insight when the business has no issues', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@y.com', 'phone' => '01900000001']);
+
+    $this->actingAs($owner)->get('/owner/reports')
+        ->assertOk()
+        ->assertSee(__('messages.insight_all_good'), escape: false);
+});
+
 it('stores item units and rejects invalid ones', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
 
