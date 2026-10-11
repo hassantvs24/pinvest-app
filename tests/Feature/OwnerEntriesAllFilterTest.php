@@ -60,9 +60,9 @@ it('shows entries of every type by default with the all option selected', functi
         // Newest entry first across the merged types.
         ->assertSeeInOrder(['ভাড়া ALLTEST', 'লবণ ALLTEST', 'চিনি ALLTEST'])
         // Each card carries its own type badge for the mixed list.
-        ->assertSee('💸 খরচ', escape: false)
-        ->assertSee('🛒 ক্রয়', escape: false)
-        ->assertSee('💰 বিক্রি', escape: false);
+        ->assertSee('খরচ', escape: false)
+        ->assertSee('ক্রয়', escape: false)
+        ->assertSee('বিক্রি', escape: false);
 });
 
 it('applies status and partner filters across all types', function (): void {

@@ -3,10 +3,12 @@
 @section('title', $head->name.' — '.__('messages.expense_heads_page'))
 
 @section('content')
-    <a href="{{ route('owner.expense-heads.index') }}" class="inline-block text-sm text-gray-600 mb-3">⬅️ {{ __('messages.back') }}</a>
+    <a href="{{ route('owner.expense-heads.index') }}" class="inline-flex items-center gap-1.5 text-sm text-gray-600 mb-3">
+        <x-icon name="arrow-left" class="w-4 h-4" /> {{ __('messages.back') }}
+    </a>
 
     {{-- Head summary --}}
-    <div class="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between gap-2">
+    <div class="card mb-4 flex items-center justify-between gap-2">
         <div>
             <h1 class="text-lg font-bold">{{ $head->name }}</h1>
             <span class="text-xs px-1.5 py-0.5 rounded {{ $head->cost_type->value === 'product' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600' }}">
@@ -25,24 +27,26 @@
 
     {{-- Pending expenses: not counted in the totals yet --}}
     @if($pending->isNotEmpty())
-        <div class="bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-xl px-4 py-3 mb-4 text-sm">
-            <div class="font-bold mb-1">⏳ {{ __('messages.pending_expenses') }}</div>
-            <ul class="space-y-0.5">
-                @foreach($pending as $expense)
-                    <li>
-                        📅 {{ \App\Support\DateFormats::dateTime($expense->entry_date) }}
-                        − {{ \App\Support\Money::format((float) $expense->amount) }}
-                        @if($expense->user)・{{ $expense->user->name }}@endif
-                        @if($expense->note) <span class="text-xs">({{ $expense->note }})</span>@endif
-                    </li>
-                @endforeach
-            </ul>
+        <div class="alert-warning mb-4">
+            <div>
+                <div class="font-bold mb-1 flex items-center gap-1.5"><x-icon name="clock" class="w-4 h-4" /> {{ __('messages.pending_expenses') }}</div>
+                <ul class="space-y-0.5">
+                    @foreach($pending as $expense)
+                        <li>
+                            <x-icon name="calendar-days" class="w-3.5 h-3.5" /> {{ \App\Support\DateFormats::dateTime($expense->entry_date) }}
+                            − {{ \App\Support\Money::format((float) $expense->amount) }}
+                            @if($expense->user)・{{ $expense->user->name }}@endif
+                            @if($expense->note) <span class="text-xs">({{ $expense->note }})</span>@endif
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
         </div>
     @endif
 
     {{-- Ledger entries --}}
-    <h2 class="font-bold text-lg mb-2">📒 {{ __('messages.expense_heads_page') }}</h2>
-    <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
+    <h2 class="section-title"><x-icon name="queue-list" class="w-5 h-5 text-emerald-600" /> {{ __('messages.expense_heads_page') }}</h2>
+    <div class="card mb-6 overflow-hidden p-0">
         @if($rows->isEmpty())
             <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_entries') }}</p>
         @else
@@ -50,10 +54,10 @@
                 @foreach($rows as $expense)
                     <li class="px-4 py-2 text-sm flex items-center justify-between gap-2">
                         <div class="min-w-0">
-                            <span class="text-gray-500">📅 {{ \App\Support\DateFormats::dateTime($expense->entry_date) }}</span>
+                            <span class="text-gray-500 flex items-center gap-1.5"><x-icon name="calendar-days" class="w-3.5 h-3.5" /> {{ \App\Support\DateFormats::dateTime($expense->entry_date) }}</span>
                             @if($expense->user)<span class="text-xs text-gray-500">{{ $expense->user->name }}</span>@endif
                             @if($expense->item)
-                                <span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">📦 {{ $expense->item->name }}</span>
+                                <span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700"><x-icon name="cube" class="w-3 h-3" /> {{ $expense->item->name }}</span>
                             @endif
                             @if($expense->note)<span class="text-xs text-gray-500">{{ $expense->note }}</span>@endif
                         </div>

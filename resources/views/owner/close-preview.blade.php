@@ -4,33 +4,49 @@
 
 @section('content')
     <div class="max-w-xl mx-auto">
-        <a href="{{ route('owner.commissions.index') }}" class="inline-block text-sm text-gray-600 mb-3">⬅️ {{ __('messages.back') }}</a>
+        <a href="{{ route('owner.commissions.index') }}" class="inline-flex items-center gap-1.5 text-sm text-gray-600 mb-3">
+            <x-icon name="arrow-left" class="w-4 h-4" /> {{ __('messages.back') }}
+        </a>
 
-        <div class="bg-white rounded-2xl shadow-lg p-5">
-            <h1 class="text-xl font-bold mb-1">🔒 {{ __('messages.close_summary') }}</h1>
-            <p class="text-sm text-gray-500 mb-4">
+        <div class="card p-5">
+            <h1 class="text-xl font-bold mb-1 flex items-center gap-2">
+                <x-icon name="lock-closed" class="w-6 h-6 text-emerald-600" /> {{ __('messages.close_summary') }}
+            </h1>
+            <p class="text-sm text-gray-500 mb-4 flex items-center gap-1.5 flex-wrap">
                 {{ $period->label ?: $period->opened_at->format('M Y') }} —
-                📅 {{ \App\Support\DateFormats::dateTime($period->opened_at) }} → {{ \App\Support\DateFormats::dateTime($closedAt) }}
+                <x-icon name="calendar-days" class="w-4 h-4" /> {{ \App\Support\DateFormats::dateTime($period->opened_at) }} → {{ \App\Support\DateFormats::dateTime($closedAt) }}
             </p>
 
             {{-- Blocking panel: unapproved entries must be resolved first --}}
             @if($pendingEntries->isNotEmpty())
-                <div class="bg-yellow-50 border border-yellow-400 rounded-xl p-4 mb-4">
-                    <div class="font-bold text-yellow-900 mb-1">🚫 {{ __('messages.unapproved_entries') }} ({{ $pendingEntries->count() }})</div>
-                    <p class="text-sm text-yellow-800 mb-2">
+                <div class="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-4">
+                    <div class="font-bold text-amber-900 mb-1 flex items-center gap-1.5">
+                        <x-icon name="shield-exclamation" class="w-5 h-5" /> {{ __('messages.unapproved_entries') }} ({{ $pendingEntries->count() }})
+                    </div>
+                    <p class="text-sm text-amber-800 mb-2">
                         {{ trans_choice(__('messages.close_blocked_pending'), $pendingEntries->count(), ['count' => $pendingEntries->count()]) }}
                     </p>
-                    <ul class="divide-y divide-yellow-200 text-sm">
+                    <ul class="divide-y divide-amber-200 text-sm">
                         @foreach($pendingEntries as $entry)
+                            @php
+                                $entryIcon = match (true) {
+                                    $entry instanceof \App\Models\Expense => 'currency-dollar',
+                                    $entry instanceof \App\Models\Purchase => 'shopping-cart',
+                                    $entry instanceof \App\Models\Sale => 'banknotes',
+                                    $entry instanceof \App\Models\Production => 'building-office-2',
+                                    $entry instanceof \App\Models\StockLoss => 'arrow-trending-down',
+                                    default => 'document-text',
+                                };
+                            @endphp
                             <li class="py-2 flex items-center justify-between gap-2">
                                 <div class="min-w-0">
-                                    <div class="font-medium">
-                                        {{ $entry->type_icon }} {{ $entry->type_label }}
+                                    <div class="font-medium flex items-center gap-1.5">
+                                        <x-icon :name="$entryIcon" class="w-4 h-4 text-gray-400" /> {{ $entry->type_label }}
                                         · {{ $entry->type_item_name ?? $entry->{$entry->type_item_relation}->name ?? '—' }}
                                     </div>
-                                    <div class="text-xs text-gray-600">
+                                    <div class="text-xs text-gray-600 flex items-center gap-1.5">
                                         <span class="inline-flex items-center gap-1.5"><x-avatar :user="$entry->user" size="20" /> {{ $entry->user->name }}</span>
-                                        · 📅 {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}
+                                        · <x-icon name="calendar-days" class="w-3.5 h-3.5" /> {{ \App\Support\DateFormats::dateTime($entry->entry_date) }}
                                     </div>
                                 </div>
                                 <div class="font-bold shrink-0">{{ \App\Support\Money::format((float) ($entry->amount ?? $entry->total)) }}</div>
@@ -43,40 +59,42 @@
             {{-- Period breakdown: sales / COGS / purchases / expenses / stock --}}
             <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 mb-4 text-sm">
                 <li class="px-4 py-2 flex items-center justify-between">
-                    <span>💰 {{ __('messages.total_sales') }}</span>
+                    <span class="flex items-center gap-1.5"><x-icon name="banknotes" class="w-4 h-4 text-emerald-600" /> {{ __('messages.total_sales') }}</span>
                     <span class="font-bold text-emerald-700">{{ \App\Support\Money::format($stats['sales']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
-                    <span>🏷️ {{ __('messages.cost_of_goods_sold') }}</span>
+                    <span class="flex items-center gap-1.5"><x-icon name="tag" class="w-4 h-4 text-indigo-600" /> {{ __('messages.cost_of_goods_sold') }}</span>
                     <span class="font-bold text-indigo-700">−{{ \App\Support\Money::format($stats['cogs']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
-                    <span>🛒 {{ __('messages.total_purchase') }} <span class="text-xs text-gray-400">({{ __('messages.cash_reference') }})</span></span>
+                    <span class="flex items-center gap-1.5"><x-icon name="shopping-cart" class="w-4 h-4 text-orange-600" /> {{ __('messages.total_purchase') }} <span class="text-xs text-gray-400">({{ __('messages.cash_reference') }})</span></span>
                     <span class="font-bold text-orange-700">{{ \App\Support\Money::format($stats['purchase']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
-                    <span>📦 {{ __('messages.product_expense') }}</span>
+                    <span class="flex items-center gap-1.5"><x-icon name="cube" class="w-4 h-4 text-violet-600" /> {{ __('messages.product_expense') }}</span>
                     <span class="font-bold text-violet-700">{{ \App\Support\Money::format($stats['product_expense']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
-                    <span>🧾 {{ __('messages.general_expense') }}</span>
+                    <span class="flex items-center gap-1.5"><x-icon name="document-text" class="w-4 h-4 text-rose-600" /> {{ __('messages.general_expense') }}</span>
                     <span class="font-bold text-red-700">−{{ \App\Support\Money::format($stats['expense']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between">
-                    <span>📉 {{ __('messages.stock_loss') }}</span>
+                    <span class="flex items-center gap-1.5"><x-icon name="arrow-trending-down" class="w-4 h-4 text-red-600" /> {{ __('messages.stock_loss') }}</span>
                     <span class="font-bold text-red-700">−{{ \App\Support\Money::format($stats['stock_loss']) }}</span>
                 </li>
                 <li class="px-4 py-2 flex items-center justify-between bg-gray-50">
-                    <span>🏪 {{ __('messages.stock_value') }}</span>
+                    <span class="flex items-center gap-1.5"><x-icon name="building-storefront" class="w-4 h-4 text-teal-600" /> {{ __('messages.stock_value') }}</span>
                     <span class="font-bold text-teal-700">{{ \App\Support\Money::format($stats['stock_value']) }}</span>
                 </li>
             </ul>
 
             {{-- Data-quality warnings (unlinked items, negative stock, ...) --}}
             @if(count($stats['warnings']) > 0)
-                <div class="bg-yellow-50 border border-yellow-400 rounded-xl p-4 mb-4">
-                    <div class="font-bold text-yellow-900 mb-1">⚠️ {{ __('messages.attention') }}</div>
-                    <ul class="list-disc list-inside text-sm text-yellow-800 space-y-1">
+                <div class="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-4">
+                    <div class="font-bold text-amber-900 mb-1 flex items-center gap-1.5">
+                        <x-icon name="exclamation-triangle" class="w-5 h-5" /> {{ __('messages.attention') }}
+                    </div>
+                    <ul class="list-disc list-inside text-sm text-amber-800 space-y-1">
                         @foreach($stats['warnings'] as $warning)
                             <li>{{ $warning }}</li>
                         @endforeach
@@ -86,11 +104,15 @@
 
             {{-- Partner cash (custody) review: settle adjustments BEFORE closing --}}
             @if($partnerCash->isNotEmpty())
-                <div class="rounded-xl border {{ $partnerCashNegative ? 'border-rose-300 bg-rose-50' : 'border-cyan-200 bg-cyan-50' }} p-4 mb-4">
+                <div class="rounded-2xl border {{ $partnerCashNegative ? 'border-rose-300 bg-rose-50' : 'border-cyan-200 bg-cyan-50' }} p-4 mb-4">
                     <div class="flex items-center justify-between gap-2 mb-1">
-                        <div class="font-bold {{ $partnerCashNegative ? 'text-rose-900' : 'text-cyan-900' }}">🤝 {{ __('messages.close_partner_cash_title') }}</div>
+                        <div class="font-bold {{ $partnerCashNegative ? 'text-rose-900' : 'text-cyan-900' }} flex items-center gap-1.5">
+                            <x-icon name="receipt-percent" class="w-5 h-5" /> {{ __('messages.close_partner_cash_title') }}
+                        </div>
                         <a href="{{ route('owner.partner-cash.index') }}"
-                           class="text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg px-3 py-1.5">🧾 {{ __('messages.transactions') }}</a>
+                           class="text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg px-3 py-1.5 flex items-center gap-1.5 transition">
+                            <x-icon name="document-text" class="w-4 h-4" /> {{ __('messages.transactions') }}
+                        </a>
                     </div>
                     <p class="text-xs {{ $partnerCashNegative ? 'text-rose-700' : 'text-cyan-800' }} mb-2">
                         {{ $partnerCashNegative ? __('messages.close_partner_cash_negative_hint') : __('messages.close_partner_cash_hint') }}
@@ -101,10 +123,10 @@
                                 <div class="min-w-0">
                                     <span class="font-medium inline-flex items-center gap-1.5"><x-avatar :user="$row['user']" size="20" /> {{ $row['user']->name }}</span>
                                     <div class="text-xs text-gray-500">
-                                        @if($row['cycle_hold'] > 0) ➕ {{ \App\Support\Money::format($row['cycle_hold']) }} @endif
-                                        @if($row['cycle_spent'] > 0) · 🧾 −{{ \App\Support\Money::format($row['cycle_spent']) }} @endif
-                                        @if($row['cycle_return'] > 0) · ⤵️ {{ \App\Support\Money::format($row['cycle_return']) }} @endif
-                                        @if($row['cycle_adjustment'] > 0) · 🤝 −{{ \App\Support\Money::format($row['cycle_adjustment']) }} @endif
+                                        @if($row['cycle_hold'] > 0) <x-icon name="plus" class="w-3 h-3" /> {{ \App\Support\Money::format($row['cycle_hold']) }} @endif
+                                        @if($row['cycle_spent'] > 0) · <x-icon name="document-text" class="w-3 h-3" /> −{{ \App\Support\Money::format($row['cycle_spent']) }} @endif
+                                        @if($row['cycle_return'] > 0) · <x-icon name="arrow-trending-down" class="w-3 h-3" /> {{ \App\Support\Money::format($row['cycle_return']) }} @endif
+                                        @if($row['cycle_adjustment'] > 0) · <x-icon name="receipt-percent" class="w-3 h-3" /> −{{ \App\Support\Money::format($row['cycle_adjustment']) }} @endif
                                     </div>
                                 </div>
                                 <div class="font-bold shrink-0 {{ $row['outstanding'] < 0 ? 'text-rose-600' : ($row['outstanding'] > 0 ? 'text-cyan-700' : 'text-gray-500') }}">
@@ -117,8 +139,10 @@
             @endif
 
             {{-- Profit --}}
-            <div class="rounded-xl p-4 mb-4 {{ $profit >= 0 ? 'bg-green-50 border border-green-300' : 'bg-red-50 border border-red-300' }}">
-                <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>
+            <div class="rounded-2xl p-4 mb-4 {{ $profit >= 0 ? 'bg-green-50 border border-green-300' : 'bg-red-50 border border-red-300' }}">
+                <div class="text-sm text-gray-500 flex items-center gap-1.5">
+                    <x-icon name="arrow-trending-up" class="w-4 h-4" /> {{ __('messages.net_profit') }}
+                </div>
                 <div class="text-3xl font-bold {{ $profit >= 0 ? 'text-green-700' : 'text-red-700' }}">
                     {{ \App\Support\Money::format($profit) }}
                 </div>
@@ -126,39 +150,41 @@
 
             @if($profit > 0 && count($rows) > 0)
                 {{-- Per-partner expected commission --}}
-                <h2 class="font-bold mb-2">🤝 {{ __('messages.expected_commission') }}</h2>
+                <h2 class="font-bold mb-2 flex items-center gap-1.5"><x-icon name="receipt-percent" class="w-5 h-5 text-violet-600" /> {{ __('messages.expected_commission') }}</h2>
                 <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 mb-4">
                     @foreach($rows as $row)
                         <li class="px-4 py-2 flex items-center justify-between text-sm">
                             <div>
                                 <span class="font-medium inline-flex items-center gap-1.5"><x-avatar :user="$row['user']" size="20" /> {{ $row['user']->name }}</span>
-                                <span class="text-xs text-violet-600">🤝 {{ $row['rate'] }}%</span>
+                                <span class="text-xs text-violet-600 flex items-center gap-1"><x-icon name="receipt-percent" class="w-3.5 h-3.5" /> {{ $row['rate'] }}%</span>
                             </div>
                             <div class="font-bold">{{ \App\Support\Money::format($row['amount']) }}</div>
                         </li>
                     @endforeach
                     <li class="px-4 py-2 flex items-center justify-between text-sm bg-violet-50 font-bold">
-                        <div>🤝 {{ __('messages.total_commission') }}</div>
+                        <div class="flex items-center gap-1.5"><x-icon name="receipt-percent" class="w-4 h-4" /> {{ __('messages.total_commission') }}</div>
                         <div>{{ \App\Support\Money::format($totalCommission) }}</div>
                     </li>
                     <li class="px-4 py-2 flex items-center justify-between text-sm bg-emerald-50 font-bold">
-                        <div>👔 {{ __('messages.owner_share') }}</div>
+                        <div class="flex items-center gap-1.5"><x-icon name="user-circle" class="w-4 h-4" /> {{ __('messages.owner_share') }}</div>
                         <div class="{{ $ownerShare >= 0 ? 'text-emerald-700' : 'text-red-700' }}">{{ \App\Support\Money::format($ownerShare) }}</div>
                     </li>
                 </ul>
             @elseif($profit <= 0)
-                <div class="bg-red-100 border border-red-400 text-red-800 rounded-lg px-4 py-3 mb-4 text-sm">
-                    📉 {{ __('messages.loss_no_commission') }}
+                <div class="alert-error mb-4">
+                    <x-icon name="arrow-trending-down" class="w-5 h-5 shrink-0" /> {{ __('messages.loss_no_commission') }}
                 </div>
             @endif
 
             {{-- Confirm (hidden while unapproved entries block the close) --}}
             @if($pendingEntries->isEmpty())
-                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-4 whitespace-pre-line">💡 {{ __('messages.close_preview_hint') }}</p>
+                <p class="text-xs bg-amber-50 border border-amber-300 text-amber-800 rounded-xl px-3 py-2 mb-4 whitespace-pre-line flex items-start gap-1.5">
+                    <x-icon name="information-circle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.close_preview_hint') }}
+                </p>
                 <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
                     @csrf
-                    <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl py-3">
-                        ✅ {{ __('messages.confirm_close') }}
+                    <button type="submit" class="btn-primary w-full">
+                        <x-icon name="check" class="w-5 h-5" /> {{ __('messages.confirm_close') }}
                     </button>
                 </form>
             @endif

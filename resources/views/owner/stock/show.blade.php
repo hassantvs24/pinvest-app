@@ -3,10 +3,12 @@
 @section('title', $item->name.' — '.__('messages.stock_ledger'))
 
 @section('content')
-    <a href="{{ route('owner.stock.index') }}" class="inline-block text-sm text-gray-600 mb-3">⬅️ {{ __('messages.back') }}</a>
+    <a href="{{ route('owner.stock.index') }}" class="inline-flex items-center gap-1.5 text-sm text-gray-600 mb-3">
+        <x-icon name="arrow-left" class="w-4 h-4" /> {{ __('messages.back') }}
+    </a>
 
     {{-- Item summary --}}
-    <div class="bg-white rounded-xl shadow p-4 mb-4 flex items-center justify-between gap-2">
+    <div class="card mb-4 flex items-center justify-between gap-2">
         <div>
             <h1 class="text-lg font-bold">{{ $item->name }}</h1>
             <p class="text-xs text-gray-500">{{ __('messages.avg_cost') }}: {{ \App\Support\Money::format($summary['avg_cost']) }}/{{ \App\Support\ItemUnits::label($item->unit) }}</p>
@@ -20,39 +22,39 @@
     </div>
 
     {{-- Ledger summary: what the whole history adds up to --}}
-    <div class="bg-white rounded-xl shadow p-4 mb-4">
-        <h2 class="font-bold mb-2">📒 {{ __('messages.ledger_summary') }}</h2>
+    <div class="card mb-4">
+        <h2 class="section-title"><x-icon name="queue-list" class="w-5 h-5 text-emerald-600" /> {{ __('messages.ledger_summary') }}</h2>
         <ul class="divide-y divide-gray-100 text-sm">
             <li class="py-1.5 flex items-center justify-between gap-2">
-                <span>🛒 {{ __('messages.total_purchase') }}</span>
+                <span class="flex items-center gap-1.5"><x-icon name="shopping-cart" class="w-4 h-4 text-orange-600" /> {{ __('messages.total_purchase') }}</span>
                 <span class="text-right">
                     <span class="font-bold">{{ rtrim(rtrim(number_format($totals['purchase']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
                     <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['purchase']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
-                <span>💵 {{ __('messages.total_sales') }}</span>
+                <span class="flex items-center gap-1.5"><x-icon name="banknotes" class="w-4 h-4 text-blue-600" /> {{ __('messages.total_sales') }}</span>
                 <span class="text-right">
                     <span class="font-bold">{{ rtrim(rtrim(number_format($totals['sale']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
                     <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['sale']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
-                <span>🏭 {{ __('messages.ledger_production_in') }}</span>
+                <span class="flex items-center gap-1.5"><x-icon name="building-office-2" class="w-4 h-4 text-emerald-600" /> {{ __('messages.ledger_production_in') }}</span>
                 <span class="text-right">
                     <span class="font-bold text-emerald-700">+{{ rtrim(rtrim(number_format($totals['production_in']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
                     <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['production_in']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
-                <span>🏭 {{ __('messages.ledger_production_out') }}</span>
+                <span class="flex items-center gap-1.5"><x-icon name="building-office-2" class="w-4 h-4 text-red-600" /> {{ __('messages.ledger_production_out') }}</span>
                 <span class="text-right">
                     <span class="font-bold text-red-600">−{{ rtrim(rtrim(number_format($totals['production_out']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
                     <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['production_out']['amount']) }}</span>
                 </span>
             </li>
             <li class="py-1.5 flex items-center justify-between gap-2">
-                <span>📉 {{ __('messages.stock_loss') }}</span>
+                <span class="flex items-center gap-1.5"><x-icon name="arrow-trending-down" class="w-4 h-4 text-red-600" /> {{ __('messages.stock_loss') }}</span>
                 <span class="text-right">
                     <span class="font-bold text-red-600">−{{ rtrim(rtrim(number_format($totals['stock-loss']['qty'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}</span>
                     <span class="text-xs text-gray-500">= {{ \App\Support\Money::format($totals['stock-loss']['amount']) }}</span>
@@ -63,23 +65,25 @@
 
     {{-- Pending sales/losses: reserve stock but do not move it yet --}}
     @if($pending !== [])
-        <div class="bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-xl px-4 py-3 mb-4 text-sm">
-            <div class="font-bold mb-1">⏳ {{ __('messages.pending_reservations') }}</div>
-            <ul class="space-y-0.5">
-                @foreach($pending as $sale)
-                    <li>
-                        📅 {{ \App\Support\DateFormats::date($sale['date']) }}
-                        − {{ rtrim(rtrim(number_format($sale['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}
-                        @if($sale['note'])<span class="text-xs">({{ $sale['note'] }})</span>@endif
-                    </li>
-                @endforeach
-            </ul>
+        <div class="alert-warning mb-4">
+            <div>
+                <div class="font-bold mb-1 flex items-center gap-1.5"><x-icon name="clock" class="w-4 h-4" /> {{ __('messages.pending_reservations') }}</div>
+                <ul class="space-y-0.5">
+                    @foreach($pending as $sale)
+                        <li>
+                            <x-icon name="calendar-days" class="w-3.5 h-3.5" /> {{ \App\Support\DateFormats::date($sale['date']) }}
+                            − {{ rtrim(rtrim(number_format($sale['quantity'], 2), '0'), '.') }} {{ \App\Support\ItemUnits::label($item->unit) }}
+                            @if($sale['note'])<span class="text-xs">({{ $sale['note'] }})</span>@endif
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
         </div>
     @endif
 
     {{-- Movement ledger --}}
-    <h2 class="font-bold text-lg mb-2">📒 {{ __('messages.stock_ledger') }}</h2>
-    <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
+    <h2 class="section-title"><x-icon name="queue-list" class="w-5 h-5 text-emerald-600" /> {{ __('messages.stock_ledger') }}</h2>
+    <div class="card mb-6 overflow-hidden p-0">
         @if($rows->isEmpty())
             <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_entries') }}</p>
         @else
@@ -87,7 +91,7 @@
                 @foreach($rows as $row)
                     <li class="px-4 py-2 text-sm flex items-center justify-between gap-2">
                         <div class="min-w-0">
-                            <span class="text-gray-500">📅 {{ \App\Support\DateFormats::date($row['date']) }}</span>
+                            <span class="text-gray-500 flex items-center gap-1.5"><x-icon name="calendar-days" class="w-3.5 h-3.5" /> {{ \App\Support\DateFormats::date($row['date']) }}</span>
                             @if($row['direction'] === 'in')
                                 <span class="text-emerald-700 font-bold">+{{ rtrim(rtrim(number_format($row['quantity'], 2), '0'), '.') }}</span>
                                 @if($row['kind'] === 'production')
@@ -105,7 +109,7 @@
                             @endif
                             @if($row['unit_price'] !== null)
                                 <span class="text-xs text-gray-600">
-                                    @if($row['kind'] === 'production' || $row['kind'] === 'stock-loss')💰 {{ __('messages.ledger_cost') }}@endif
+                                    @if($row['kind'] === 'production' || $row['kind'] === 'stock-loss')<x-icon name="banknotes" class="w-3.5 h-3.5" /> {{ __('messages.ledger_cost') }}@endif
                                     {{ \App\Support\Money::format($row['unit_price']) }}/{{ \App\Support\ItemUnits::label($item->unit) }}
                                     = <span class="font-bold">{{ \App\Support\Money::format($row['total']) }}</span>
                                 </span>
