@@ -37,12 +37,26 @@
         </div>
     @endif
 
-    {{-- Pending alert --}}
+    {{-- Pending alert: each chip leads to the right list --}}
     @if($pendingCount > 0)
-        <a href="{{ route('entries.index', ['type' => 'sales', 'status' => 'pending']) }}"
-           class="block bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 mt-3">
-            ⏳ {{ __('messages.pending_entries') }}: {{ $pendingCount }}
-        </a>
+        <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 mt-3">
+            <div class="font-bold mb-2">⏳ {{ __('messages.pending_entries') }}: {{ $pendingCount }}</div>
+            <div class="flex flex-wrap gap-2">
+                @foreach([
+                    ['n' => $pendingBreakdown['expenses'], 'icon' => '💸', 'url' => route('entries.index', ['type' => 'expenses', 'status' => 'pending'])],
+                    ['n' => $pendingBreakdown['purchases'], 'icon' => '🛒', 'url' => route('entries.index', ['type' => 'purchases', 'status' => 'pending'])],
+                    ['n' => $pendingBreakdown['sales'], 'icon' => '💰', 'url' => route('entries.index', ['type' => 'sales', 'status' => 'pending'])],
+                    ['n' => $pendingBreakdown['productions'], 'icon' => '🏭', 'url' => route('productions.index')],
+                    ['n' => $pendingBreakdown['stock_losses'], 'icon' => '📉', 'url' => route('stock-losses.index')],
+                ] as $chip)
+                    @if($chip['n'] > 0)
+                        <a href="{{ $chip['url'] }}" class="bg-white/70 hover:bg-white rounded-lg px-3 py-1.5 text-sm font-bold">
+                            {{ $chip['icon'] }} {{ $chip['n'] }} ➡️
+                        </a>
+                    @endif
+                @endforeach
+            </div>
+        </div>
     @endif
 
     {{-- My summary cards --}}
@@ -69,6 +83,11 @@
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-rose-500">
             <div class="text-sm text-gray-500">💸 {{ __('messages.my_expense') }}</div>
             <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['expense']) }}</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-cyan-600">
+            <div class="text-sm text-gray-500">🤝 {{ __('messages.my_held_cash') }}</div>
+            <div class="text-2xl font-bold {{ $heldCash < 0 ? 'text-rose-600' : 'text-cyan-700' }}">{{ \App\Support\Money::format($heldCash) }}</div>
+            <p class="text-xs text-gray-500 mt-1">{{ __('messages.my_held_cash_hint') }}</p>
         </div>
     </div>
 

@@ -8,6 +8,7 @@ use App\Models\CommissionSettlement;
 use App\Models\Expense;
 use App\Models\Investment;
 use App\Models\OwnerWithdrawal;
+use App\Models\PartnerCashMovement;
 use App\Models\Payout;
 use App\Models\Production;
 use App\Models\Purchase;
@@ -23,6 +24,9 @@ use Illuminate\Support\Carbon;
  * expenses; product costs (transport, labour) stay in stock value
  * until the goods are sold. Cash in hand stays cash-based and
  * subtracts partner payouts and owner profit withdrawals.
+ * `cash_with_partners` is the net cash physically held by partners
+ * (sales money kept / cash handed over): custody only, so cash in
+ * hand is NOT reduced by it — the money still belongs to the business.
  *
  * Boundaries are exact moments: a `Y-m-d` string still means that
  * whole day (start/end of day), a Carbon means the exact instant —
@@ -30,7 +34,7 @@ use Illuminate\Support\Carbon;
  * (closed_at + 1s) without re-counting the closing day's earlier
  * entries of the closed cycle.
  *
- * @phpstan-type StatsArray array{investment: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_loss: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float}
+ * @phpstan-type StatsArray array{investment: float, purchase: float, cogs: float, expense: float, general_expense: float, product_expense: float, stock_loss: float, stock_value: float, sales: float, commission: float, payout: float, withdrawal: float, net_profit: float, cash_in_hand: float, cash_with_partners: float}
  */
 class BusinessStats
 {
@@ -86,6 +90,11 @@ class BusinessStats
             ->dateBetween($from, $to)
             ->sum('amount');
 
+        // Cash held by partners (custody, not a cash flow): holds add,
+        // returns/spent/commission adjustments subtract. Partner-scoped
+        // views show that partner's own outstanding.
+        $cashWithPartners = PartnerCashMovement::outstanding($userId, $from, $to);
+
         // Production labour is paid in cash as the run happens.
         $productionLabour = (float) Production::query()
             ->confirmed()
@@ -117,6 +126,7 @@ class BusinessStats
             'withdrawal' => $withdrawal,
             'net_profit' => $netProfit,
             'cash_in_hand' => $cashInHand,
+            'cash_with_partners' => $cashWithPartners,
         ];
     }
 

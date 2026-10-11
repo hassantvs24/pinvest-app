@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
 use App\Models\Expense;
+use App\Models\PartnerCashMovement;
 use App\Models\PayoutRequest;
 use App\Models\Production;
 use App\Models\Purchase;
@@ -56,6 +57,7 @@ class DashboardController extends Controller
                 ...$cycleData,
                 'stats' => $stats,
                 'cashInHand' => BusinessStats::all()['cash_in_hand'],
+                'cashWithPartners' => PartnerCashMovement::outstanding(),
                 'pending' => [
                     'expenses' => Expense::query()->pending()->count(),
                     'purchases' => Purchase::query()->pending()->count(),
@@ -106,8 +108,16 @@ class DashboardController extends Controller
             ...$cycleData,
             'stats' => $stats,
             'pendingCount' => $user->pendingEntriesCount(),
+            'pendingBreakdown' => [
+                'expenses' => $user->expenses()->pending()->count(),
+                'purchases' => $user->purchases()->pending()->count(),
+                'sales' => $user->sales()->pending()->count(),
+                'productions' => $user->productions()->pending()->count(),
+                'stock_losses' => $user->stockLosses()->pending()->count(),
+            ],
             'commissionRate' => (float) $user->commission_rate,
             'pendingCommission' => CommissionSettlementService::pendingDue($user->id),
+            'heldCash' => PartnerCashMovement::outstanding($user->id),
             'lastSettlement' => CommissionSettlement::query()
                 ->with('period')
                 ->where('user_id', $user->id)

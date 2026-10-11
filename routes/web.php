@@ -9,6 +9,7 @@ use App\Http\Controllers\Owner\EntryController as OwnerEntryController;
 use App\Http\Controllers\Owner\ExpenseHeadController as OwnerExpenseHeadController;
 use App\Http\Controllers\Owner\InvestmentController as OwnerInvestmentController;
 use App\Http\Controllers\Owner\MasterController as OwnerMasterController;
+use App\Http\Controllers\Owner\PartnerCashController as OwnerPartnerCashController;
 use App\Http\Controllers\Owner\PartnerController as OwnerPartnerController;
 use App\Http\Controllers\Owner\PayoutController as OwnerPayoutController;
 use App\Http\Controllers\Owner\ProductionController as OwnerProductionController;
@@ -130,5 +131,13 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/withdrawals', [OwnerWithdrawalController::class, 'index'])->name('withdrawals.index');
         Route::post('/withdrawals', [OwnerWithdrawalController::class, 'store'])->name('withdrawals.store');
+
+        // Cash physically held by partners (sales money kept / cash handed
+        // over). Custody tracking only — cash in hand is not affected.
+        Route::get('/partner-cash', [OwnerPartnerCashController::class, 'index'])->name('partner-cash.index');
+        Route::post('/partner-cash/hold', [OwnerPartnerCashController::class, 'storeHold'])->name('partner-cash.hold');
+        Route::post('/partner-cash/return', [OwnerPartnerCashController::class, 'storeReturn'])->name('partner-cash.return');
+        Route::post('/partner-cash/cash-adjust', [OwnerPartnerCashController::class, 'storeCashAdjustment'])->name('partner-cash.cash-adjust');
+        Route::post('/partner-cash/adjust', [OwnerPartnerCashController::class, 'storeAdjustment'])->name('partner-cash.adjust');
     });
 });

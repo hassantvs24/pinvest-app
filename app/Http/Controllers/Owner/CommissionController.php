@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\CashMovementType;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
+use App\Models\PartnerCashMovement;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
+use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CashLock;
 use App\Support\CommissionSettlementService;
@@ -109,6 +112,38 @@ class CommissionController extends Controller
         // close can warn when a rate drifted in between.
         session(['close_preview_rate_snapshot' => CommissionSettlementService::rateSnapshot($rows)]);
 
+        // Partner cash (custody) review for this cycle: what moved during
+        // the period and what each partner still holds — so the owner can
+        // top up minuses ("give") or take returns BEFORE closing.
+        $from = CommissionSettlementService::effectiveStart($period);
+        $cycleMovements = PartnerCashMovement::query()
+            ->select('user_id', 'type')
+            ->selectRaw('SUM(amount) as total')
+            ->occurredBetween($from, $closedAt)
+            ->groupBy('user_id', 'type')
+            ->get()
+            ->groupBy('user_id');
+
+        $partnerCash = User::query()->partners()->orderBy('name')->get()
+            ->map(function (User $partner) use ($cycleMovements): array {
+                $cycle = $cycleMovements->get($partner->id, collect());
+                $sum = fn (CashMovementType $type): float => (float) $cycle
+                    ->firstWhere('type', $type->value)?->total ?? 0.0;
+
+                return [
+                    'user' => $partner,
+                    'outstanding' => PartnerCashMovement::outstanding($partner->id),
+                    'cycle_hold' => $sum(CashMovementType::Hold),
+                    'cycle_spent' => $sum(CashMovementType::Spent),
+                    'cycle_return' => $sum(CashMovementType::Return),
+                    'cycle_adjustment' => $sum(CashMovementType::CommissionAdjustment),
+                ];
+            })
+            ->filter(fn (array $row): bool => $row['outstanding'] != 0.0
+                || $row['cycle_hold'] != 0.0 || $row['cycle_spent'] != 0.0
+                || $row['cycle_return'] != 0.0 || $row['cycle_adjustment'] != 0.0)
+            ->values();
+
         return view('owner.close-preview', [
             'period' => $period,
             'closedAt' => $closedAt,
@@ -118,6 +153,8 @@ class CommissionController extends Controller
             'rows' => $rows,
             'totalCommission' => $totalCommission,
             'ownerShare' => $profit - $totalCommission,
+            'partnerCash' => $partnerCash,
+            'partnerCashNegative' => $partnerCash->contains(fn (array $row): bool => $row['outstanding'] < 0.0),
         ]);
     }
 

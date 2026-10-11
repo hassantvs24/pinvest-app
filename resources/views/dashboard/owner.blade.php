@@ -56,14 +56,35 @@
         </div>
     @endif
 
-    {{-- Pending confirmations alert --}}
-    @php $totalPending = $pending['expenses'] + $pending['purchases'] + $pending['sales'] + $pending['productions'] + $pending['stock_losses']; @endphp
+    {{-- Pending confirmations alert: each chip leads to the right page --}}
+    @php
+        $totalPending = $pending['expenses'] + $pending['purchases'] + $pending['sales'] + $pending['productions'] + $pending['stock_losses'];
+        $entryPending = $pending['expenses'] + $pending['purchases'] + $pending['sales'];
+    @endphp
     @if($totalPending > 0)
-        <a href="{{ route('owner.entries.index', ['status' => 'pending']) }}"
-           class="block bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 mt-3">
-            ⏳ {{ __('messages.pending_confirmations') }} —
-            💸 {{ $pending['expenses'] }} · 🛒 {{ $pending['purchases'] }} · 💰 {{ $pending['sales'] }} · 🏭 {{ $pending['productions'] }} · 📉 {{ $pending['stock_losses'] }}
-        </a>
+        <div class="bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg px-4 py-3 mt-3">
+            <div class="font-bold mb-2">⏳ {{ __('messages.pending_confirmations') }}</div>
+            <div class="flex flex-wrap gap-2">
+                @if($entryPending > 0)
+                    <a href="{{ route('owner.entries.index', ['status' => 'pending']) }}"
+                       class="bg-white/70 hover:bg-white rounded-lg px-3 py-1.5 text-sm font-bold">
+                        💸 {{ $pending['expenses'] }} · 🛒 {{ $pending['purchases'] }} · 💰 {{ $pending['sales'] }} ➡️
+                    </a>
+                @endif
+                @if($pending['productions'] > 0)
+                    <a href="{{ route('owner.productions.index') }}"
+                       class="bg-white/70 hover:bg-white rounded-lg px-3 py-1.5 text-sm font-bold">
+                        🏭 {{ $pending['productions'] }} ➡️
+                    </a>
+                @endif
+                @if($pending['stock_losses'] > 0)
+                    <a href="{{ route('owner.stock-losses.index') }}"
+                       class="bg-white/70 hover:bg-white rounded-lg px-3 py-1.5 text-sm font-bold">
+                        📉 {{ $pending['stock_losses'] }} ➡️
+                    </a>
+                @endif
+            </div>
+        </div>
     @endif
     @if($pendingPayoutRequests > 0)
         <a href="{{ route('owner.commissions.index') }}"
@@ -124,6 +145,18 @@
             <a href="{{ route('owner.investments.index') }}"
                class="inline-block mt-2 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-3 py-1.5">
                 ➕ {{ __('messages.add_cash') }}
+            </a>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-emerald-500">
+            <div class="text-sm text-gray-500">👤 {{ __('messages.cash_with_owner') }}</div>
+            <div class="text-2xl font-bold">{{ \App\Support\Money::format($cashInHand - $cashWithPartners) }}</div>
+        </div>
+        <div class="bg-white rounded-xl shadow p-4 border-l-4 border-cyan-600">
+            <div class="text-sm text-gray-500">🤝 {{ __('messages.cash_with_partners') }}</div>
+            <div class="text-2xl font-bold text-cyan-700">{{ \App\Support\Money::format($cashWithPartners) }}</div>
+            <a href="{{ route('owner.partner-cash.index') }}"
+               class="inline-block mt-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg px-3 py-1.5">
+                🧾 {{ __('messages.transactions') }}
             </a>
         </div>
     </div>

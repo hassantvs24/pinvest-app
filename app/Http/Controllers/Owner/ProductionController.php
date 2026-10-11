@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\CashMovementType;
 use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
+use App\Models\PartnerCashMovement;
 use App\Models\Production;
 use App\Support\CommissionSettlementService;
 use App\Support\InventoryService;
@@ -180,6 +182,20 @@ class ProductionController extends Controller
                 'confirmed_by' => request()->user()->id,
                 'confirmed_at' => now(),
             ]);
+
+            // Labour is paid in cash from whatever the partner holds:
+            // auto-deduct from their outstanding (may go negative — the
+            // owner tops up later). The owner's own runs have no partner
+            // custody, so they are skipped.
+            if ((float) $production->extra_cost > 0 && ! $production->user->isOwner()) {
+                PartnerCashMovement::query()->create([
+                    'user_id' => $production->user_id,
+                    'type' => CashMovementType::Spent,
+                    'amount' => (float) $production->extra_cost,
+                    'note' => __('messages.auto_spent_production', ['id' => $production->id]),
+                    'occurred_at' => $production->entry_date,
+                ]);
+            }
         });
 
         if ($error !== null) {

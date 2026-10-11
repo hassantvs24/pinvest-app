@@ -84,6 +84,38 @@
                 </div>
             @endif
 
+            {{-- Partner cash (custody) review: settle adjustments BEFORE closing --}}
+            @if($partnerCash->isNotEmpty())
+                <div class="rounded-xl border {{ $partnerCashNegative ? 'border-rose-300 bg-rose-50' : 'border-cyan-200 bg-cyan-50' }} p-4 mb-4">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <div class="font-bold {{ $partnerCashNegative ? 'text-rose-900' : 'text-cyan-900' }}">🤝 {{ __('messages.close_partner_cash_title') }}</div>
+                        <a href="{{ route('owner.partner-cash.index') }}"
+                           class="text-xs font-bold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg px-3 py-1.5">🧾 {{ __('messages.transactions') }}</a>
+                    </div>
+                    <p class="text-xs {{ $partnerCashNegative ? 'text-rose-700' : 'text-cyan-800' }} mb-2">
+                        {{ $partnerCashNegative ? __('messages.close_partner_cash_negative_hint') : __('messages.close_partner_cash_hint') }}
+                    </p>
+                    <ul class="divide-y divide-gray-200/60 text-sm">
+                        @foreach($partnerCash as $row)
+                            <li class="py-2 flex items-center justify-between gap-2">
+                                <div class="min-w-0">
+                                    <span class="font-medium inline-flex items-center gap-1.5"><x-avatar :user="$row['user']" size="20" /> {{ $row['user']->name }}</span>
+                                    <div class="text-xs text-gray-500">
+                                        @if($row['cycle_hold'] > 0) ➕ {{ \App\Support\Money::format($row['cycle_hold']) }} @endif
+                                        @if($row['cycle_spent'] > 0) · 🧾 −{{ \App\Support\Money::format($row['cycle_spent']) }} @endif
+                                        @if($row['cycle_return'] > 0) · ⤵️ {{ \App\Support\Money::format($row['cycle_return']) }} @endif
+                                        @if($row['cycle_adjustment'] > 0) · 🤝 −{{ \App\Support\Money::format($row['cycle_adjustment']) }} @endif
+                                    </div>
+                                </div>
+                                <div class="font-bold shrink-0 {{ $row['outstanding'] < 0 ? 'text-rose-600' : ($row['outstanding'] > 0 ? 'text-cyan-700' : 'text-gray-500') }}">
+                                    {{ \App\Support\Money::format($row['outstanding']) }}
+                                </div>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             {{-- Profit --}}
             <div class="rounded-xl p-4 mb-4 {{ $profit >= 0 ? 'bg-green-50 border border-green-300' : 'bg-red-50 border border-red-300' }}">
                 <div class="text-sm text-gray-500">📈 {{ __('messages.net_profit') }}</div>

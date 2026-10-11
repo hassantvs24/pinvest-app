@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\CashMovementType;
 use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\ExpenseHead;
 use App\Models\Item;
+use App\Models\PartnerCashMovement;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CommissionSettlementService;
@@ -248,6 +250,26 @@ class EntryController extends Controller
                 'confirmed_by' => $request->user()->id,
                 'confirmed_at' => now(),
             ]);
+
+            // Spending entries are paid from whatever the partner holds:
+            // auto-deduct from their outstanding cash (may go negative —
+            // the partner covered it from their own pocket and the owner
+            // tops up later with a "hold").
+            if (in_array($type, ['purchases', 'expenses'], true)) {
+                $amount = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+
+                if ($amount > 0) {
+                    PartnerCashMovement::query()->create([
+                        'user_id' => $model->user_id,
+                        'type' => CashMovementType::Spent,
+                        'amount' => $amount,
+                        'note' => $type === 'purchases'
+                            ? __('messages.auto_spent_purchase', ['id' => $model->id])
+                            : __('messages.auto_spent_expense', ['id' => $model->id]),
+                        'occurred_at' => $model->entry_date,
+                    ]);
+                }
+            }
         });
 
         if ($error !== null) {

@@ -87,6 +87,11 @@ class User extends Authenticatable
         return $this->hasMany(Payout::class);
     }
 
+    public function partnerCashMovements(): HasMany
+    {
+        return $this->hasMany(PartnerCashMovement::class);
+    }
+
     public function confirmedExpenses(): HasMany
     {
         return $this->hasMany(Expense::class, 'confirmed_by');

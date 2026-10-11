@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\CashMovementType;
 use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
@@ -9,6 +10,7 @@ use App\Models\Expense;
 use App\Models\ExpenseHead;
 use App\Models\Investment;
 use App\Models\Item;
+use App\Models\PartnerCashMovement;
 use App\Models\Payout;
 use App\Models\Production;
 use App\Models\Purchase;
@@ -276,6 +278,37 @@ class DemoDataSeeder extends Seeder
             'note' => 'ডেমো মজুদ ক্ষতি (পানি লেগে নষ্ট)',
             'entry_date' => now()->subDay(),
             'status' => EntryStatus::Pending,
+        ]);
+
+        // Partner cash custody demo: Raju kept sales money, spent some of
+        // it on purchases (reconciled), returned part — 7,000 still held.
+        PartnerCashMovement::query()->create([
+            'user_id' => $raju->id,
+            'type' => CashMovementType::Hold,
+            'amount' => 20000,
+            'note' => 'বিক্রির টাকা রাজুর কাছে',
+            'occurred_at' => now()->subDays(6),
+        ]);
+        PartnerCashMovement::query()->create([
+            'user_id' => $raju->id,
+            'type' => CashMovementType::Spent,
+            'amount' => 8000,
+            'note' => 'গাছ কেনার খরচের সমন্বয়',
+            'occurred_at' => now()->subDays(4),
+        ]);
+        PartnerCashMovement::query()->create([
+            'user_id' => $raju->id,
+            'type' => CashMovementType::Return,
+            'amount' => 5000,
+            'note' => 'তিজোরিতে ফেরত',
+            'occurred_at' => now()->subDays(2),
+        ]);
+        PartnerCashMovement::query()->create([
+            'user_id' => $sahel->id,
+            'type' => CashMovementType::Hold,
+            'amount' => 12000,
+            'note' => 'বিনিয়োগের টাকা হিসেবে নগদ হস্তান্তর',
+            'occurred_at' => now()->subDays(3),
         ]);
     }
 }
