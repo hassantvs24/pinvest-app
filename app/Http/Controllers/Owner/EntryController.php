@@ -13,9 +13,11 @@ use App\Support\CommissionSettlementService;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -41,11 +43,12 @@ class EntryController extends Controller
     }
 
     /**
-     * All entries of one type with partner + status filters.
+     * Entries of one type with the partner + status filters applied.
+     *
+     * @return Builder<Model>
      */
-    public function index(Request $request): View
+    private function filteredEntriesQuery(string $type, string $status, int $partnerId): Builder
     {
-        $type = $request->query('type', 'sales');
         $config = EntryTypes::config($type);
 
         /** @var class-string<Model> $modelClass */
@@ -57,30 +60,67 @@ class EntryController extends Controller
             $query->with('item');
         }
 
-        $status = $request->query('status', 'all');
         if (in_array($status, ['pending', 'confirmed', 'rejected'], true)) {
             $query->where('status', $status);
         }
 
-        $partnerId = (int) $request->query('partner_id', 0);
         if ($partnerId > 0) {
             $query->where('user_id', $partnerId);
         }
 
-        // Active master items for the inline edit dropdowns.
-        $items = match ($type) {
-            'expenses' => ExpenseHead::query()->active()->orderBy('name')->get(),
-            default => Item::query()->active()->orderBy('name')->get(),
-        };
+        return $query;
+    }
+
+    /**
+     * All entries across the three types, merged newest-first into one
+     * in-memory paginator (the type filter's "all" option).
+     */
+    private function allEntries(Request $request, string $status, int $partnerId): LengthAwarePaginator
+    {
+        $merged = collect(EntryTypes::all())
+            ->keys()
+            ->flatMap(fn (string $type) => $this->filteredEntriesQuery($type, $status, $partnerId)->get())
+            ->sortByDesc(fn (Model $entry) => [$entry->entry_date->getTimestamp(), $entry->id])
+            ->values();
+
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = 15;
+
+        return new LengthAwarePaginator(
+            $merged->forPage($page, $perPage)->values()->all(),
+            $merged->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+    }
+
+    /**
+     * All entries of the chosen type ("all" = every type) with partner +
+     * status filters.
+     */
+    public function index(Request $request): View
+    {
+        $type = $request->query('type', 'all');
+        $status = $request->query('status', 'all');
+        $partnerId = (int) $request->query('partner_id', 0);
+
+        $entries = $type === 'all'
+            ? $this->allEntries($request, $status, $partnerId)
+            : $this->filteredEntriesQuery($type, $status, $partnerId)->paginate(15)->withQueryString();
 
         return view('owner.entries', [
             'type' => $type,
-            'config' => $config,
-            'entries' => $query->paginate(15)->withQueryString(),
+            'entries' => $entries,
             'status' => $status,
             'partnerId' => $partnerId,
             'partners' => User::query()->partners()->orderBy('name')->get(),
-            'items' => $items,
+            // Active master items for the inline edit dropdowns, per type.
+            'itemsByType' => [
+                'expenses' => ExpenseHead::query()->active()->orderBy('name')->get(),
+                'purchases' => Item::query()->active()->orderBy('name')->get(),
+                'sales' => Item::query()->active()->orderBy('name')->get(),
+            ],
             'allItems' => Item::query()->active()->orderBy('name')->get(),
             // Cash position, so approving a purchase/expense can warn about
             // an overdraw right in the confirmation dialog.
