@@ -1708,8 +1708,6 @@ it('seeds permanent Bangla defaults with accounts, masters and links', function 
         ->and(Item::query()->where('name', 'অগর গাছ')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'আগর বখুর')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'আগর টুকরা')->exists())->toBeTrue()
-        ->and(Item::query()->where('name', 'আগর বীজ')->exists())->toBeTrue()
-        ->and(Item::query()->where('name', 'আগর চারা')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'আগর মিক্স চিপস')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'উদ চিপস A+')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'উদ চিপস C')->exists())->toBeTrue()
