@@ -12,6 +12,7 @@ use App\Models\Item;
 use App\Models\PartnerCashMovement;
 use App\Models\Production;
 use App\Models\Purchase;
+use App\Models\Sale;
 use App\Models\User;
 use App\Support\BusinessStats;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -547,6 +548,124 @@ it('reopens the cash adjustment tab after a validation error', function (): void
     // on the cash adjustment tab.
     $this->actingAs($owner)->get('/owner/partner-cash')
         ->assertSee('<option value="add" selected>', false);
+});
+
+it('auto-holds sale money in the partner custody on confirm', function (): void {
+    $owner = cashOwner();
+    $partner = cashPartner();
+    CommissionPeriod::factory()->open()->create();
+    Investment::factory()->create(['amount' => 100000]);
+
+    $this->actingAs($owner)->post('/owner/partner-cash/hold', [
+        'user_id' => $partner->id,
+        'amount' => 20000,
+        'occurred_at' => now()->toDateString(),
+    ])->assertRedirect();
+
+    // Partner holds 20k, buys 10 units of wood (10k, confirmed).
+    $wood = Item::factory()->create();
+    $purchase = Purchase::factory()->create([
+        'user_id' => $partner->id,
+        'item_id' => $wood->id,
+        'quantity' => 10,
+        'unit_price' => 1000,
+        'total' => 10000,
+        'entry_date' => now(),
+    ]);
+    $this->actingAs($owner)->patch("/owner/entries/purchases/{$purchase->id}/confirm")->assertRedirect();
+    expect(PartnerCashMovement::outstanding($partner->id))->toBe(10000.0);
+
+    // Partner sells 4 units for 8k — the sale money lands in custody.
+    $sale = Sale::factory()->create([
+        'user_id' => $partner->id,
+        'item_id' => $wood->id,
+        'quantity' => 4,
+        'unit_price' => 2000,
+        'total' => 8000,
+        'entry_date' => now(),
+    ]);
+    $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}/confirm")->assertRedirect();
+
+    expect(PartnerCashMovement::outstanding($partner->id))->toBe(18000.0)
+        ->and(BusinessStats::all()['cash_in_hand'])->toBe(98000.0)
+        ->and(PartnerCashMovement::query()->where('user_id', $partner->id)->count())->toBe(3);
+});
+
+it('syncs custody when a confirmed sale is edited or deleted', function (): void {
+    $owner = cashOwner();
+    $partner = cashPartner();
+    CommissionPeriod::factory()->open()->create();
+    Investment::factory()->create(['amount' => 100000]);
+
+    $this->actingAs($owner)->post('/owner/partner-cash/hold', [
+        'user_id' => $partner->id,
+        'amount' => 20000,
+        'occurred_at' => now()->toDateString(),
+    ])->assertRedirect();
+
+    $wood = Item::factory()->create();
+    $purchase = Purchase::factory()->create([
+        'user_id' => $partner->id,
+        'item_id' => $wood->id,
+        'quantity' => 10,
+        'unit_price' => 1000,
+        'total' => 10000,
+        'entry_date' => now(),
+    ]);
+    $this->actingAs($owner)->patch("/owner/entries/purchases/{$purchase->id}/confirm")->assertRedirect();
+
+    $sale = Sale::factory()->create([
+        'user_id' => $partner->id,
+        'item_id' => $wood->id,
+        'quantity' => 4,
+        'unit_price' => 2000,
+        'total' => 8000,
+        'entry_date' => now(),
+    ]);
+    $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}/confirm")->assertRedirect();
+    expect(PartnerCashMovement::outstanding($partner->id))->toBe(18000.0);
+
+    // Edit the sale down to 2 units (4,000): the 4,000 difference leaves custody.
+    $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}", [
+        'head_id' => $wood->id,
+        'quantity' => 2,
+        'unit_price' => 2000,
+        'entry_date' => now()->toDateString(),
+    ])->assertRedirect();
+    expect(PartnerCashMovement::outstanding($partner->id))->toBe(14000.0);
+
+    // Deleting the sale removes the rest from custody.
+    $this->actingAs($owner)->delete("/owner/entries/sales/{$sale->id}")->assertRedirect();
+    expect(PartnerCashMovement::outstanding($partner->id))->toBe(10000.0);
+});
+
+it('owner-owned sales never touch partner cash', function (): void {
+    $owner = cashOwner();
+    CommissionPeriod::factory()->open()->create();
+    Investment::factory()->create(['amount' => 100000]);
+
+    // Stock for the owner's sale.
+    $wood = Item::factory()->create();
+    $purchase = Purchase::factory()->create([
+        'user_id' => $owner->id,
+        'item_id' => $wood->id,
+        'quantity' => 10,
+        'unit_price' => 1000,
+        'total' => 10000,
+        'entry_date' => now(),
+        'status' => EntryStatus::Confirmed,
+        'confirmed_by' => $owner->id,
+    ]);
+
+    // Owner's own sale is auto-confirmed at creation.
+    $this->actingAs($owner)->post('/entries/sales', [
+        'head_id' => $wood->id,
+        'quantity' => 3,
+        'unit_price' => 2000,
+        'entry_date' => now()->toDateString(),
+    ])->assertRedirect();
+
+    expect(PartnerCashMovement::query()->count())->toBe(0);
 });
 
 it('scopes the outstanding per partner and in stats', function (): void {

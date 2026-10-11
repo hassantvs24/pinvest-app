@@ -270,6 +270,23 @@ class EntryController extends Controller
                     ]);
                 }
             }
+
+            // Sale money lands in the partner's hands: auto-add it to
+            // their outstanding cash (the owner records a "return" when
+            // collecting it). Owner-owned sales have no custody.
+            if ($type === 'sales' && ! $model->user->isOwner()) {
+                $amount = (float) $model->total;
+
+                if ($amount > 0) {
+                    PartnerCashMovement::query()->create([
+                        'user_id' => $model->user_id,
+                        'type' => CashMovementType::Hold,
+                        'amount' => $amount,
+                        'note' => __('messages.auto_held_sale', ['id' => $model->id]),
+                        'occurred_at' => $model->entry_date,
+                    ]);
+                }
+            }
         });
 
         if ($error !== null) {
@@ -350,10 +367,11 @@ class EntryController extends Controller
             return back()->with('error', $locked);
         }
 
-        // Capture the pre-edit total so a confirmed spending entry can
-        // sync the partner custody ledger afterwards (the auto-spent
-        // movement keeps its original amount — the delta is compensated).
-        $oldTotal = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+        // Capture the pre-edit total so a confirmed entry can sync the
+        // partner custody ledger afterwards (the auto movement keeps
+        // its original amount — the delta is compensated). Sales and
+        // purchases carry `total`; expenses carry `amount`.
+        $oldTotal = $type === 'expenses' ? (float) $model->amount : (float) $model->total;
 
         if ($type === 'expenses') {
             $validated = $request->validate([
@@ -418,29 +436,35 @@ class EntryController extends Controller
     }
 
     /**
-     * When a CONFIRMED spending entry's amount changed, the auto-spent
-     * movement still carries the original amount. Record the delta as a
-     * compensating movement so the partner custody ledger keeps matching
-     * the business cash. Owner-owned entries have no custody — skipped.
+     * When a CONFIRMED entry's amount changed, the custody movement
+     * keeps its original amount. Record the delta as a compensating
+     * movement so the partner custody ledger keeps matching the
+     * business cash: spending edits work one way, sale edits the other
+     * (a bigger sale = more cash in the partner's hands). Owner-owned
+     * entries have no custody — skipped.
      */
     private function syncCustodyOnEdit(string $type, Model $model, float $oldTotal): void
     {
-        if (! in_array($type, ['purchases', 'expenses'], true)
+        if (! in_array($type, ['purchases', 'expenses', 'sales'], true)
             || $model->status !== EntryStatus::Confirmed
             || $model->user->isOwner()) {
             return;
         }
 
-        $newTotal = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+        $newTotal = $type === 'expenses' ? (float) $model->amount : (float) $model->total;
         $delta = round($newTotal - $oldTotal, 2);
 
         if (abs($delta) < 0.005) {
             return;
         }
 
+        // Sales add to custody; spending subtracts. So for a positive
+        // delta: spending → more spent, sale → more held.
+        $addsToCustody = $type === 'sales' ? $delta > 0 : $delta < 0;
+
         PartnerCashMovement::query()->create([
             'user_id' => $model->user_id,
-            'type' => $delta > 0 ? CashMovementType::Spent : CashMovementType::Hold,
+            'type' => $addsToCustody ? CashMovementType::Hold : CashMovementType::Spent,
             'amount' => abs($delta),
             'note' => __('messages.custody_correction_note', [
                 'id' => $model->id,
@@ -470,20 +494,30 @@ class EntryController extends Controller
             return back()->with('error', $locked);
         }
 
-        // Give the held cash back before deleting a confirmed spending
-        // entry — the auto-spent movement stays in the immutable ledger,
-        // so the custody side must be refunded to keep both in sync.
-        if (in_array($type, ['purchases', 'expenses'], true)
-            && $model->status === EntryStatus::Confirmed
-            && ! $model->user->isOwner()) {
-            $amount = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
+        // Keep the custody ledger in sync when deleting a confirmed
+        // entry — the auto movement stays in the immutable ledger, so
+        // the custody side must be compensated before the delete:
+        // spending money goes back to the partner, sale money is
+        // removed again (the sale never happened).
+        if ($model->status === EntryStatus::Confirmed && ! $model->user->isOwner()) {
+            if (in_array($type, ['purchases', 'expenses'], true)) {
+                $amount = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
 
-            if ($amount > 0) {
+                if ($amount > 0) {
+                    PartnerCashMovement::query()->create([
+                        'user_id' => $model->user_id,
+                        'type' => CashMovementType::Hold,
+                        'amount' => $amount,
+                        'note' => __('messages.custody_delete_refund', ['id' => $model->id]),
+                        'occurred_at' => $model->entry_date,
+                    ]);
+                }
+            } elseif ($type === 'sales' && (float) $model->total > 0) {
                 PartnerCashMovement::query()->create([
                     'user_id' => $model->user_id,
-                    'type' => CashMovementType::Hold,
-                    'amount' => $amount,
-                    'note' => __('messages.custody_delete_refund', ['id' => $model->id]),
+                    'type' => CashMovementType::Spent,
+                    'amount' => (float) $model->total,
+                    'note' => __('messages.custody_sale_delete', ['id' => $model->id]),
                     'occurred_at' => $model->entry_date,
                 ]);
             }
