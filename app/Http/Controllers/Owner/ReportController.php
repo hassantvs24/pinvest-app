@@ -35,12 +35,16 @@ class ReportController extends Controller
     {
         [$from, $to] = $this->dateRange($request);
 
-        // A selected cycle always wins: its date range scopes the whole report.
+        // A selected cycle always wins: its exact moment range (the
+        // previous close + 1s → the close/open moment) scopes the whole
+        // report, so the closing day's post-close entries never leak into
+        // the closed cycle's report and pre-open entries never leak into
+        // an open one. The date strings stay for display.
         $selectedCycle = $this->selectedCycle($request);
 
         if ($selectedCycle) {
-            $from = $selectedCycle->opened_at->format('Y-m-d');
-            $to = ($selectedCycle->closed_at ?? Carbon::today())->format('Y-m-d');
+            $from = CommissionSettlementService::periodStart($selectedCycle);
+            $to = $selectedCycle->closed_at ?? now();
         }
 
         // Period summary + full-lifetime balance figures.
@@ -59,8 +63,8 @@ class ReportController extends Controller
             ->get();
 
         return view('owner.reports', [
-            'from' => $from,
-            'to' => $to,
+            'from' => $from instanceof Carbon ? $from->toDateString() : $from,
+            'to' => $to instanceof Carbon ? $to->toDateString() : $to,
             'cycles' => CommissionPeriod::query()
                 ->orderByDesc('opened_at')
                 ->orderByDesc('id')
@@ -71,7 +75,7 @@ class ReportController extends Controller
                 : 0,
             'ownerShare' => $periodStats['net_profit'],
             'stats' => $periodStats,
-            'stockRows' => InventoryService::stockRows(Carbon::parse($to ?? now()->toDateString())->endOfDay()),
+            'stockRows' => InventoryService::stockRows($to instanceof Carbon ? $to : Carbon::parse($to ?? now()->toDateString())->endOfDay()),
             'lifetimeCashInHand' => $lifetime['cash_in_hand'],
             'lifetimeInvestment' => $lifetime['investment'],
             'partners' => $this->partnerRows($from, $to),
@@ -106,19 +110,20 @@ class ReportController extends Controller
     }
 
     /**
-     * Read and normalize the from/to filters (nullable Y-m-d, from <= to).
+     * Read and normalize the from/to filters (nullable whole-day Carbon
+     * boundaries, from <= to) — a picked date means that entire day.
      *
-     * @return array{0: ?string, 1: ?string}
+     * @return array{0: ?Carbon, 1: ?Carbon}
      */
     private function dateRange(Request $request): array
     {
         $from = $request->query('from');
         $to = $request->query('to');
 
-        $from = is_string($from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) ? $from : null;
-        $to = is_string($to) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) ? $to : null;
+        $from = is_string($from) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) ? Carbon::parse($from)->startOfDay() : null;
+        $to = is_string($to) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) ? Carbon::parse($to)->endOfDay() : null;
 
-        if ($from && $to && $from > $to) {
+        if ($from && $to && $from->greaterThan($to)) {
             [$from, $to] = [$to, $from];
         }
 
@@ -131,7 +136,7 @@ class ReportController extends Controller
      *
      * @return Collection<int, array{name: string, commission_rate: float, sales: float, commission: float, purchase: float, expense: float, payout: float, commission_due: float}>
      */
-    private function partnerRows(?string $from, ?string $to): Collection
+    private function partnerRows(Carbon|string|null $from, Carbon|string|null $to): Collection
     {
         return User::query()
             ->partners()
@@ -158,11 +163,11 @@ class ReportController extends Controller
      *
      * @return Collection<int, Investment>
      */
-    private function investmentRows(?string $from, ?string $to): Collection
+    private function investmentRows(Carbon|string|null $from, Carbon|string|null $to): Collection
     {
         return Investment::query()
-            ->when($from, fn ($q) => $q->whereDate('invested_at', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('invested_at', '<=', $to))
+            ->when($from, fn ($q) => $q->where('invested_at', '>=', $from instanceof Carbon ? $from->toDateString() : $from))
+            ->when($to, fn ($q) => $q->where('invested_at', '<=', $to instanceof Carbon ? $to->toDateString() : $to))
             ->orderByDesc('invested_at')
             ->orderByDesc('id')
             ->get();
@@ -173,13 +178,13 @@ class ReportController extends Controller
      *
      * @return Collection<int, array{name: string, quantity: int, total: float}>
      */
-    private function entryRowsByItem(string $entryModel, string $fk, string $relation, ?string $from, ?string $to): Collection
+    private function entryRowsByItem(string $entryModel, string $fk, string $relation, Carbon|string|null $from, Carbon|string|null $to): Collection
     {
         return $entryModel::query()
             ->with($relation)
             ->where('status', EntryStatus::Confirmed->value)
-            ->when($from, fn ($q) => $q->whereDate('entry_date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('entry_date', '<=', $to))
+            ->when($from, fn ($q) => $q->where('entry_date', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entry_date', '<=', $to))
             ->get()
             ->groupBy($fk)
             ->map(fn (Collection $group) => [
@@ -197,13 +202,13 @@ class ReportController extends Controller
      *
      * @return Collection<int, array{name: string, total: float}>
      */
-    private function expenseRowsByHead(?string $from, ?string $to): Collection
+    private function expenseRowsByHead(Carbon|string|null $from, Carbon|string|null $to): Collection
     {
         return Expense::query()
             ->with('expenseHead')
             ->where('status', EntryStatus::Confirmed->value)
-            ->when($from, fn ($q) => $q->whereDate('entry_date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('entry_date', '<=', $to))
+            ->when($from, fn ($q) => $q->where('entry_date', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entry_date', '<=', $to))
             ->get()
             ->groupBy('expense_head_id')
             ->map(fn (Collection $group) => [
@@ -220,13 +225,13 @@ class ReportController extends Controller
      *
      * @return Collection<int, Sale|Purchase|Expense>
      */
-    private function entryDetailRows(string $entryModel, ?string $from, ?string $to): Collection
+    private function entryDetailRows(string $entryModel, Carbon|string|null $from, Carbon|string|null $to): Collection
     {
         return $entryModel::query()
             ->with($entryModel === Expense::class ? 'expenseHead' : 'item')
             ->where('status', EntryStatus::Confirmed->value)
-            ->when($from, fn ($q) => $q->whereDate('entry_date', '>=', $from))
-            ->when($to, fn ($q) => $q->whereDate('entry_date', '<=', $to))
+            ->when($from, fn ($q) => $q->where('entry_date', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entry_date', '<=', $to))
             ->orderByDesc('entry_date')
             ->orderByDesc('id')
             ->get();

@@ -95,6 +95,9 @@
                 🤝 {{ __('messages.total_commission') }}{{ $commissionEstimated ? ' '.__('messages.estimated_hint') : '' }}
             </div>
             <div class="text-2xl font-bold">{{ \App\Support\Money::format($stats['commission']) }}</div>
+            @if($commissionEstimated && $totalRate > 100)
+                <p class="text-xs text-red-600 mt-1">{{ __('messages.rate_over_100', ['total' => number_format($totalRate, 2)]) }}</p>
+            @endif
         </div>
         <div class="bg-white rounded-xl shadow p-4 border-l-4 border-slate-600">
             <div class="text-sm text-gray-500">💳 {{ __('messages.total_payout') }}</div>

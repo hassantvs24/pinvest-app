@@ -28,13 +28,14 @@ class DashboardController extends Controller
         $openPeriod = CommissionPeriod::query()->open()->latest('id')->first();
 
         // While a cycle runs, dashboards show that cycle's figures
-        // (effective start → today); without one they show lifetime
-        // totals. The effective start follows the latest closed cycle,
-        // so a same-day reopen never double-counts.
+        // (effective start → this exact moment); without one they show
+        // lifetime totals. The effective start follows the latest closed
+        // cycle's close moment, so a same-day reopen never re-counts the
+        // closing day's earlier entries of the closed cycle.
         $from = $openPeriod
-            ? CommissionSettlementService::effectiveStart($openPeriod)->format('Y-m-d')
+            ? CommissionSettlementService::effectiveStart($openPeriod)
             : null;
-        $to = $openPeriod ? now()->format('Y-m-d') : null;
+        $to = $openPeriod ? now() : null;
         $profit = $openPeriod ? CommissionSettlementService::runningProfit($openPeriod) : null;
 
         $cycleData = [
@@ -63,6 +64,7 @@ class DashboardController extends Controller
                     'stock_losses' => StockLoss::query()->pending()->count(),
                 ],
                 'pendingPayoutRequests' => PayoutRequest::query()->pending()->count(),
+                'totalRate' => CommissionSettlementService::totalActiveRate(),
                 'leaderboard' => User::query()
                     ->partners()
                     ->orderBy('name')
@@ -77,13 +79,13 @@ class DashboardController extends Controller
                         'is_active' => (bool) $partner->is_active,
                         'commission_rate' => (float) $partner->commission_rate,
                         'total_sales' => $openPeriod
-                            ? (float) $partner->sales()->confirmed()->whereDate('entry_date', '>=', $from)->sum('total')
+                            ? (float) $partner->sales()->confirmed()->where('entry_date', '>=', $from)->sum('total')
                             : $partner->confirmedSalesTotal(),
                         'total_purchase' => $openPeriod
-                            ? (float) $partner->purchases()->confirmed()->whereDate('entry_date', '>=', $from)->sum('total')
+                            ? (float) $partner->purchases()->confirmed()->where('entry_date', '>=', $from)->sum('total')
                             : $partner->confirmedPurchasesTotal(),
                         'total_expense' => $openPeriod
-                            ? (float) $partner->expenses()->confirmed()->whereDate('entry_date', '>=', $from)->sum('amount')
+                            ? (float) $partner->expenses()->confirmed()->where('entry_date', '>=', $from)->sum('amount')
                             : $partner->confirmedExpensesTotal(),
                         // Commission value: estimated while the cycle runs,
                         // lifetime earned settlements otherwise.

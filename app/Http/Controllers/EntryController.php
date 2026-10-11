@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Expense;
+use App\Models\ExpenseHead;
 use App\Models\Item;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -263,16 +264,32 @@ class EntryController extends Controller
                 $user->isOwner() ? __('messages.saved_success') : __('messages.waiting_owner'),
             );
 
+        $warnings = [];
+
+        // A product-cost expense without a linked product spreads across
+        // the average cost of EVERY stocked item — say so right away.
+        if ($type === 'expenses') {
+            $head = ExpenseHead::query()->find($validated['head_id']);
+
+            if ($head?->cost_type?->addsToStock() && ($validated['item_id'] ?? null) === null) {
+                $warnings[] = __('messages.product_expense_no_item_warning');
+            }
+        }
+
         // The owner's own purchases/expenses may overdraw the cash —
         // the entry still counts (credit buying), but warn right away.
         if ($user->isOwner() && in_array($type, ['purchases', 'expenses'], true)) {
             $cash = BusinessStats::all()['cash_in_hand'];
             if ($cash < 0) {
-                $redirect->with('warning', __('messages.cash_overdraw_warning', [
+                $warnings[] = __('messages.cash_overdraw_warning', [
                     'cash' => number_format($cash + ($type === 'purchases' ? (float) $validated['quantity'] * (float) $validated['unit_price'] : (float) $validated['amount']), 2),
                     'short' => number_format($cash, 2),
-                ]));
+                ]);
             }
+        }
+
+        if ($warnings !== []) {
+            $redirect->with('warning', implode(' ', $warnings));
         }
 
         return $redirect;

@@ -27,7 +27,10 @@
 
                 {{-- Desktop navigation --}}
                 <nav class="hidden md:flex items-center gap-1 text-sm">
-                    <a href="{{ route('dashboard') }}" class="px-3 py-2 rounded {{ request()->routeIs('dashboard') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏠 {{ __('messages.home') }}</a>
+                    {{-- Home is the partner's landing tab; the owner starts on the entries workflow --}}
+                    @unless(auth()->user()->isOwner())
+                        <a href="{{ route('dashboard') }}" class="px-3 py-2 rounded {{ request()->routeIs('dashboard') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">🏠 {{ __('messages.home') }}</a>
+                    @endunless
                     @if(auth()->user()->isOwner())
                         <a href="{{ route('owner.entries.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.entries.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📋 {{ __('messages.entries') }}</a>
                         <a href="{{ route('owner.reports.index') }}" class="px-3 py-2 rounded {{ request()->routeIs('owner.reports.*') ? 'bg-emerald-900' : 'hover:bg-emerald-600' }}">📊 {{ __('messages.reports') }}</a>
@@ -92,10 +95,12 @@
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 shadow-lg pb-[env(safe-area-inset-bottom)]">
-        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-8' : 'grid-cols-4' }} text-center text-xs">
-            <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
-                <div class="text-xl">🏠</div>{{ __('messages.home') }}
-            </a>
+        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-7' : 'grid-cols-4' }} text-center text-xs">
+            @unless(auth()->user()->isOwner())
+                <a href="{{ route('dashboard') }}" class="py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
+                    <div class="text-xl">🏠</div>{{ __('messages.home') }}
+                </a>
+            @endunless
             @if(auth()->user()->isOwner())
                 <a href="{{ route('owner.entries.index') }}" class="py-2 {{ request()->routeIs('owner.entries.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <div class="text-xl">📋</div>{{ __('messages.entries') }}

@@ -318,7 +318,7 @@
             </ul>
             <div class="px-4 py-2 bg-gray-50 text-xs text-gray-500 border-t border-gray-100">
                 💵 {{ __('messages.total_sales') }} · 🤝 {{ __('messages.commission_earned') }} · 🛒 {{ __('messages.total_purchase') }} ·
-                💸 {{ __('messages.total_expense') }} · 💳 {{ __('messages.commission_paid') }} · ⏳ {{ __('messages.commission_due') }}
+                💸 {{ __('messages.total_expense') }} · 💳 {{ __('messages.commission_paid') }} · ⏳ {{ __('messages.commission_due_lifetime') }}
             </div>
         @endif
     </div>

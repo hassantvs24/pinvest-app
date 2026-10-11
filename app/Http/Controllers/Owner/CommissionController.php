@@ -8,6 +8,7 @@ use App\Models\CommissionSettlement;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
 use App\Support\BusinessStats;
+use App\Support\CashLock;
 use App\Support\CommissionSettlementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -104,6 +105,10 @@ class CommissionController extends Controller
         $totalCommission = array_sum(array_column($rows, 'amount'));
         $pendingEntries = CommissionSettlementService::pendingEntries();
 
+        // Remember which partner rates this preview showed, so the actual
+        // close can warn when a rate drifted in between.
+        session(['close_preview_rate_snapshot' => CommissionSettlementService::rateSnapshot($rows)]);
+
         return view('owner.close-preview', [
             'period' => $period,
             'closedAt' => $closedAt,
@@ -135,12 +140,21 @@ class CommissionController extends Controller
 
         $result = CommissionSettlementService::closePeriod($period, now());
 
+        // Warn when a partner's rate/active flag changed since the preview,
+        // so the settlements never silently differ from what was shown.
+        $previewSnapshot = session()->pull('close_preview_rate_snapshot');
+        $rateDrifted = $previewSnapshot !== null
+            && $previewSnapshot !== CommissionSettlementService::rateSnapshot(
+                CommissionSettlementService::settlementRows($result['profit'])
+            );
+        $driftNote = $rateDrifted ? ' '.__('messages.commission_rate_changed_since_preview') : '';
+
         if ($result['profit'] <= 0) {
             return redirect()
                 ->route('owner.commissions.index')
                 ->with('warning', __('messages.period_closed_loss', [
                     'profit' => number_format($result['profit'], 2),
-                ]));
+                ]).$driftNote);
         }
 
         return redirect()
@@ -148,7 +162,7 @@ class CommissionController extends Controller
             ->with('success', __('messages.period_closed_profit', [
                 'profit' => number_format($result['profit'], 2),
                 'count' => $result['created'],
-            ]));
+            ]).$driftNote);
     }
 
     /**
@@ -163,48 +177,58 @@ class CommissionController extends Controller
 
         $approved = true;
 
-        DB::transaction(function () use ($payoutRequest, &$approved): void {
-            $payoutRequest->refresh();
-            abort_unless($payoutRequest->status === 'pending', 409);
+        // Serialize against every other cash-affecting operation: the
+        // cash-in-hand check below reads an aggregate SUM that has no
+        // row to lock, so the named lock keeps a parallel withdrawal or
+        // approval from overdrawing the same cash figure.
+        CashLock::acquire();
 
-            $settlements = CommissionSettlement::query()
-                ->pending()
-                ->where('user_id', $payoutRequest->user_id)
-                ->lockForUpdate()
-                ->get();
+        try {
+            DB::transaction(function () use ($payoutRequest, &$approved): void {
+                $payoutRequest->refresh();
+                abort_unless($payoutRequest->status === 'pending', 409);
 
-            $total = (float) $settlements->sum('amount');
+                $settlements = CommissionSettlement::query()
+                    ->pending()
+                    ->where('user_id', $payoutRequest->user_id)
+                    ->lockForUpdate()
+                    ->get();
 
-            if ($total <= 0) {
-                // Nothing left to pay — close the request without a payout.
-                $payoutRequest->update(['status' => 'rejected']);
+                $total = (float) $settlements->sum('amount');
 
-                return;
-            }
+                if ($total <= 0) {
+                    // Nothing left to pay — close the request without a payout.
+                    $payoutRequest->update(['status' => 'rejected']);
 
-            // Paying commission is cash out — never pay beyond the cash
-            // actually in hand.
-            $cashInHand = BusinessStats::all()['cash_in_hand'];
+                    return;
+                }
 
-            if ($total > $cashInHand) {
-                $approved = false;
+                // Paying commission is cash out — never pay beyond the cash
+                // actually in hand.
+                $cashInHand = BusinessStats::all()['cash_in_hand'];
 
-                return;
-            }
+                if ($total > $cashInHand) {
+                    $approved = false;
 
-            CommissionSettlement::query()
-                ->whereIn('id', $settlements->pluck('id'))
-                ->update(['status' => 'paid']);
+                    return;
+                }
 
-            Payout::query()->create([
-                'user_id' => $payoutRequest->user_id,
-                'amount' => $total,
-                'note' => __('messages.payout_for_commission', ['name' => $payoutRequest->user->name]),
-                'payout_date' => Carbon::today()->toDateString(),
-            ]);
+                CommissionSettlement::query()
+                    ->whereIn('id', $settlements->pluck('id'))
+                    ->update(['status' => 'paid']);
 
-            $payoutRequest->update(['status' => 'approved', 'amount' => $total]);
-        });
+                Payout::query()->create([
+                    'user_id' => $payoutRequest->user_id,
+                    'amount' => $total,
+                    'note' => __('messages.payout_for_commission', ['name' => $payoutRequest->user->name]),
+                    'payout_date' => Carbon::today()->toDateString(),
+                ]);
+
+                $payoutRequest->update(['status' => 'approved', 'amount' => $total]);
+            });
+        } finally {
+            CashLock::release();
+        }
 
         if ($approved === false) {
             return back()->with('error', __('messages.payout_exceeds_cash', [

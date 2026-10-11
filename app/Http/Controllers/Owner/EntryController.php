@@ -98,6 +98,22 @@ class EntryController extends Controller
     }
 
     /**
+     * An entry made on/before the latest cycle close belongs to that
+     * closed cycle — its numbers are baked into the stored profit and
+     * settlements, so it must stay untouched (edit AND delete).
+     */
+    private function closedCycleEntryError(Model $model): ?string
+    {
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+
+        if ($latestClosed !== null && $model->entry_date->lessThanOrEqualTo($latestClosed)) {
+            return __('messages.entry_locked_closed_cycle');
+        }
+
+        return null;
+    }
+
+    /**
      * Entry-date rules for edits: today or any past day, never on/inside
      * a closed cycle (backdated entries land at midnight of the picked
      * day, so the day right after a close is the earliest backdate).
@@ -200,17 +216,33 @@ class EntryController extends Controller
 
         $redirect = back()->with('success', __('messages.entry_confirmed'));
 
+        $warnings = [];
+
+        // A product-cost expense without a linked product spreads across
+        // the average cost of EVERY stocked item — say so right away.
+        if ($type === 'expenses') {
+            $head = $model->expenseHead;
+
+            if ($head?->cost_type?->addsToStock() && $model->item_id === null) {
+                $warnings[] = __('messages.product_expense_no_item_warning');
+            }
+        }
+
         // Approving a purchase/expense spends cash — warn (never block)
         // when it overdraws the balance; partners' requests stay free.
         if (in_array($type, ['purchases', 'expenses'], true)) {
             $cash = BusinessStats::all()['cash_in_hand'];
             if ($cash < 0) {
                 $amount = $type === 'purchases' ? (float) $model->total : (float) $model->amount;
-                $redirect->with('warning', __('messages.cash_overdraw_warning', [
+                $warnings[] = __('messages.cash_overdraw_warning', [
                     'cash' => number_format($cash + $amount, 2),
                     'short' => number_format($cash, 2),
-                ]));
+                ]);
             }
+        }
+
+        if ($warnings !== []) {
+            $redirect->with('warning', implode(' ', $warnings));
         }
 
         return $redirect;
@@ -249,6 +281,12 @@ class EntryController extends Controller
 
         $config = EntryTypes::config($type);
         $model = $this->findEntry($type, $entry);
+
+        $locked = $this->closedCycleEntryError($model);
+
+        if ($locked !== null) {
+            return back()->with('error', $locked);
+        }
 
         if ($type === 'expenses') {
             $validated = $request->validate([
@@ -319,6 +357,12 @@ class EntryController extends Controller
     {
         if (! $this->cycleOpen()) {
             return back()->with('warning', __('messages.confirm_blocked_no_period'));
+        }
+
+        $locked = $this->closedCycleEntryError($this->findEntry($type, $entry));
+
+        if ($locked !== null) {
+            return back()->with('error', $locked);
         }
 
         $this->findEntry($type, $entry)->delete();

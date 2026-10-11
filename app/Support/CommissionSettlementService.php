@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Owner-managed commission periods.
@@ -95,16 +96,28 @@ class CommissionSettlementService
      */
     public static function effectiveStart(CommissionPeriod $period): Carbon
     {
-        $latestClosed = CommissionPeriod::query()
+        return self::periodStart($period);
+    }
+
+    /**
+     * The moment a GIVEN period's accounts start from: one second after
+     * the close of the last cycle closed before it, or its own opening
+     * moment when it is the first cycle. (effectiveStart() is the same
+     * lookup for the currently open period.)
+     */
+    public static function periodStart(CommissionPeriod $period): Carbon
+    {
+        $prevClosed = CommissionPeriod::query()
             ->closed()
+            ->where('closed_at', '<', $period->opened_at)
             ->orderByDesc('closed_at')
             ->value('closed_at');
 
-        if ($latestClosed === null) {
+        if ($prevClosed === null) {
             return $period->opened_at->copy();
         }
 
-        return Carbon::parse($latestClosed)->addSecond();
+        return Carbon::parse($prevClosed)->addSecond();
     }
 
     /**
@@ -124,6 +137,13 @@ class CommissionSettlementService
     public static function closePeriod(CommissionPeriod $period, Carbon $closedAt): array
     {
         return DB::transaction(function () use ($period, $closedAt): array {
+            // Hard guard (the controller shows a friendly page first): a
+            // cycle can never close with unapproved entries, no matter
+            // which caller — seeder, command or controller — closes it.
+            if (self::pendingEntries()->isNotEmpty()) {
+                throw new LogicException('Cannot close a commission cycle while pending entries exist.');
+            }
+
             $profit = self::periodProfit(self::effectiveStart($period), $closedAt);
 
             $period->update([
@@ -157,6 +177,24 @@ class CommissionSettlementService
 
             return ['profit' => $profit, 'created' => $created];
         });
+    }
+
+    /**
+     * A fingerprint of the partner/rate pairs a close would use — stored
+     * at preview time so the actual close can warn when a rate changed
+     * in between and the result no longer matches the preview.
+     *
+     * @param  array<int, array{user: User, rate: float, amount: float}>  $rows
+     */
+    public static function rateSnapshot(array $rows): string
+    {
+        $pairs = array_map(
+            fn (array $row): string => $row['user']->id.':'.number_format($row['rate'], 2),
+            $rows,
+        );
+        sort($pairs);
+
+        return md5(implode('|', $pairs));
     }
 
     /**
