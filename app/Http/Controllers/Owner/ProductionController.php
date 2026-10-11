@@ -83,6 +83,22 @@ class ProductionController extends Controller
     }
 
     /**
+     * A run made on/before the latest cycle close belongs to that
+     * closed cycle — its stock/COGS are baked into the stored profit
+     * and settlements, so it must stay untouched.
+     */
+    private function closedCycleEntryError(Production $production): ?string
+    {
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+
+        if ($latestClosed !== null && $production->entry_date->lessThanOrEqualTo($latestClosed)) {
+            return __('messages.entry_locked_closed_cycle');
+        }
+
+        return null;
+    }
+
+    /**
      * Store a production run with its component lines. Owner entries
      * are auto-confirmed (the owner is the approver).
      */
@@ -230,6 +246,12 @@ class ProductionController extends Controller
     public function destroy(Production $production): RedirectResponse
     {
         abort_unless($this->cycleOpen(), 409);
+
+        $locked = $this->closedCycleEntryError($production);
+
+        if ($locked !== null) {
+            return back()->with('error', $locked);
+        }
 
         // Refund the partner's held cash before deleting a confirmed run
         // — the labour auto-spent movement stays in the immutable ledger,

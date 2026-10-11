@@ -53,6 +53,22 @@ class StockLossController extends Controller
         return $picked->toDateString() === now()->toDateString() ? now() : $picked->startOfDay();
     }
 
+    /**
+     * A loss made on/before the latest cycle close belongs to that
+     * closed cycle — its write-off is baked into the stored profit and
+     * settlements, so it must stay untouched.
+     */
+    private function closedCycleEntryError(StockLoss $stockLoss): ?string
+    {
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+
+        if ($latestClosed !== null && $stockLoss->entry_date->lessThanOrEqualTo($latestClosed)) {
+            return __('messages.entry_locked_closed_cycle');
+        }
+
+        return null;
+    }
+
     public function index(): View
     {
         return view('owner.stock-losses', [
@@ -165,6 +181,12 @@ class StockLossController extends Controller
     public function destroy(StockLoss $stockLoss): RedirectResponse
     {
         abort_unless(CommissionPeriod::query()->open()->exists(), 409);
+
+        $locked = $this->closedCycleEntryError($stockLoss);
+
+        if ($locked !== null) {
+            return back()->with('error', $locked);
+        }
 
         $stockLoss->delete();
 

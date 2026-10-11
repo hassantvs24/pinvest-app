@@ -5,8 +5,10 @@ use App\Enums\ExpenseCostType;
 use App\Enums\UserRole;
 use App\Models\ExpenseHead;
 use App\Models\Item;
+use App\Models\Production;
 use App\Models\Purchase;
 use App\Models\Sale;
+use App\Models\StockLoss;
 use App\Models\User;
 use App\Support\BusinessStats;
 use App\Support\CashLock;
@@ -194,6 +196,60 @@ it('blocks editing and deleting entries that belong to a closed cycle', function
         ->assertRedirect();
 
     expect((float) $openSale->fresh()->unit_price)->toBe(75.0);
+});
+
+it('blocks deleting productions and stock losses that belong to a closed cycle', function (): void {
+    $owner = cycleOwner();
+    $item = Item::factory()->create();
+
+    $period1 = CommissionSettlementService::openPeriod(null, Carbon::parse('2026-10-10 09:00'), null, null);
+
+    // Both made at 14:00 — inside the cycle that closes at 15:00.
+    $production = Production::factory()->create([
+        'user_id' => $owner->id,
+        'entry_date' => '2026-10-10 14:00',
+        'status' => EntryStatus::Confirmed,
+    ]);
+    $production->outputs()->create(['item_id' => $item->id, 'quantity' => 5]);
+
+    $loss = StockLoss::factory()->create([
+        'item_id' => $item->id,
+        'entry_date' => '2026-10-10 14:00',
+        'status' => EntryStatus::Confirmed,
+    ]);
+
+    Carbon::setTestNow('2026-10-10 15:00');
+    CommissionSettlementService::closePeriod($period1, now());
+
+    Carbon::setTestNow('2026-10-10 16:00');
+    CommissionSettlementService::openPeriod(null, now(), null, null);
+
+    $this->actingAs($owner)
+        ->delete("/owner/productions/{$production->id}")
+        ->assertSessionHas('error');
+
+    expect(Production::query()->whereKey($production->id)->exists())->toBeTrue();
+
+    $this->actingAs($owner)
+        ->delete("/owner/stock-losses/{$loss->id}")
+        ->assertSessionHas('error');
+
+    expect(StockLoss::query()->whereKey($loss->id)->exists())->toBeTrue();
+
+    // A run made AFTER the close stays deletable.
+    Carbon::setTestNow('2026-10-11 12:00');
+
+    $openProduction = Production::factory()->create([
+        'user_id' => $owner->id,
+        'entry_date' => '2026-10-11 10:00',
+        'status' => EntryStatus::Confirmed,
+    ]);
+
+    $this->actingAs($owner)
+        ->delete("/owner/productions/{$openProduction->id}")
+        ->assertRedirect();
+
+    expect(Production::query()->whereKey($openProduction->id)->exists())->toBeFalse();
 });
 
 it('refuses to close a cycle with pending entries at the service level', function (): void {

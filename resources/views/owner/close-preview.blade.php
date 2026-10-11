@@ -154,7 +154,7 @@
 
             {{-- Confirm (hidden while unapproved entries block the close) --}}
             @if($pendingEntries->isEmpty())
-                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-4">💡 {{ __('messages.close_preview_hint') }}</p>
+                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-4 whitespace-pre-line">💡 {{ __('messages.close_preview_hint') }}</p>
                 <form method="POST" action="{{ route('owner.commissions.close') }}" class="js-confirm-update">
                     @csrf
                     <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl py-3">

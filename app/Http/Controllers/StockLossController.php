@@ -21,6 +21,9 @@ class StockLossController extends Controller
 {
     public function index(Request $request): View
     {
+        // Only items that actually hold stock can be reported as lost.
+        $available = InventoryService::availableMap();
+
         return view('stock-losses.index', [
             'losses' => StockLoss::query()
                 ->with('item')
@@ -28,7 +31,9 @@ class StockLossController extends Controller
                 ->orderByDesc('entry_date')
                 ->orderByDesc('id')
                 ->paginate(15),
-            'items' => Item::query()->active()->orderBy('name')->get(),
+            'items' => Item::query()->active()->orderBy('name')->get()
+                ->filter(fn (Item $item): bool => ($available[$item->id] ?? 0.0) > 0.0)
+                ->values(),
             'today' => now()->format('Y-m-d'),
         ]);
     }

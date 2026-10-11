@@ -1922,6 +1922,23 @@ it('blocks closing while a stock loss is pending and rejects cleanly', function 
     expect(InventoryService::stockLossCost(now()->subDay(), now()))->toBe(0.0);
 });
 
+it('only lists items that hold stock in the partner stock-loss dropdown', function (): void {
+    $partner = makeUser(['phone' => '01700000062']);
+    $stocked = Item::factory()->create(['name' => 'স্টকে থাকা কাঠ']);
+    $empty = Item::factory()->create(['name' => 'শূন্য স্টকের কাঠ']);
+
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create(['item_id' => $stocked->id, 'quantity' => 10, 'status' => EntryStatus::Confirmed]);
+
+    $response = $this->actingAs($partner)->get('/stock-losses');
+    $response->assertOk();
+
+    $itemIds = collect($response->viewData('items'))->pluck('id');
+
+    expect($itemIds)->toContain($stocked->id)
+        ->not->toContain($empty->id);
+});
+
 it('costs direct buy-and-sell of the same item without any links', function (): void {
     $item = Item::factory()->create(['unit' => 'pcs']);
 
