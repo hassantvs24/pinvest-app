@@ -38,7 +38,6 @@
                     </button>
                     <p class="text-xs text-gray-500 mt-1">{{ __('messages.output_split_hint') }}</p>
                     <p class="text-xs text-gray-500 mt-1"><x-icon name="calculator" class="w-3.5 h-3.5" /> {{ __('messages.production_unit_hint') }}</p>
-                    <p class="text-xs text-gray-500 mt-1"><x-icon name="banknotes" class="w-3.5 h-3.5" /> {{ __('messages.production_value_hint') }}</p>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">

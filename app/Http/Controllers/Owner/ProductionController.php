@@ -137,8 +137,6 @@ class ProductionController extends Controller
 
         $error = InventoryService::validateProduction(
             $validated['components'] ?? [],
-            $validated['outputs'],
-            (float) ($validated['extra_cost'] ?? 0),
         );
         if ($error !== null) {
             return back()->withInput()->with('error', $error);
@@ -180,9 +178,9 @@ class ProductionController extends Controller
     {
         abort_unless($this->cycleOpen(), 409);
 
-        // Stock and prices may have moved since the partner submitted —
-        // re-validate both checks under a row lock so two simultaneous
-        // confirms cannot oversell the same units.
+        // Stock may have moved since the partner submitted — re-validate
+        // under a row lock so two simultaneous confirms cannot oversell
+        // the same units.
         $error = null;
 
         DB::transaction(function () use ($production, &$error): void {
@@ -192,8 +190,6 @@ class ProductionController extends Controller
 
             $error = InventoryService::validateProduction(
                 $production->components->map(fn ($c): array => ['item_id' => $c->item_id, 'quantity' => (float) $c->quantity])->all(),
-                $production->outputs->map(fn ($o): array => ['item_id' => $o->item_id, 'quantity' => (float) $o->quantity])->all(),
-                (float) $production->extra_cost,
                 excludeProductionId: $production->id,
             );
 

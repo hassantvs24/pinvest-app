@@ -72,8 +72,6 @@ class ProductionController extends Controller
 
         $error = InventoryService::validateProduction(
             $validated['components'] ?? [],
-            $validated['outputs'],
-            (float) ($validated['extra_cost'] ?? 0),
         );
         if ($error !== null) {
             return back()->withInput()->with('error', $error);

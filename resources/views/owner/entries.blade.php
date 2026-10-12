@@ -176,9 +176,13 @@
                                 <input type="number" name="quantity" min="0.001" step="any" value="{{ (float) $entry->quantity }}" required class="input-sm">
                             </div>
                             <div>
-                                <label class="label text-xs text-gray-500">{{ __('messages.unit_price') }}</label>
-                                <input type="number" name="unit_price" step="0.01" min="0" value="{{ $entry->unit_price }}" required class="input-sm">
+                                <label class="label text-xs text-gray-500">{{ __('messages.total_amount') }}</label>
+                                <input type="number" name="total" step="0.01" min="0.01" value="{{ $entry->total }}" required class="input-sm">
                             </div>
+                        </div>
+                        <div>
+                            <label class="label text-xs text-gray-500">{{ __('messages.unit_price_auto') }}</label>
+                            <input type="text" class="js-unit-price-preview input-sm input-readonly" readonly>
                         </div>
                     @endif
 
@@ -205,4 +209,29 @@
     </div>
 
     <div class="mt-4">{{ $entries->links() }}</div>
+
+    <script>
+        $(function () {
+            // Live unit-price preview for the purchase/sale inline edit forms.
+            function recalcEditUnitPrice($form) {
+                var qty = parseFloat($form.find('[name="quantity"]').val());
+                var total = parseFloat($form.find('[name="total"]').val());
+                var $preview = $form.find('.js-unit-price-preview');
+
+                if (!isNaN(qty) && qty > 0 && !isNaN(total)) {
+                    $preview.val((total / qty).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                } else {
+                    $preview.val('');
+                }
+            }
+
+            $(document).on('input', '.js-edit-form [name="quantity"], .js-edit-form [name="total"]', function () {
+                recalcEditUnitPrice($(this).closest('.js-edit-form'));
+            });
+
+            $('.js-edit-form').each(function () {
+                recalcEditUnitPrice($(this));
+            });
+        });
+    </script>
 @endsection

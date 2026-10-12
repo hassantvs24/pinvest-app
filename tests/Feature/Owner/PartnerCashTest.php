@@ -414,7 +414,7 @@ it('refunds the custody difference when a confirmed purchase is edited down', fu
     $this->actingAs($owner)->patch("/owner/entries/purchases/{$purchase->id}", [
         'head_id' => $wood->id,
         'quantity' => 7,
-        'unit_price' => 1000,
+        'total' => 7000,
         'entry_date' => now()->toDateString(),
     ])->assertRedirect();
 
@@ -448,7 +448,7 @@ it('deducts the extra when a confirmed entry is edited upward', function (): voi
     $this->actingAs($owner)->patch("/owner/entries/purchases/{$purchase->id}", [
         'head_id' => $wood->id,
         'quantity' => 14,
-        'unit_price' => 1000,
+        'total' => 14000,
         'entry_date' => now()->toDateString(),
     ])->assertRedirect();
 
@@ -517,7 +517,7 @@ it('never moves partner cash for owner-owned entries', function (): void {
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $wood->id,
         'quantity' => 5,
-        'unit_price' => 1000,
+        'total' => 5000,
         'entry_date' => now()->toDateString(),
     ])->assertRedirect();
 
@@ -526,7 +526,7 @@ it('never moves partner cash for owner-owned entries', function (): void {
     $this->actingAs($owner)->patch("/owner/entries/purchases/{$purchase->id}", [
         'head_id' => $wood->id,
         'quantity' => 8,
-        'unit_price' => 1000,
+        'total' => 8000,
         'entry_date' => now()->toDateString(),
     ])->assertRedirect();
 
@@ -629,7 +629,7 @@ it('syncs custody when a confirmed sale is edited or deleted', function (): void
     $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}", [
         'head_id' => $wood->id,
         'quantity' => 2,
-        'unit_price' => 2000,
+        'total' => 4000,
         'entry_date' => now()->toDateString(),
     ])->assertRedirect();
     expect(PartnerCashMovement::outstanding($partner->id))->toBe(14000.0);
@@ -661,7 +661,7 @@ it('owner-owned sales never touch partner cash', function (): void {
     $this->actingAs($owner)->post('/entries/sales', [
         'head_id' => $wood->id,
         'quantity' => 3,
-        'unit_price' => 2000,
+        'total' => 6000,
         'entry_date' => now()->toDateString(),
     ])->assertRedirect();
 

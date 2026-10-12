@@ -200,17 +200,20 @@
                 $('.js-flash').fadeOut(300);
             }, 2500);
 
-            // Live total = quantity x unit price
-            function recalcTotal() {
-                var qty = parseFloat($('#quantity').val()) || 0;
-                var price = parseFloat($('#unit_price').val()) || 0;
-                var total = qty * price;
-                $('#total_display').val(total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+            // Live unit price = total ÷ quantity (purchase/sale forms).
+            function recalcUnitPrice() {
+                var qty = parseFloat($('#quantity').val());
+                var total = parseFloat($('#total').val());
+                if (!isNaN(qty) && qty > 0 && !isNaN(total)) {
+                    $('#unit_price_display').val((total / qty).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                } else {
+                    $('#unit_price_display').val('');
+                }
             }
-            $(document).on('input', '#quantity, #unit_price', recalcTotal);
-            recalcTotal();
+            $(document).on('input', '#quantity, #total', recalcUnitPrice);
+            recalcUnitPrice();
 
-            // Item selected: auto-fill sale price + show the item's unit
+            // Item selected: show the item's unit and prefill the sale total.
             $(document).on('change', '#head_id', function () {
                 var selected = $(this).find('option:selected');
                 var unit = selected.data('unit');
@@ -219,8 +222,11 @@
                 }
                 var price = selected.data('price');
                 if (price) {
-                    $('#unit_price').val(price);
-                    recalcTotal();
+                    var qty = parseFloat($('#quantity').val()) || 0;
+                    if (qty > 0 && !$('#total').val()) {
+                        $('#total').val((price * qty).toFixed(2));
+                    }
+                    recalcUnitPrice();
                 }
             });
             $('#head_id').trigger('change');

@@ -143,7 +143,7 @@ it('scopes partner entries to their own user id', function (): void {
     $this->actingAs($me)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 2,
-        'unit_price' => 500,
+        'total' => 1000,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 
@@ -165,7 +165,7 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
     $this->actingAs($partner)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 1,
-        'unit_price' => 100,
+        'total' => 100,
         'entry_date' => now()->format('Y-m-d'),
     ]);
     expect(Sale::count())->toBe(0);
@@ -269,7 +269,7 @@ it('warns the owner on cash overdraw but still saves the entry', function (): vo
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 10,
-        'unit_price' => 100,
+        'total' => 1000,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionHas('success')->assertSessionHas('warning');
 
@@ -311,7 +311,7 @@ it('lets the owner create entries that are auto-confirmed', function (): void {
     $this->actingAs($owner)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 3,
-        'unit_price' => 200,
+        'total' => 600,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 

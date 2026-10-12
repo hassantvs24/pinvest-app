@@ -62,7 +62,7 @@ it('accepts fractional quantities end to end (purchase, sale, stock, COGS)', fun
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 2.5,
-        'unit_price' => 1000,
+        'total' => 2500,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors()->assertRedirect();
 
@@ -74,7 +74,7 @@ it('accepts fractional quantities end to end (purchase, sale, stock, COGS)', fun
     $this->actingAs($partner)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 1.25,
-        'unit_price' => 2000,
+        'total' => 2500,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors()->assertRedirect();
 
@@ -99,7 +99,7 @@ it('rejects non-numeric or zero fractional quantities', function (): void {
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 0,
-        'unit_price' => 100,
+        'total' => 100,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionHasErrors('quantity');
 
@@ -142,7 +142,7 @@ it('rejects owner entries dated inside a closed cycle', function (): void {
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 1,
-        'unit_price' => 100,
+        'total' => 100,
         'entry_date' => $now->copy()->subDays(3)->format('Y-m-d'),
     ])->assertSessionHasErrors('entry_date');
 
@@ -152,7 +152,7 @@ it('rejects owner entries dated inside a closed cycle', function (): void {
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 1,
-        'unit_price' => 100,
+        'total' => 100,
         'entry_date' => $now->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors();
 

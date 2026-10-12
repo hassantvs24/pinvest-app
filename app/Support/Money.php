@@ -15,4 +15,13 @@ class Money
     {
         return self::SYMBOL.number_format($amount, 2);
     }
+
+    /**
+     * Unit price derived from a total and a quantity, rounded to the
+     * same two decimals the purchase/sale columns store.
+     */
+    public static function unitPrice(float $total, float $quantity): float
+    {
+        return round($total / $quantity, 2);
+    }
 }

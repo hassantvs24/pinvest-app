@@ -14,6 +14,7 @@ use App\Support\CommissionSettlementService;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -203,10 +204,18 @@ class EntryController extends Controller
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'numeric', 'min:0.001'],
-                'unit_price' => ['required', 'numeric', 'min:0.01'],
+                'total' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
+
+            $unitPrice = Money::unitPrice((float) $validated['total'], (float) $validated['quantity']);
+
+            if ($unitPrice < 0.01) {
+                return back()->withInput()->withErrors([
+                    'total' => __('messages.total_too_low_for_quantity'),
+                ]);
+            }
 
             $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
@@ -214,8 +223,8 @@ class EntryController extends Controller
                 'user_id' => $user->id,
                 'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
-                'unit_price' => $validated['unit_price'],
-                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
+                'unit_price' => $unitPrice,
+                'total' => $validated['total'],
                 'note' => $validated['note'] ?? null,
                 'entry_date' => $entryMoment,
                 'status' => $status,
@@ -225,10 +234,18 @@ class EntryController extends Controller
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'numeric', 'min:0.001'],
-                'unit_price' => ['required', 'numeric', 'min:0.01'],
+                'total' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
+
+            $unitPrice = Money::unitPrice((float) $validated['total'], (float) $validated['quantity']);
+
+            if ($unitPrice < 0.01) {
+                return back()->withInput()->withErrors([
+                    'total' => __('messages.total_too_low_for_quantity'),
+                ]);
+            }
 
             $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
@@ -248,8 +265,8 @@ class EntryController extends Controller
                 'user_id' => $user->id,
                 'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
-                'unit_price' => $validated['unit_price'],
-                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
+                'unit_price' => $unitPrice,
+                'total' => $validated['total'],
                 'note' => $validated['note'] ?? null,
                 'entry_date' => $entryMoment,
                 'status' => $status,
@@ -282,7 +299,7 @@ class EntryController extends Controller
             $cash = BusinessStats::all()['cash_in_hand'];
             if ($cash < 0) {
                 $warnings[] = __('messages.cash_overdraw_warning', [
-                    'cash' => number_format($cash + ($type === 'purchases' ? (float) $validated['quantity'] * (float) $validated['unit_price'] : (float) $validated['amount']), 2),
+                    'cash' => number_format($cash + ($type === 'purchases' ? (float) $validated['total'] : (float) $validated['amount']), 2),
                     'short' => number_format($cash, 2),
                 ]);
             }

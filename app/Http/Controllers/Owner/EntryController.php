@@ -15,6 +15,7 @@ use App\Support\CommissionSettlementService;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
@@ -393,16 +394,24 @@ class EntryController extends Controller
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'numeric', 'min:0.001'],
-                'unit_price' => ['required', 'numeric', 'min:0.01'],
+                'total' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => $this->entryDateRules(),
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
+            $unitPrice = Money::unitPrice((float) $validated['total'], (float) $validated['quantity']);
+
+            if ($unitPrice < 0.01) {
+                return back()->withInput()->withErrors([
+                    'total' => __('messages.total_too_low_for_quantity'),
+                ]);
+            }
+
             $model->update([
                 'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
-                'unit_price' => $validated['unit_price'],
-                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
+                'unit_price' => $unitPrice,
+                'total' => $validated['total'],
                 'entry_date' => $this->editedEntryMoment($model, $validated['entry_date']),
                 'note' => $validated['note'] ?? null,
             ]);
@@ -410,10 +419,18 @@ class EntryController extends Controller
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'numeric', 'min:0.001'],
-                'unit_price' => ['required', 'numeric', 'min:0.01'],
+                'total' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => $this->entryDateRules(),
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
+
+            $unitPrice = Money::unitPrice((float) $validated['total'], (float) $validated['quantity']);
+
+            if ($unitPrice < 0.01) {
+                return back()->withInput()->withErrors([
+                    'total' => __('messages.total_too_low_for_quantity'),
+                ]);
+            }
 
             $error = $this->stockOverflowError($type, (int) $validated['head_id'], (float) $validated['quantity'], (int) $model->id);
             if ($error !== null) {
@@ -423,8 +440,8 @@ class EntryController extends Controller
             $model->update([
                 'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
-                'unit_price' => $validated['unit_price'],
-                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
+                'unit_price' => $unitPrice,
+                'total' => $validated['total'],
                 'entry_date' => $this->editedEntryMoment($model, $validated['entry_date']),
                 'note' => $validated['note'] ?? null,
             ]);

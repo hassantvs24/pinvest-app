@@ -80,7 +80,7 @@
                     </div>
                 @endif
 
-                {{-- Purchase / Sale: quantity + unit price + live total --}}
+                {{-- Purchase / Sale: quantity + total amount; unit price is computed automatically --}}
                 @if($config['has_quantity'])
                     <div class="grid grid-cols-2 gap-3">
                         <div>
@@ -88,14 +88,17 @@
                             <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required class="input">
                         </div>
                         <div>
-                            <label class="label">{{ __('messages.unit_price') }}</label>
-                            <input type="number" id="unit_price" name="unit_price" value="{{ old('unit_price') }}" step="0.01" min="0" required class="input">
+                            <label class="label">{{ __('messages.total_amount') }}</label>
+                            <input type="number" id="total" name="total" value="{{ old('total') }}" step="0.01" min="0.01" required class="input">
                         </div>
                     </div>
 
                     <div>
-                        <label class="label">{{ __('messages.total') }}</label>
-                        <input type="text" id="total_display" readonly class="input input-readonly">
+                        <label class="label">{{ __('messages.unit_price_auto') }}</label>
+                        <input type="text" id="unit_price_display" readonly class="input input-readonly">
+                        <p class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                            <x-icon name="calculator" class="w-4 h-4" /> {{ __('messages.unit_price_auto_hint') }}
+                        </p>
                     </div>
                 @endif
 
@@ -142,7 +145,7 @@
                 function checkCashOverdraw() {
                     var total = 0;
                     @if($type === 'purchases')
-                        total = (parseFloat($('#quantity').val()) || 0) * (parseFloat($('#unit_price').val()) || 0);
+                        total = parseFloat($('#total').val()) || 0;
                     @else
                         total = parseFloat($('#amount').val()) || 0;
                     @endif
@@ -157,7 +160,7 @@
                         hint.addClass('hidden').text('');
                     }
                 }
-                $(document).on('input', '#quantity, #unit_price, #amount', checkCashOverdraw);
+                $(document).on('input', '#total, #amount', checkCashOverdraw);
                 checkCashOverdraw();
             });
         </script>

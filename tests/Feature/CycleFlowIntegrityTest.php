@@ -161,7 +161,7 @@ it('blocks editing and deleting entries that belong to a closed cycle', function
         ->patch('/owner/entries/sales/'.$closedSale->id, [
             'head_id' => $item->id,
             'quantity' => 1,
-            'unit_price' => 999,
+            'total' => 999,
             'entry_date' => '2026-10-11',
         ])
         ->assertSessionHas('error');
@@ -190,7 +190,7 @@ it('blocks editing and deleting entries that belong to a closed cycle', function
         ->patch('/owner/entries/sales/'.$openSale->id, [
             'head_id' => $item->id,
             'quantity' => 1,
-            'unit_price' => 75,
+            'total' => 75,
             'entry_date' => '2026-10-11',
         ])
         ->assertRedirect();

@@ -293,48 +293,24 @@ class InventoryService
     }
 
     /**
-     * The moving weighted-average cost of one unit of an item, in the
-     * item's own unit (0 when the item has no stock history yet — the
-     * same basis the COGS calculation uses).
-     */
-    public static function avgCostPerUnit(Item $item): float
-    {
-        $states = self::simulate(null, now())['states'];
-        $state = $states[$item->id] ?? null;
-
-        if ($state === null || $state['in_qty'] <= 0.0) {
-            return 0.0;
-        }
-
-        return self::stateAvgCost($state) * ItemUnits::toBase(1.0, $item->unit);
-    }
-
-    /**
      * Validate a production run before it is stored or confirmed.
      * Raw materials may not exceed what is available (pending runs
-     * reserve their materials), and the finished goods must be worth
-     * at least what the run consumes. Returns an error message or null.
+     * reserve their materials). Returns an error message or null.
      *
      * @param  array<int, array{item_id: int, quantity: float}>  $components
-     * @param  array<int, array{item_id: int, quantity: float}>  $outputs
      */
     public static function validateProduction(
         array $components,
-        array $outputs,
-        float $extraCost,
         ?int $excludeProductionId = null,
     ): ?string {
         // Rows are validated distinct, but aggregate defensively so the
         // check stays correct for any caller.
-        $sumByItem = fn (array $rows): array => collect($rows)
+        $componentsByItem = collect($components)
             ->groupBy('item_id')
             ->map(fn ($group): float => (float) $group->sum('quantity'))
             ->all();
 
-        $componentsByItem = $sumByItem($components);
-        $outputsByItem = $sumByItem($outputs);
-
-        // 1. Raw materials must fit the available stock.
+        // Raw materials must fit the available stock.
         foreach ($componentsByItem as $itemId => $quantity) {
             $item = Item::query()->find($itemId);
             if ($item === null) {
@@ -349,30 +325,6 @@ class InventoryService
                     'unit' => ItemUnits::label($item->unit),
                 ]);
             }
-        }
-
-        // 2. The outputs must be worth at least the inputs.
-        $inputCost = $extraCost;
-        foreach ($componentsByItem as $itemId => $quantity) {
-            $item = Item::query()->find($itemId);
-            if ($item !== null) {
-                $inputCost += $quantity * self::avgCostPerUnit($item);
-            }
-        }
-
-        $outputValue = 0.0;
-        foreach ($outputsByItem as $itemId => $quantity) {
-            $item = Item::query()->find($itemId);
-            if ($item !== null) {
-                $outputValue += $quantity * (float) $item->default_price;
-            }
-        }
-
-        if ($outputValue + 0.01 < $inputCost) {
-            return __('messages.production_value_below_cost', [
-                'cost' => number_format($inputCost, 2),
-                'value' => number_format($outputValue, 2),
-            ]);
         }
 
         return null;
