@@ -20,6 +20,7 @@ use App\Http\Controllers\Owner\WithdrawalController as OwnerWithdrawalController
 use App\Http\Controllers\PartnerCommissionController;
 use App\Http\Controllers\ProductionController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StockController;
 use App\Http\Controllers\StockLossController;
 use Illuminate\Support\Facades\Route;
 
@@ -64,6 +65,9 @@ Route::middleware('auth')->group(function (): void {
     // Partner stock-loss reports (pending until the owner confirms).
     Route::get('/stock-losses', [StockLossController::class, 'index'])->name('stock-losses.index');
     Route::post('/stock-losses', [StockLossController::class, 'store'])->name('stock-losses.store');
+
+    // Partner stock overview — quantity only, no ledger or cost figures.
+    Route::get('/stock', [StockController::class, 'index'])->name('stock.index');
 
     // Partner entries (own only — scoped by user_id in the controller).
     Route::get('/entries/{type}', [EntryController::class, 'index'])->name('entries.index');

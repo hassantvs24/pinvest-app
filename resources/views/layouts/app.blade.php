@@ -64,6 +64,9 @@
                         <a href="{{ route('stock-losses.index') }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg transition {{ request()->routeIs('stock-losses.*') ? 'bg-white/20 font-semibold' : 'hover:bg-white/10' }}">
                             <x-icon name="arrow-trending-down" class="w-4 h-4" /> {{ __('messages.stock_losses') }}
                         </a>
+                        <a href="{{ route('stock.index') }}" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg transition {{ request()->routeIs('stock.*') ? 'bg-white/20 font-semibold' : 'hover:bg-white/10' }}">
+                            <x-icon name="building-storefront" class="w-4 h-4" /> {{ __('messages.stock_page') }}
+                        </a>
                     @endif
                 </nav>
 
@@ -120,7 +123,7 @@
 
     {{-- ===================== Bottom navigation (mobile only) ===================== --}}
     <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-gray-200 shadow-[0_-4px_16px_rgba(0,0,0,0.05)] pb-[env(safe-area-inset-bottom)]">
-        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-7' : 'grid-cols-4' }} text-center text-[11px]">
+        <div class="grid {{ auth()->user()->isOwner() ? 'grid-cols-7' : 'grid-cols-5' }} text-center text-[11px]">
             @unless(auth()->user()->isOwner())
                 <a href="{{ route('dashboard') }}" class="flex flex-col items-center gap-0.5 py-2 {{ request()->routeIs('dashboard') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
                     <x-icon name="home" class="w-5 h-5" />
@@ -179,6 +182,11 @@
                     <x-icon name="arrow-trending-down" class="w-5 h-5" />
                     {{ __('messages.stock_losses') }}
                     <span class="w-1 h-1 rounded-full {{ request()->routeIs('stock-losses.*') ? 'bg-emerald-500' : 'bg-transparent' }}"></span>
+                </a>
+                <a href="{{ route('stock.index') }}" class="flex flex-col items-center gap-0.5 py-2 {{ request()->routeIs('stock.*') ? 'text-emerald-700 font-bold' : 'text-gray-500' }}">
+                    <x-icon name="building-storefront" class="w-5 h-5" />
+                    {{ __('messages.stock_page') }}
+                    <span class="w-1 h-1 rounded-full {{ request()->routeIs('stock.*') ? 'bg-emerald-500' : 'bg-transparent' }}"></span>
                 </a>
             @endif
         </div>

@@ -307,6 +307,7 @@ return [
     'warn_negative_stock' => 'More used/sold than purchased for: :items',
     'stock_page' => 'Stock',
     'stock_page_hint' => 'Current stock of every item — click an item for its full movement ledger.',
+    'partner_stock_hint' => 'Current stock of every item — quantity only.',
     'stock_out' => 'Out of stock',
     'stock_reserved' => 'Reserved (pending sales/losses)',
     'stock_available_now' => 'Available',
