@@ -142,6 +142,41 @@
         $(function () {
             var rowIndex = 1;
 
+            // Prevent the same item from being picked twice in one run:
+            // an item may appear in only one row, and it cannot be both a
+            // component and an output of the same run.
+            function refreshDuplicateOptions() {
+                var $selects = $('#output_rows select, #component_rows select');
+
+                $selects.each(function () {
+                    var $select = $(this);
+                    var current = $select.val();
+
+                    $select.find('option').each(function () {
+                        var $option = $(this);
+                        var value = $option.val();
+
+                        if (!value) {
+                            $option.prop('disabled', false);
+
+                            return;
+                        }
+
+                        var usedElsewhere = false;
+
+                        $selects.not($select).each(function () {
+                            if ($(this).val() === value) {
+                                usedElsewhere = true;
+
+                                return false;
+                            }
+                        });
+
+                        $option.prop('disabled', usedElsewhere);
+                    });
+                });
+            }
+
             // Add a finished-good output row (clone of the first, re-indexed).
             $(document).on('click', '#js-add-output', function () {
                 var $row = $('.output-row').first().clone();
@@ -149,12 +184,14 @@
                 $row.find('input').attr('name', 'outputs[' + rowIndex + '][quantity]').val('');
                 rowIndex++;
                 $('#output_rows').append($row);
+                refreshDuplicateOptions();
             });
 
             // Remove an output row (keep at least one).
             $(document).on('click', '.js-remove-output', function () {
                 if ($('.output-row').length > 1) {
                     $(this).closest('.output-row').remove();
+                    refreshDuplicateOptions();
                 }
             });
 
@@ -165,13 +202,18 @@
                 $row.find('input').attr('name', 'components[' + rowIndex + '][quantity]').val('');
                 rowIndex++;
                 $('#component_rows').append($row);
+                refreshDuplicateOptions();
             });
 
             // Remove a raw-material row (rows are optional — zero is fine).
             $(document).on('click', '.js-remove-row', function () {
                 $(this).closest('.component-row').remove();
                 updateComponentHint();
+                refreshDuplicateOptions();
             });
+
+            // Re-check disabled options whenever a selection changes.
+            $(document).on('change', '#output_rows select, #component_rows select', refreshDuplicateOptions);
 
             // Live hint: how much of the selected material is available.
             function updateComponentHint() {
@@ -190,6 +232,7 @@
             }
             $(document).on('change', '.js-component-select', updateComponentHint);
             updateComponentHint();
+            refreshDuplicateOptions();
         });
     </script>
 @endsection
