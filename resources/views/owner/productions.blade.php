@@ -60,7 +60,7 @@
                         <div class="component-row grid grid-cols-[1fr_110px_44px] gap-2">
                             <select name="components[0][item_id]" class="js-component-select input-sm">
                                 <option value="">{{ __('messages.item') }}</option>
-                                @foreach($items as $item)
+                                @foreach($componentItems as $item)
                                     <option value="{{ $item->id }}" data-available="{{ $available[$item->id] ?? 0 }}" data-unit="{{ \App\Support\ItemUnits::label($item->unit) }}">{{ $item->name }} ({{ \App\Support\ItemUnits::label($item->unit) }})</option>
                                 @endforeach
                             </select>
@@ -69,12 +69,17 @@
                             <button type="button" class="js-remove-row bg-red-100 text-red-700 rounded-lg font-bold" title="{{ __('messages.remove') }}"><x-icon name="x-mark" class="w-4 h-4 mx-auto" /></button>
                         </div>
                     </div>
+                    @if($componentItems->isEmpty())
+                        <p class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2 mt-2 flex items-start gap-1.5">
+                            <x-icon name="exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.no_component_stock') }}
+                        </p>
+                    @endif
                     <button type="button" id="js-add-row" class="mt-2 w-full border-2 border-dashed border-emerald-300 text-emerald-700 font-bold rounded-xl py-2.5 flex items-center justify-center gap-1.5 active:scale-[0.98] transition">
                         <x-icon name="plus" class="w-4 h-4" /> {{ __('messages.add_material') }}
                     </button>
                     <p class="text-xs text-gray-500 mt-1"><x-icon name="calculator" class="w-3.5 h-3.5" /> {{ __('messages.production_unit_hint') }}</p>
                     <p class="text-xs text-gray-500 mt-1"><x-icon name="cube" class="w-3.5 h-3.5" /> {{ __('messages.production_stock_hint') }}</p>
-                    <p id="component_stock_hint" class="text-xs text-gray-600"></p>
+                    <p id="component_stock_hint" class="text-xs"></p>
                 </div>
 
                 <div>
@@ -198,12 +203,13 @@
                 var available = parseFloat(selected.data('available'));
                 var hint = $('#component_stock_hint');
                 if (isNaN(available) || available === undefined) {
-                    hint.text('');
+                    hint.text('').removeClass('text-red-600 text-emerald-700 font-bold');
                     return;
                 }
                 var unit = $('.js-component-select').first().find('option:selected').data('unit') || '';
                 var text = @json(__('messages.available_stock_hint')).replace(':available', available).replace(':unit', unit);
                 hint.text(text);
+                hint.toggleClass('text-emerald-700 font-bold', available > 0);
                 hint.toggleClass('text-red-600 font-bold', available <= 0);
             }
             $(document).on('change', '.js-component-select', updateComponentHint);

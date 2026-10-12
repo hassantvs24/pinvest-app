@@ -121,3 +121,41 @@ it('blocks the owner from confirming a production that no longer fits', function
 
     expect($production->fresh()->status)->toBe(EntryStatus::Pending);
 });
+
+it('lists only in-stock items in the partner production component dropdown', function (): void {
+    $stocked = prodItem(['name' => 'স্টকে থাকা কাঠ']);
+    $empty = prodItem(['name' => 'শূন্য স্টকের কাঠ']);
+    prodStock($stocked, 10);
+
+    $response = $this->actingAs(prodPartner())->get('/productions')->assertOk();
+
+    expect(collect($response->viewData('componentItems'))->pluck('id'))
+        ->toContain($stocked->id)
+        ->not->toContain($empty->id);
+
+    // The finished-good output dropdown still lists every active item.
+    expect(collect($response->viewData('items'))->pluck('id'))
+        ->toContain($stocked->id)
+        ->toContain($empty->id);
+});
+
+it('lists only in-stock items in the owner production component dropdown', function (): void {
+    $stocked = prodItem(['name' => 'স্টকে থাকা কাঠ']);
+    $empty = prodItem(['name' => 'শূন্য স্টকের কাঠ']);
+    prodStock($stocked, 10);
+
+    $response = $this->actingAs(prodOwner())->get('/owner/productions')->assertOk();
+
+    expect(collect($response->viewData('componentItems'))->pluck('id'))
+        ->toContain($stocked->id)
+        ->not->toContain($empty->id);
+});
+
+it('shows the no-component-stock hint when nothing is in stock', function (): void {
+    prodItem(['name' => 'শূন্য স্টকের কাঠ']);
+
+    $this->actingAs(prodPartner())
+        ->get('/productions')
+        ->assertOk()
+        ->assertSee(__('messages.no_component_stock'));
+});

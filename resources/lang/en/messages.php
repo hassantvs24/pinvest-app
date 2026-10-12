@@ -351,6 +351,7 @@ return [
     'production_saved' => 'Production recorded',
     'production_unit_hint' => 'Each product is counted in its own unit (e.g. kg, pcs, tola). So when entering a quantity, match it with the unit label shown next to the field.',
     'production_stock_hint' => 'You cannot enter more material than the stock has — check current stock on the 🏪 Stock page first.',
+    'no_component_stock' => 'No raw material has usable stock right now — add a purchase or production entry first.',
     'production_value_hint' => 'If the finished goods are worth less than the materials cost, the entry will not be accepted.',
     'production_component_exceeds_stock' => 'Only :available :unit of :item is in stock — you cannot use more than that.',
     'production_value_below_cost' => 'The finished goods are worth ৳:value but the materials cost ৳:cost — check the inputs and outputs.',
