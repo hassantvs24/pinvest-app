@@ -7,8 +7,8 @@
     {{-- Pre-compiled Tailwind (Vite) + local jQuery — icons/avatars are offline SVG --}}
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <script src="{{ asset('js/jquery.min.js') }}"></script>
-    {{-- Android APK (Capacitor) native feel: no-op in normal browsers --}}
-    <script src="{{ asset('js/capacitor-native.js') }}"></script>
+    {{-- Capacitor native feel (APK) + mobile pull-to-refresh; native parts no-op in browsers --}}
+    <script src="{{ asset('js/capacitor-native.js') }}?v=2"></script>
     <link rel="icon" type="image/svg+xml" href="{{ asset('icon.svg') }}">
 </head>
 <body class="bg-gray-50 text-gray-800 pb-20 md:pb-6">
