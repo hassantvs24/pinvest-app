@@ -26,6 +26,9 @@ class ProductionController extends Controller
      */
     public function index(Request $request): View
     {
+        $items = Item::query()->active()->orderBy('name')->get();
+        $available = InventoryService::availableMap();
+
         return view('productions.index', [
             'productions' => Production::query()
                 ->with(['outputs.item', 'components.item'])
@@ -33,8 +36,13 @@ class ProductionController extends Controller
                 ->orderByDesc('entry_date')
                 ->orderByDesc('id')
                 ->paginate(15),
-            'items' => Item::query()->active()->orderBy('name')->get(),
-            'available' => InventoryService::availableMap(),
+            'items' => $items,
+            // Component rows may only use items that actually have stock
+            // right now, exactly like the sale form's item dropdown.
+            'componentItems' => $items
+                ->filter(fn (Item $item): bool => ($available[$item->id] ?? 0.0) > 0.00001)
+                ->values(),
+            'available' => $available,
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -64,8 +72,6 @@ class ProductionController extends Controller
 
         $error = InventoryService::validateProduction(
             $validated['components'] ?? [],
-            $validated['outputs'],
-            (float) ($validated['extra_cost'] ?? 0),
         );
         if ($error !== null) {
             return back()->withInput()->with('error', $error);
@@ -76,7 +82,7 @@ class ProductionController extends Controller
                 'user_id' => $request->user()->id,
                 'extra_cost' => $validated['extra_cost'] ?? 0,
                 'note' => $validated['note'] ?? null,
-                'entry_date' => now()->format('Y-m-d'), // partners always report today
+                'entry_date' => now(), // entry moment captured automatically
                 'status' => EntryStatus::Pending,
             ]);
 

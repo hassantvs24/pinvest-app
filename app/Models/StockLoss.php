@@ -23,7 +23,7 @@ class StockLoss extends Model
     {
         return [
             'quantity' => 'decimal:3',
-            'entry_date' => 'date',
+            'entry_date' => 'datetime',
             'status' => EntryStatus::class,
             'confirmed_at' => 'datetime',
         ];

@@ -46,7 +46,7 @@ function postSale(User $user, Item $item, int $quantity)
     return test()->actingAs($user)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => $quantity,
-        'unit_price' => 100,
+        'total' => $quantity * 100,
         'entry_date' => now()->format('Y-m-d'),
     ]);
 }
@@ -123,7 +123,7 @@ it('blocks the owner from editing a sale beyond available stock', function (): v
     $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}", [
         'head_id' => $item->id,
         'quantity' => 6,
-        'unit_price' => 100,
+        'total' => 600,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 
@@ -150,7 +150,7 @@ it('blocks the owner from editing a pending sale above what is left', function (
     $this->actingAs($owner)->patch("/owner/entries/sales/{$sale->id}", [
         'head_id' => $item->id,
         'quantity' => 3,
-        'unit_price' => 100,
+        'total' => 300,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 

@@ -25,7 +25,10 @@ use App\Support\InventoryService;
 use App\Support\ItemUnits;
 use Database\Seeders\DefaultDataSeeder;
 use Database\Seeders\DemoDataSeeder;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 uses(RefreshDatabase::class);
 
@@ -54,6 +57,20 @@ it('logs in with email or mobile number', function (): void {
         ->assertRedirect('/dashboard');
 
     $this->assertAuthenticatedAs($user);
+});
+
+it('queues a remember cookie only when remember me is checked', function (): void {
+    makeUser(['email' => 'r@b.com', 'phone' => '01700000003', 'password' => 'secret123']);
+    $recaller = auth()->guard()->getRecallerName();
+
+    // Without the checkbox: no remember cookie.
+    $this->post('/login', ['identifier' => 'r@b.com', 'password' => 'secret123'])
+        ->assertCookieMissing($recaller);
+    $this->post('/logout');
+
+    // With the checkbox: long-lived remember cookie is queued.
+    $this->post('/login', ['identifier' => 'r@b.com', 'password' => 'secret123', 'remember' => '1'])
+        ->assertCookie($recaller);
 });
 
 it('renders guest pages in Bangla by default and honors the saved preference', function (): void {
@@ -126,7 +143,7 @@ it('scopes partner entries to their own user id', function (): void {
     $this->actingAs($me)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 2,
-        'unit_price' => 500,
+        'total' => 1000,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 
@@ -148,7 +165,7 @@ it('blocks entry creation and confirmation without an open cycle', function (): 
     $this->actingAs($partner)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 1,
-        'unit_price' => 100,
+        'total' => 100,
         'entry_date' => now()->format('Y-m-d'),
     ]);
     expect(Sale::count())->toBe(0);
@@ -189,16 +206,51 @@ it('lists only sellable items on the sale form', function (): void {
         ->assertSee(__('messages.no_sellable_items', [], 'bn'));
 });
 
-it('loads the expense create form with expense heads, not items', function (): void {
+it('loads the expense create form with expense heads in the head dropdown and products in the related-product picker', function (): void {
     $partner = makeUser(['phone' => '01700000098']);
     $item = Item::factory()->create(['name' => 'গোপন পণ্য']);
     $head = ExpenseHead::factory()->create(['name' => 'গোপন খাত']);
     CommissionPeriod::factory()->open()->create();
 
-    $this->actingAs($partner)->get('/entries/expenses/create')
+    $html = $this->actingAs($partner)->get('/entries/expenses/create')
         ->assertOk()
-        ->assertSee('গোপন খাত')
-        ->assertDontSee('গোপন পণ্য');
+        ->getContent();
+
+    // The head dropdown lists expense heads only…
+    preg_match('/<select[^>]*name="head_id"[^>]*>.*?<\/select>/s', $html, $headSelect);
+    expect($headSelect[0] ?? '')->toContain('গোপন খাত')->not->toContain('গোপন পণ্য');
+
+    // …while the related-product picker lists master items.
+    preg_match('/<select[^>]*name="item_id"[^>]*>.*?<\/select>/s', $html, $productSelect);
+    expect($productSelect[0] ?? '')->toContain('গোপন পণ্য');
+});
+
+it('links a product-type expense to the selected product and rejects non-product ids', function (): void {
+    $partner = makeUser(['phone' => '01700000099']);
+    $item = Item::factory()->create();
+    $otherItem = Item::factory()->create();
+    $productHead = ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::Product]);
+    $generalHead = ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::General]);
+    CommissionPeriod::factory()->open()->create();
+
+    // Product head + a real product id: saved with the link.
+    $this->actingAs($partner)->post('/entries/expenses', [
+        'head_id' => $productHead->id,
+        'item_id' => $item->id,
+        'amount' => 250,
+    ])->assertSessionDoesntHaveErrors();
+
+    expect(Expense::sole()->item_id)->toBe($item->id);
+
+    // A non-product id (e.g. an expense head id, the old broken picker)
+    // must fail validation instead of silently linking.
+    $this->actingAs($partner)->post('/entries/expenses', [
+        'head_id' => $generalHead->id,
+        'item_id' => $otherItem->id + 1000,
+        'amount' => 100,
+    ])->assertSessionHasErrors('item_id');
+
+    expect(Expense::count())->toBe(1);
 });
 
 it('warns the owner on cash overdraw but still saves the entry', function (): void {
@@ -217,7 +269,7 @@ it('warns the owner on cash overdraw but still saves the entry', function (): vo
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 10,
-        'unit_price' => 100,
+        'total' => 1000,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionHas('success')->assertSessionHas('warning');
 
@@ -259,7 +311,7 @@ it('lets the owner create entries that are auto-confirmed', function (): void {
     $this->actingAs($owner)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 3,
-        'unit_price' => 200,
+        'total' => 600,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertRedirect();
 
@@ -687,6 +739,53 @@ it('shows commission due per partner on the report (pending settlements)', funct
         ->assertSee('৳150.00'); // total earned
 });
 
+it('shows business health insights and per-product profit on the report', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000010']);
+    $item = Item::factory()->create(['name' => 'Gold ring']);
+
+    Purchase::factory()->create([
+        'item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 100,
+        'total' => 100,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDays(2),
+    ]);
+
+    Sale::factory()->create([
+        'user_id' => $partner->id,
+        'item_id' => $item->id,
+        'quantity' => 1,
+        'unit_price' => 120,
+        'total' => 120,
+        'status' => EntryStatus::Confirmed,
+        'entry_date' => now()->subDay(),
+    ]);
+
+    CommissionSettlement::factory()->create([
+        'user_id' => $partner->id,
+        'amount' => 200,
+        'status' => 'pending',
+    ]);
+
+    $this->actingAs($owner)->get('/owner/reports')
+        ->assertOk()
+        ->assertSee(__('messages.business_health'))
+        ->assertSee(__('messages.insight_commission_over_cash', ['due' => '৳200.00', 'cash' => '৳20.00']), escape: false)
+        ->assertSee('Gold ring')
+        ->assertSee('৳20.00 · 16.7%') // per-product gross profit 120 − 100
+        ->assertSee(__('messages.six_month_trend'));
+});
+
+it('shows an all-good insight when the business has no issues', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@y.com', 'phone' => '01900000001']);
+
+    $this->actingAs($owner)->get('/owner/reports')
+        ->assertOk()
+        ->assertSee(__('messages.insight_all_good'), escape: false);
+});
+
 it('stores item units and rejects invalid ones', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
 
@@ -853,25 +952,23 @@ it('opens and closes a commission period manually, settling profit x rate', func
     $a = makeUser(['commission_rate' => 10, 'phone' => '01700000005']);
     $b = makeUser(['commission_rate' => 20, 'phone' => '01700000006']);
     $item = Item::factory()->create();
-    $openedAt = now()->subDays(10);
+    $now = now()->setTime(9, 0);
 
-    // Owner opens the period with opening cash and an opening investment.
+    // Owner opens the period with an opening investment.
+    // A cycle always opens at the exact current moment.
+    $this->travelTo($now->copy()->subDays(10));
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'label' => 'Test session',
-        'opened_at' => $openedAt->format('Y-m-d'),
-        'opening_cash' => 5000,
         'investment_amount' => 2000,
     ])->assertRedirect();
 
     $period = CommissionPeriod::sole();
     expect($period->status)->toBe('open')
-        ->and((float) $period->opening_cash)->toBe(5000.0)
+        ->and($period->opened_at->eq($now->copy()->subDays(10)))->toBeTrue()
         ->and((float) Investment::sole()->amount)->toBe(2000.0);
 
     // A second open attempt is rejected while one period is open.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->format('Y-m-d'),
-    ])->assertStatus(409);
+    $this->actingAs($owner)->post('/owner/commissions/open')->assertStatus(409);
 
     // Entries inside the period (profit = 100) and outside it (must not count).
     Sale::factory()->create([
@@ -879,20 +976,19 @@ it('opens and closes a commission period manually, settling profit x rate', func
         'item_id' => $item->id,
         'total' => 100,
         'status' => EntryStatus::Confirmed,
-        'entry_date' => $openedAt->copy()->addDays(3),
+        'entry_date' => $now->copy()->subDays(7),
     ]);
     Sale::factory()->create([
         'user_id' => $a->id,
         'item_id' => $item->id,
         'total' => 999,
         'status' => EntryStatus::Confirmed,
-        'entry_date' => now()->subDays(30),
+        'entry_date' => $now->copy()->subDays(30),
     ]);
 
-    // Owner closes the period today.
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ])->assertRedirect();
+    // Owner closes the period a few days later.
+    $this->travelTo($now->copy()->subDays(3));
+    $this->actingAs($owner)->post('/owner/commissions/close')->assertRedirect();
 
     expect($period->fresh()->status)->toBe('closed')
         ->and((float) $period->fresh()->profit)->toBe(100.0)
@@ -902,30 +998,33 @@ it('opens and closes a commission period manually, settling profit x rate', func
     // Re-closing (e.g. retry) creates nothing new — idempotent per period.
     CommissionSettlementService::closePeriod($period->fresh(), now());
     expect(CommissionSettlement::count())->toBe(2);
+
+    $this->travelBack();
 });
 
 it('closes a loss period without creating commissions', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000004']);
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(5)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(5));
+    $this->actingAs($owner)->post('/owner/commissions/open');
 
     Expense::factory()->create([
         'user_id' => $partner->id,
         'expense_head_id' => ExpenseHead::factory(),
         'amount' => 500,
         'status' => EntryStatus::Confirmed,
-        'entry_date' => now()->subDays(2),
+        'entry_date' => $now->copy()->subDays(2),
     ]);
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     expect((float) CommissionPeriod::sole()->profit)->toBe(-500.0)
         ->and(CommissionSettlement::count())->toBe(0);
+
+    $this->travelBack();
 });
 
 it('pays a partner through request and approval, reducing cash', function (): void {
@@ -1020,54 +1119,53 @@ it('carries unsold stock across cycles so cycle profit is not distorted', functi
     $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000020']);
     // One unified item: bought in cycle 1, sold in cycle 2.
     $item = Item::factory()->create();
+    $now = now()->setTime(9, 0);
 
     // Cycle 1: buy 10 pcs @ 100, sell nothing. Old logic would show a
     // 1000 loss here; stock must carry over instead.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(10)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(10));
+    $this->actingAs($owner)->post('/owner/commissions/open');
     Purchase::factory()->create([
         'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(9),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(9),
     ]);
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->subDays(8)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(8));
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     $firstPeriod = CommissionPeriod::orderBy('id')->first();
     expect((float) $firstPeriod->profit)->toBe(0.0)
         ->and(CommissionSettlement::count())->toBe(0);
 
     // Cycle 2: sell the same 10 pcs @ 150. Profit = 1500 - 1000 = 500.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(5)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(5));
+    $this->actingAs($owner)->post('/owner/commissions/open');
     Sale::factory()->create([
         'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 150, 'total' => 1500,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(2),
     ]);
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     expect((float) CommissionPeriod::orderByDesc('id')->first()->profit)->toBe(500.0)
         ->and((float) CommissionSettlement::sole()->amount)->toBe(50.0); // 500 x 10%
+
+    $this->travelBack();
 });
 
 it('adds product costs to stock and deducts general expenses from profit', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $item = Item::factory()->create();
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(5)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(5));
+    $this->actingAs($owner)->post('/owner/commissions/open');
 
     Purchase::factory()->create([
         'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(4),
     ]);
 
     // Product cost (transport) belongs to the stock of this item.
@@ -1075,54 +1173,56 @@ it('adds product costs to stock and deducts general expenses from profit', funct
         'expense_head_id' => ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::Product]),
         'item_id' => $item->id,
         'amount' => 100,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(3),
     ]);
 
     // General cost hits the profit directly.
     Expense::factory()->create([
         'expense_head_id' => ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::General]),
         'amount' => 50,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(3),
     ]);
 
     Sale::factory()->create([
         'item_id' => $item->id,
         'quantity' => 10, 'unit_price' => 200, 'total' => 2000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDay(),
     ]);
 
     // COGS = 10 x ((1000 + 100) / 10) = 1100; profit = 2000 - 1100 - 50.
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     expect((float) CommissionPeriod::sole()->profit)->toBe(850.0);
+
+    $this->travelBack();
 });
 
 it('selling an item with no stock at all shows a negative-stock warning and zero cost', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $item = Item::factory()->create(['name' => 'Gold ring']); // never purchased
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(3)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(3));
+    $this->actingAs($owner)->post('/owner/commissions/open');
     Sale::factory()->create([
         'item_id' => $item->id,
         'quantity' => 1, 'unit_price' => 100, 'total' => 100,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDay(),
     ]);
 
+    $this->travelTo($now);
     $this->actingAs($owner)->get('/owner/commissions/close')
         ->assertOk()
         ->assertSee(__('messages.attention'))
         ->assertSee(__('messages.warn_negative_stock', ['items' => 'Gold ring']));
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     // Cost 0 (nothing ever bought) → profit equals the full sale amount.
     expect((float) CommissionPeriod::sole()->profit)->toBe(100.0);
+
+    $this->travelBack();
 });
 
 it('converts units through production (kg input, gram output)', function (): void {
@@ -1186,20 +1286,21 @@ it('tracks production from raw materials and costs the sale at the finished good
     $button = Item::factory()->create(['unit' => 'pcs']);
     $zip = Item::factory()->create(['unit' => 'pcs']);
     $panjabi = Item::factory()->create(['unit' => 'pcs', 'default_price' => 300]); // no purchase link
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(6)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(6));
+    $this->actingAs($owner)->post('/owner/commissions/open');
 
     // Raw materials: cotton 5kg @ 200, buttons 10 @ 5, zips 10 @ 8.
-    Purchase::factory()->create(['item_id' => $cotton->id, 'quantity' => 5, 'unit_price' => 200, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
-    Purchase::factory()->create(['item_id' => $button->id, 'quantity' => 10, 'unit_price' => 5, 'total' => 50, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
-    Purchase::factory()->create(['item_id' => $zip->id, 'quantity' => 10, 'unit_price' => 8, 'total' => 80, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $cotton->id, 'quantity' => 5, 'unit_price' => 200, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $button->id, 'quantity' => 10, 'unit_price' => 5, 'total' => 50, 'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(5)]);
+    Purchase::factory()->create(['item_id' => $zip->id, 'quantity' => 10, 'unit_price' => 8, 'total' => 80, 'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(5)]);
 
     // Produce 10 panjabis: all the cotton + buttons + zips + ৳500 labour.
+    $this->travelTo($now->copy()->subDays(2));
     $this->actingAs($owner)->post('/owner/productions', [
         'extra_cost' => 500,
-        'entry_date' => now()->subDays(2)->format('Y-m-d'),
+        'entry_date' => $now->copy()->subDays(2)->format('Y-m-d'),
         'outputs' => [
             ['item_id' => $panjabi->id, 'quantity' => 10],
         ],
@@ -1211,7 +1312,7 @@ it('tracks production from raw materials and costs the sale at the finished good
     ])->assertRedirect()->assertSessionHas('success');
 
     // Inputs fully consumed; output stock: 10 @ (1630/10) = 163 each.
-    $rows = InventoryService::stockRows(now());
+    $rows = InventoryService::stockRows($now->copy()->subDays(2));
     expect($rows)->toHaveCount(1)
         ->and($rows[0]['item']->id)->toBe($panjabi->id)
         ->and($rows[0]['base_quantity'])->toBe(10.0)
@@ -1221,17 +1322,18 @@ it('tracks production from raw materials and costs the sale at the finished good
     Sale::factory()->create([
         'user_id' => $partner->id, 'item_id' => $panjabi->id,
         'quantity' => 6, 'unit_price' => 300, 'total' => 1800,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDay(),
     ]);
 
-    expect(InventoryService::cogs(now()->subDays(6), now()))->toBe(978.0)
-        ->and(InventoryService::stockValue(now()))->toBe(652.0); // 4 x 163
+    expect(InventoryService::cogs($now->copy()->subDays(6), $now->copy()->subDay()))->toBe(978.0)
+        ->and(InventoryService::stockValue($now->copy()->subDay()))->toBe(652.0); // 4 x 163
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     expect((float) CommissionPeriod::sole()->profit)->toBe(822.0);
+
+    $this->travelBack();
 });
 
 it('guards master items used anywhere from deletion', function (): void {
@@ -1310,20 +1412,21 @@ it('splits one purchased item into several goods and costs each sale fairly', fu
     $ornament = Item::factory()->create(['unit' => 'pcs']);
     $gold = Item::factory()->create(['unit' => 'gram', 'default_price' => 12000]);
     $scrap = Item::factory()->create(['unit' => 'gram', 'default_price' => 500]);
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(4)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(4));
+    $this->actingAs($owner)->post('/owner/commissions/open');
     Purchase::factory()->create([
         'item_id' => $ornament->id,
         'quantity' => 1, 'unit_price' => 80000, 'total' => 80000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(3),
     ]);
 
     // Melt it: 8g pure gold + 3g scrap come out.
+    $this->travelTo($now->copy()->subDays(2));
     $this->actingAs($owner)->post('/owner/productions', [
         'extra_cost' => 2000,
-        'entry_date' => now()->subDays(2)->format('Y-m-d'),
+        'entry_date' => $now->copy()->subDays(2)->format('Y-m-d'),
         'outputs' => [
             ['item_id' => $gold->id, 'quantity' => 8],
             ['item_id' => $scrap->id, 'quantity' => 3],
@@ -1334,31 +1437,32 @@ it('splits one purchased item into several goods and costs each sale fairly', fu
     ])->assertRedirect()->assertSessionHas('success');
 
     // Input fully consumed; stock holds both outputs.
-    $rows = InventoryService::stockRows(now());
+    $rows = InventoryService::stockRows($now->copy()->subDays(2));
     expect($rows)->toHaveCount(2);
 
     // Sell everything: gold 8g @ 12000, scrap 3g @ 500.
     Sale::factory()->create([
         'user_id' => $partner->id, 'item_id' => $gold->id,
         'quantity' => 8, 'unit_price' => 12000, 'total' => 96000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDay(),
     ]);
     Sale::factory()->create([
         'user_id' => $partner->id, 'item_id' => $scrap->id,
         'quantity' => 3, 'unit_price' => 500, 'total' => 1500,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDay(),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDay(),
     ]);
 
     // Total cost must equal the pool (80000 + 2000), however the split
     // falls; revenue 97500 - 82000 = 15500 profit.
-    expect(InventoryService::cogs(now()->subDays(4), now()))->toBe(82000.0)
-        ->and(InventoryService::stockValue(now()))->toBe(0.0);
+    expect(InventoryService::cogs($now->copy()->subDays(4), $now->copy()->subDay()))->toBe(82000.0)
+        ->and(InventoryService::stockValue($now->copy()->subDay()))->toBe(0.0);
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     expect((float) CommissionPeriod::sole()->profit)->toBe(15500.0);
+
+    $this->travelBack();
 });
 
 it('redirects guests from the root to the login page', function (): void {
@@ -1470,42 +1574,61 @@ it('blocks closing the cycle while a production is pending', function (): void {
         ->and(CommissionSettlement::count())->toBe(0);
 });
 
-it('counts opening cash and production labour in cash in hand', function (): void {
+it('counts investments and production labour in cash in hand', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $purchaseItem = Item::factory()->create();
     $item = Item::factory()->create();
+    $now = now()->setTime(9, 0);
 
+    $this->travelTo($now->copy()->subDays(3));
     $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(3)->format('Y-m-d'),
-        'opening_cash' => 5000,
+        'investment_amount' => 5000,
     ]);
     Purchase::factory()->create([
         'item_id' => $purchaseItem->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(2),
     ]);
 
     $production = Production::factory()->create([
         'user_id' => $owner->id, 'extra_cost' => 300,
         'status' => EntryStatus::Confirmed,
-        'entry_date' => now()->subDay(),
+        'entry_date' => $now->copy()->subDay(),
     ]);
     $production->outputs()->create(['item_id' => $item->id, 'quantity' => 5]);
     $production->components()->create(['item_id' => $purchaseItem->id, 'quantity' => 5]);
 
-    // cash = opening 5000 - purchase 1000 - labour 300
+    // cash = investment 5000 - purchase 1000 - labour 300
     expect(BusinessStats::all()['cash_in_hand'])->toBe(3700.0)
-        ->and(BusinessStats::all()['opening_cash'])->toBe(5000.0);
+        ->and((float) Investment::sole()->amount)->toBe(5000.0);
+
+    $this->travelBack();
 });
 
-it('rejects opening a cycle with a future date', function (): void {
+it('ignores any submitted opening cash when opening a cycle', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
 
+    // The field no longer exists — a stale/submitted value must not
+    // affect the cycle or the cash position.
+    $this->actingAs($owner)->post('/owner/commissions/open', [
+        'opening_cash' => 9999,
+    ])->assertRedirect();
+
+    expect(CommissionPeriod::sole()->getAttributes())->not->toHaveKey('opening_cash')
+        ->and(BusinessStats::all()['cash_in_hand'])->toBe(0.0)
+        ->and((float) Investment::query()->sum('amount'))->toBe(0.0);
+});
+
+it('opens a cycle at the exact current moment', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+
+    // No date is picked anymore: the cycle opens at the moment the
+    // button is pressed (submitted dates are ignored).
     $this->actingAs($owner)->post('/owner/commissions/open', [
         'opened_at' => now()->addDays(2)->format('Y-m-d'),
-    ])->assertSessionHasErrors('opened_at');
+    ])->assertRedirect();
 
-    expect(CommissionPeriod::count())->toBe(0);
+    expect(CommissionPeriod::sole()->opened_at->isSameSecond(now()))->toBeTrue();
 });
 
 it('rejects withdrawing more than the cash in hand', function (): void {
@@ -1542,44 +1665,41 @@ it('runs the full business lifecycle across cycles with payout', function (): vo
     $generalHead = ExpenseHead::factory()->create(['cost_type' => ExpenseCostType::General]);
 
     // Cycle 1: invest, buy 10 wood, sell 5 as chips.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(20)->format('Y-m-d'),
-    ]);
-    Investment::factory()->create(['amount' => 5000, 'invested_at' => now()->subDays(20)]);
+    $now = now()->setTime(9, 0);
+    $this->travelTo($now->copy()->subDays(20));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+    Investment::factory()->create(['amount' => 5000, 'invested_at' => $now->copy()->subDays(20)]);
     Purchase::factory()->create([
         'item_id' => $wood->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(15),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(15),
     ]);
     Sale::factory()->create([
         'user_id' => $partner->id, 'item_id' => $wood->id,
         'quantity' => 5, 'unit_price' => 300, 'total' => 1500,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(12),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(12),
     ]);
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->subDays(11)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(11));
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     // Profit 1 = 1500 - 500 (COGS) = 1000 → settlement 100.
     expect((float) CommissionPeriod::orderBy('id')->first()->profit)->toBe(1000.0)
         ->and((float) CommissionSettlement::orderBy('id')->first()->amount)->toBe(100.0);
 
     // Cycle 2: re-invest mid-cycle, sell the leftover 5 wood, one general expense.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(10)->format('Y-m-d'),
-    ]);
-    Investment::factory()->create(['amount' => 2000, 'invested_at' => now()->subDays(8)]);
+    $this->travelTo($now->copy()->subDays(10));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+    Investment::factory()->create(['amount' => 2000, 'invested_at' => $now->copy()->subDays(8)]);
     Sale::factory()->create([
         'user_id' => $partner->id, 'item_id' => $wood->id,
         'quantity' => 5, 'unit_price' => 320, 'total' => 1600,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(5),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(5),
     ]);
     Expense::factory()->create([
         'user_id' => $partner->id, 'expense_head_id' => $generalHead->id,
-        'amount' => 100, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4),
+        'amount' => 100, 'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(4),
     ]);
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     // Profit 2 = 1600 - 500 (COGS, carried stock) - 100 = 1000 → settlement 100.
     expect((float) CommissionPeriod::orderByDesc('id')->first()->profit)->toBe(1000.0);
@@ -1597,6 +1717,8 @@ it('runs the full business lifecycle across cycles with payout', function (): vo
     // Cash: 5000 + 2000 invested + 3100 sales - 1000 purchases
     //       - 100 expense - 200 payout.
     expect(BusinessStats::all()['cash_in_hand'])->toBe(8800.0);
+
+    $this->travelBack();
 });
 
 it('seeds a consistent demo state with an open cycle owning the pending entries', function (): void {
@@ -1633,8 +1755,6 @@ it('seeds permanent Bangla defaults with accounts, masters and links', function 
         ->and(Item::query()->where('name', 'অগর গাছ')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'আগর বখুর')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'আগর টুকরা')->exists())->toBeTrue()
-        ->and(Item::query()->where('name', 'আগর বীজ')->exists())->toBeTrue()
-        ->and(Item::query()->where('name', 'আগর চারা')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'আগর মিক্স চিপস')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'উদ চিপস A+')->exists())->toBeTrue()
         ->and(Item::query()->where('name', 'উদ চিপস C')->exists())->toBeTrue()
@@ -1770,22 +1890,23 @@ it('reduces stock and profit when confirmed stock loss is recorded', function ()
     $partner = makeUser(['phone' => '01700000060']);
     // One unified item: bought, sold, then partly lost.
     $purchaseItem = Item::factory()->create();
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(4)->format('Y-m-d'),
-    ]);
+    $this->travelTo($now->copy()->subDays(4));
+    $this->actingAs($owner)->post('/owner/commissions/open');
     Purchase::factory()->create([
         'item_id' => $purchaseItem->id,
         'quantity' => 10, 'unit_price' => 100, 'total' => 1000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(3),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(3),
     ]);
     Sale::factory()->create([
         'user_id' => $partner->id, 'item_id' => $purchaseItem->id,
         'quantity' => 5, 'unit_price' => 200, 'total' => 1000,
-        'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(2),
+        'status' => EntryStatus::Confirmed, 'entry_date' => $now->copy()->subDays(2),
     ]);
 
     // Partner reports a loss of 2 wood → pending: nothing changes yet.
+    $this->travelTo($now->copy()->subDays(2));
     $this->actingAs($partner)->post('/stock-losses', [
         'item_id' => $purchaseItem->id,
         'quantity' => 2,
@@ -1793,7 +1914,7 @@ it('reduces stock and profit when confirmed stock loss is recorded', function ()
     ])->assertRedirect()->assertSessionHas('warning');
 
     $loss = StockLoss::sole();
-    $rowOf = fn () => collect(InventoryService::stockRows(now()))->firstWhere('item.id', $purchaseItem->id);
+    $rowOf = fn () => collect(InventoryService::stockRows($now->copy()->subDays(2)))->firstWhere('item.id', $purchaseItem->id);
     expect($loss->status)->toBe(EntryStatus::Pending)
         ->and($rowOf()['base_quantity'])->toBe(5.0);
 
@@ -1805,14 +1926,15 @@ it('reduces stock and profit when confirmed stock loss is recorded', function ()
     $this->actingAs($owner)->patch("/owner/stock-losses/{$loss->id}/confirm")->assertRedirect();
 
     expect($rowOf()['base_quantity'])->toBe(3.0)
-        ->and(InventoryService::stockLossCost(now()->subDays(4), now()))->toBe(200.0);
+        ->and(InventoryService::stockLossCost($now->copy()->subDays(4), $now->copy()->subDays(2)))->toBe(200.0);
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ]);
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     // Profit = sales(1000) − COGS(500) − loss(200) = 300.
     expect((float) CommissionPeriod::sole()->profit)->toBe(300.0);
+
+    $this->travelBack();
 });
 
 it('blocks closing while a stock loss is pending and rejects cleanly', function (): void {
@@ -1843,6 +1965,23 @@ it('blocks closing while a stock loss is pending and rejects cleanly', function 
     // Reject → never counts.
     $this->actingAs($owner)->patch('/owner/stock-losses/'.StockLoss::sole()->id.'/reject')->assertRedirect();
     expect(InventoryService::stockLossCost(now()->subDay(), now()))->toBe(0.0);
+});
+
+it('only lists items that hold stock in the partner stock-loss dropdown', function (): void {
+    $partner = makeUser(['phone' => '01700000062']);
+    $stocked = Item::factory()->create(['name' => 'স্টকে থাকা কাঠ']);
+    $empty = Item::factory()->create(['name' => 'শূন্য স্টকের কাঠ']);
+
+    CommissionPeriod::factory()->open()->create();
+    Purchase::factory()->create(['item_id' => $stocked->id, 'quantity' => 10, 'status' => EntryStatus::Confirmed]);
+
+    $response = $this->actingAs($partner)->get('/stock-losses');
+    $response->assertOk();
+
+    $itemIds = collect($response->viewData('items'))->pluck('id');
+
+    expect($itemIds)->toContain($stocked->id)
+        ->not->toContain($empty->id);
 });
 
 it('costs direct buy-and-sell of the same item without any links', function (): void {
@@ -1912,100 +2051,169 @@ it('forces partner entries to today regardless of the submitted date', function 
     expect(Expense::sole()->entry_date->format('Y-m-d'))->toBe(now()->format('Y-m-d'));
 });
 
-it('blocks opening a cycle inside a previously closed one', function (): void {
+it('refuses to open a cycle while the latest closed cycle ends in the future (clock safety)', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(30)]);
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->subDays(10)->format('Y-m-d'),
-    ])->assertRedirect();
+    // Simulated future close (clock skew or a restored backup): a new
+    // cycle must never open before the previous one has ended.
+    CommissionPeriod::factory()->create([
+        'opened_at' => now()->subDays(2),
+        'closed_at' => now()->addHour(),
+    ]);
 
-    // Opening before the previous close day is rejected.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(15)->format('Y-m-d'),
-    ])->assertSessionHasErrors('opened_at');
-
-    // Reopening on the close day itself is rejected (one day cannot
-    // belong to two cycles); the following day is allowed.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(10)->format('Y-m-d'),
-    ])->assertSessionHasErrors('opened_at');
-
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(9)->format('Y-m-d'),
-    ])->assertSessionDoesntHaveErrors()->assertRedirect();
-
-    expect(CommissionPeriod::query()->open()->count())->toBe(1);
-});
-
-it('rejects reopening a cycle on the same day the previous one closed', function (): void {
-    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
-    $partner = makeUser(['commission_rate' => 10]);
-    $item = Item::factory()->create(['unit' => 'pcs']);
-    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(5)]);
-    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => now()->subDays(4)]);
-    Sale::factory()->create(['user_id' => $partner->id, 'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 200, 'total' => 2000, 'status' => EntryStatus::Confirmed, 'entry_date' => today()]);
-
-    // Close cycle A today — today's sale counts in A only.
-    $this->actingAs($owner)->get('/owner/commissions/close')
-        ->assertOk()
-        ->assertSee(__('messages.close_preview_hint'));
-
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ])->assertRedirect();
-    expect((float) CommissionPeriod::sole()->profit)->toBe(1000.0);
-
-    // Same-day reopen is rejected: at date granularity the same day
-    // cannot belong to two cycles (its entries would either count
-    // twice or vanish from every cycle). A new cycle starts the
-    // following day at the earliest.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->format('Y-m-d'),
-    ])->assertSessionHasErrors('opened_at');
+    $this->actingAs($owner)->post('/owner/commissions/open')->assertStatus(409);
 
     expect(CommissionPeriod::query()->open()->count())->toBe(0);
-    expect((float) CommissionPeriod::sole()->profit)->toBe(1000.0);
+});
+
+it('allows closing and reopening a cycle the same day, splitting entries at the close moment', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['commission_rate' => 10, 'phone' => '01700000077']);
+    $item = Item::factory()->create(['unit' => 'pcs']);
+    $day = now()->setTime(9, 0)->startOfDay();
+
+    // Morning cycle: open 9:00, buy + sell 10:00, close 12:00.
+    $this->travelTo($day->copy()->setTime(9, 0));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+    Purchase::factory()->create(['item_id' => $item->id, 'quantity' => 10, 'unit_price' => 100, 'total' => 1000, 'status' => EntryStatus::Confirmed, 'entry_date' => $day->copy()->setTime(10, 0)]);
+    Sale::factory()->create(['user_id' => $partner->id, 'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 200, 'total' => 2000, 'status' => EntryStatus::Confirmed, 'entry_date' => $day->copy()->setTime(10, 0)]);
+    $this->travelTo($day->copy()->setTime(12, 0));
+    $this->actingAs($owner)->post('/owner/commissions/close')->assertRedirect();
+
+    expect((float) CommissionPeriod::orderBy('id')->first()->profit)->toBe(1000.0);
+
+    // Same-day reopen at 13:00 is now allowed.
+    $this->travelTo($day->copy()->setTime(13, 0));
+    $this->actingAs($owner)->post('/owner/commissions/open')->assertRedirect();
+    expect(CommissionPeriod::query()->open()->count())->toBe(1);
+
+    // Afternoon sale 15:00 lands in the NEW cycle only.
+    $this->travelTo($day->copy()->setTime(15, 0));
+    Sale::factory()->create(['user_id' => $partner->id, 'item_id' => $item->id, 'quantity' => 10, 'unit_price' => 300, 'total' => 3000, 'status' => EntryStatus::Confirmed, 'entry_date' => $day->copy()->setTime(15, 0)]);
+    $this->travelTo($day->copy()->setTime(17, 0));
+    $this->actingAs($owner)->post('/owner/commissions/close')->assertRedirect();
+
+    $periods = CommissionPeriod::orderBy('id')->get();
+    expect((float) $periods[0]->profit)->toBe(1000.0)   // 2000 sales − 1000 COGS
+        ->and((float) $periods[1]->profit)->toBe(2000.0) // 3000 sales − 1000 carried COGS
+        ->and((float) CommissionSettlement::orderBy('id')->first()->amount)->toBe(100.0)
+        ->and((float) CommissionSettlement::orderByDesc('id')->first()->amount)->toBe(200.0);
+
+    $this->travelBack();
+});
+
+it('blocks new entries between the close and the reopen', function (): void {
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $partner = makeUser(['phone' => '01700000078']);
+    $head = ExpenseHead::factory()->create();
+    $day = now()->setTime(9, 0)->startOfDay();
+
+    $this->travelTo($day->copy()->setTime(9, 0));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+    $this->travelTo($day->copy()->setTime(12, 0));
+    $this->actingAs($owner)->post('/owner/commissions/close');
+
+    // No cycle is open right now: entries are blocked, nothing is lost —
+    // they can be added right after the reopen.
+    $this->travelTo($day->copy()->setTime(12, 30));
+    $this->actingAs($partner)->post('/entries/expenses', [
+        'head_id' => $head->id,
+        'amount' => 250,
+    ])->assertRedirect()->assertSessionHas('warning');
+    expect(Expense::count())->toBe(0);
+
+    $this->travelTo($day->copy()->setTime(13, 0));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+
+    $this->travelTo($day->copy()->setTime(13, 30));
+    $this->actingAs($owner)->post('/entries/expenses', [
+        'head_id' => $head->id,
+        'amount' => 250,
+    ])->assertSessionDoesntHaveErrors();
+
+    $this->travelTo($day->copy()->setTime(17, 0));
+    $this->actingAs($owner)->post('/owner/commissions/close');
+
+    $periods = CommissionPeriod::orderBy('id')->get();
+    expect((float) $periods[0]->profit)->toBe(0.0)
+        ->and((float) $periods[1]->profit)->toBe(-250.0);
+
+    $this->travelBack();
+});
+
+it('translates the backdate error instead of showing the raw validation key', function (): void {
+    app()->setLocale('bn');
+
+    $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
+    $head = ExpenseHead::factory()->create();
+    $now = now()->setTime(9, 0);
+
+    $this->travelTo($now->copy()->subDays(2));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+    $this->travelTo($now->copy()->subDay());
+    $this->actingAs($owner)->post('/owner/commissions/close');
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/open');
+
+    // Backdating to the close day lands at midnight — inside the
+    // closed cycle — so it is rejected with a translated message.
+    $this->actingAs($owner)->post('/entries/expenses', [
+        'head_id' => $head->id,
+        'amount' => 100,
+        'entry_date' => $now->copy()->subDay()->format('Y-m-d'),
+    ])->assertSessionHasErrors('entry_date');
+
+    $message = session('errors')->first('entry_date');
+
+    expect($message)->not->toStartWith('validation.');
+    expect($message)->toContain('তারিখ');
+
+    $this->travelBack();
 });
 
 it('absorbs entries from the gap between cycles into the next one', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     $head = ExpenseHead::factory()->create(['name' => 'গ্যাপ খরচ']);
-    CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(30)]);
+    $now = now()->setTime(9, 0);
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->subDays(20)->format('Y-m-d'),
-    ])->assertRedirect();
+    $this->travelTo($now->copy()->subDays(30));
+    $this->actingAs($owner)->post('/owner/commissions/open');
+    $this->travelTo($now->copy()->subDays(20));
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
-    // New cycle opens 15 days ago; an entry lands 18 days ago — inside the gap.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->subDays(15)->format('Y-m-d'),
-    ])->assertSessionDoesntHaveErrors();
+    // New cycle opens 15 days later; an entry lands 18 days ago — inside the gap.
+    $this->travelTo($now->copy()->subDays(15));
+    $this->actingAs($owner)->post('/owner/commissions/open');
 
     $expense = Expense::factory()->create([
         'user_id' => $owner->id,
         'expense_head_id' => $head->id,
         'amount' => 500,
         'status' => EntryStatus::Confirmed,
-        'entry_date' => now()->subDays(18),
+        'entry_date' => $now->copy()->subDays(18),
     ]);
 
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->format('Y-m-d'),
-    ])->assertRedirect();
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/close');
 
     expect((float) CommissionPeriod::orderByDesc('id')->first()->profit)->toBe(-500.0);
+
+    $this->travelBack();
 });
 
-it('rejects closing a cycle with a future date', function (): void {
+it('closes a cycle at the exact current moment', function (): void {
     $owner = makeUser(['role' => UserRole::Owner, 'email' => 'owner@x.com', 'phone' => '01900000000']);
     CommissionPeriod::factory()->open()->create(['opened_at' => now()->subDays(3)]);
 
+    // No date is picked anymore: the cycle closes at the moment the
+    // button is pressed (submitted dates are ignored).
     $this->actingAs($owner)->post('/owner/commissions/close', [
         'closed_at' => now()->addDay()->format('Y-m-d'),
-    ])->assertSessionHasErrors('closed_at');
+    ])->assertRedirect();
 
-    expect(CommissionPeriod::sole()->status)->toBe('open');
+    $period = CommissionPeriod::sole();
+    expect($period->status)->toBe('closed')
+        ->and($period->closed_at->isSameSecond(now()))->toBeTrue();
 });
 
 it('blocks deleting confirmed entries outside an open cycle', function (): void {
@@ -2031,17 +2239,30 @@ it('blocks deleting confirmed entries outside an open cycle', function (): void 
         ->and(StockLoss::query()->whereKey($loss->id)->exists())->toBeTrue();
 });
 
-it('scopes opening cash to the requested date range', function (): void {
-    CommissionPeriod::factory()->create([
-        'opened_at' => now()->subDays(60),
-        'closed_at' => now()->subDays(50),
-        'opening_cash' => 5000,
-    ]);
-    CommissionPeriod::factory()->open()->create([
-        'opened_at' => now()->subDays(5),
-        'opening_cash' => 700,
-    ]);
+it('scopes investments to the requested date range', function (): void {
+    Investment::factory()->create(['amount' => 5000, 'invested_at' => now()->subDays(60)]);
+    Investment::factory()->create(['amount' => 700, 'invested_at' => now()->subDays(5)]);
 
-    expect(BusinessStats::all()['opening_cash'])->toBe(5700.0)
-        ->and(BusinessStats::all(null, now()->subDays(10)->format('Y-m-d'), now()->format('Y-m-d'))['opening_cash'])->toBe(700.0);
+    expect(BusinessStats::all()['investment'])->toBe(5700.0)
+        ->and(BusinessStats::all(null, now()->subDays(10)->format('Y-m-d'), now()->format('Y-m-d'))['investment'])->toBe(700.0);
+});
+
+it('converts legacy opening cash into an investment and drops the column', function (): void {
+    // Recreate the dropped column with a legacy value, then run the
+    // conversion migration directly.
+    Schema::table('commission_periods', function (Blueprint $table): void {
+        $table->decimal('opening_cash', 12, 2)->nullable();
+    });
+    $period = CommissionPeriod::factory()->open()->create(['opened_at' => '2026-10-01 09:00:00']);
+    DB::table('commission_periods')->where('id', $period->id)->update(['opening_cash' => 52047]);
+
+    $migration = include database_path('migrations/2026_10_11_041108_drop_opening_cash_from_commission_periods.php');
+    $migration->up();
+
+    expect((float) Investment::sole()->amount)->toBe(52047.0)
+        ->and(Investment::sole()->invested_at->toDateString())->toBe('2026-10-01')
+        ->and(Schema::hasColumn('commission_periods', 'opening_cash'))->toBeFalse();
+
+    $migration->down();
+    expect(Schema::hasColumn('commission_periods', 'opening_cash'))->toBeTrue();
 });

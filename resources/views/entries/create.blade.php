@@ -4,13 +4,22 @@
 
 @section('content')
     <div class="max-w-xl mx-auto">
-        <a href="{{ route('entries.index', ['type' => $type]) }}" class="inline-block text-sm text-gray-600 mb-3">⬅️ {{ __('messages.back') }}</a>
+        <a href="{{ route('entries.index', ['type' => $type]) }}" class="inline-flex items-center gap-1.5 text-sm text-gray-600 mb-3">
+            <x-icon name="arrow-left" class="w-4 h-4" /> {{ __('messages.back') }}
+        </a>
 
-        <div class="bg-white rounded-2xl shadow-lg p-5">
-            <h1 class="text-xl font-bold mb-4">{{ $config['icon'] }} {{ __('messages.add_'.rtrim($type, 's')) }}</h1>
-            <p class="text-xs text-gray-500 mb-3">💡 {{ __('messages.entry_hint_'.$type) }}</p>
+        <div class="card p-5">
+            <h1 class="text-xl font-bold mb-4 flex items-center gap-2">
+                @php $tIcon = $type === 'expenses' ? 'currency-dollar' : ($type === 'purchases' ? 'shopping-cart' : 'banknotes'); @endphp
+                <x-icon :name="$tIcon" class="w-6 h-6 text-emerald-600" /> {{ __('messages.add_'.rtrim($type, 's')) }}
+            </h1>
+            <p class="text-xs text-gray-500 mb-3 flex items-start gap-1.5">
+                <x-icon name="information-circle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.entry_hint_'.$type) }}
+            </p>
             @if($type === 'sales')
-                <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-3">⚠️ {{ __('messages.warn_sale_unlinked') }}</p>
+                <p class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2 mb-3 flex items-start gap-1.5">
+                    <x-icon name="exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.warn_sale_unlinked') }}
+                </p>
             @endif
 
             <form method="POST" action="{{ route('entries.store', ['type' => $type]) }}" class="space-y-4 js-confirm-submit">
@@ -18,11 +27,10 @@
 
                 {{-- Item / head dropdown (master data, active only) --}}
                 <div>
-                    <label class="block text-sm font-medium mb-1">
+                    <label class="label">
                         {{ __('messages.'.($type === 'expenses' ? 'expense_head' : 'item')) }}
                     </label>
-                    <select id="head_id" name="head_id" required
-                            class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <select id="head_id" name="head_id" required class="input">
                         <option value="">{{ __('messages.select_option') }}</option>
                         @foreach($items as $item)
                             <option value="{{ $item->id }}" data-price="{{ $type === 'sales' ? $item->default_price : '' }}"
@@ -39,20 +47,24 @@
                 @if($type === 'sales')
                     <p id="stock_hint" class="text-xs text-gray-600 -mt-2"></p>
                     @if($items->isEmpty())
-                        <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 -mt-2">⚠️ {{ __('messages.no_sellable_items') }}</p>
+                        <p class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2 -mt-2 flex items-start gap-1.5">
+                            <x-icon name="exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.no_sellable_items') }}
+                        </p>
                     @endif
                 @endif
 
                 {{-- Expense: optional product the cost belongs to (product-type heads only) --}}
                 @if($type === 'expenses')
                     <div id="product_item_wrap" class="hidden">
-                        <p class="text-xs bg-yellow-50 border border-yellow-300 text-yellow-800 rounded-lg px-3 py-2 mb-2">⚠️ {{ __('messages.warn_expense_double_count') }}</p>
-                        <label class="block text-sm font-medium mb-1">📦 {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
-                        <select name="item_id" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <p class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-xl px-3 py-2 mb-2 flex items-start gap-1.5">
+                            <x-icon name="exclamation-triangle" class="w-4 h-4 shrink-0 mt-0.5" /> {{ __('messages.warn_expense_double_count') }}
+                        </p>
+                        <label class="label"><x-icon name="cube" class="w-4 h-4" /> {{ __('messages.related_product') }} ({{ __('messages.optional') }})</label>
+                        <select name="item_id" class="input">
                             <option value="">{{ __('messages.shared_across_products') }}</option>
-                            @foreach($items as $item)
-                                <option value="{{ $item->id }}" {{ old('item_id') == $item->id ? 'selected' : '' }}>
-                                    {{ $item->name }}
+                            @foreach(($allItems ?? []) as $product)
+                                <option value="{{ $product->id }}" {{ old('item_id') == $product->id ? 'selected' : '' }}>
+                                    {{ $product->name }}
                                 </option>
                             @endforeach
                         </select>
@@ -63,59 +75,63 @@
                 {{-- Expense: single amount --}}
                 @if($type === 'expenses')
                     <div>
-                        <label class="block text-sm font-medium mb-1">{{ __('messages.amount') }}</label>
-                        <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0" required
-                               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <label class="label">{{ __('messages.amount') }}</label>
+                        <input type="number" name="amount" value="{{ old('amount') }}" step="0.01" min="0" required class="input">
                     </div>
                 @endif
 
-                {{-- Purchase / Sale: quantity + unit price + live total --}}
+                {{-- Purchase / Sale: quantity + total amount; unit price is computed automatically --}}
                 @if($config['has_quantity'])
                     <div class="grid grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-sm font-medium mb-1">{{ __('messages.quantity') }} <span id="unit_label" class="text-emerald-700 font-bold"></span></label>
-                            <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required
-                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <label class="label">{{ __('messages.quantity') }} <span id="unit_label" class="text-emerald-700 font-bold"></span></label>
+                            <input type="number" id="quantity" name="quantity" value="{{ old('quantity', 1) }}" min="0.001" step="any" required class="input">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium mb-1">{{ __('messages.unit_price') }}</label>
-                            <input type="number" id="unit_price" name="unit_price" value="{{ old('unit_price') }}" step="0.01" min="0" required
-                                   class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <label class="label">{{ __('messages.total_amount') }}</label>
+                            <input type="number" id="total" name="total" value="{{ old('total') }}" step="0.01" min="0.01" required class="input">
                         </div>
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium mb-1">{{ __('messages.total') }}</label>
-                        <input type="text" id="total_display" readonly
-                               class="w-full border border-gray-200 rounded-lg px-4 py-3 text-lg bg-gray-100 font-bold">
+                        <label class="label">{{ __('messages.unit_price_auto') }}</label>
+                        <input type="text" id="unit_price_display" readonly class="input input-readonly">
+                        <p class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                            <x-icon name="calculator" class="w-4 h-4" /> {{ __('messages.unit_price_auto_hint') }}
+                        </p>
                     </div>
                 @endif
 
-                {{-- Date: partners always report today (server forces it); owner may backdate --}}
+                {{-- Date: the moment is captured automatically (date + time of entry); the owner may backdate (day only) --}}
                 @if(auth()->user()->isOwner())
                     <div>
-                        <label class="block text-sm font-medium mb-1">{{ __('messages.date') }}</label>
-                        <input type="date" name="entry_date" value="{{ old('entry_date', $today) }}" required
-                               class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        <label class="label">{{ __('messages.date') }}</label>
+                        <input type="date" name="entry_date" value="{{ old('entry_date', $today) }}" required class="input">
+                        <p class="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                            <x-icon name="clock" class="w-4 h-4" /> {{ __('messages.auto_time_hint') }}
+                        </p>
                     </div>
                 @else
-                    <input type="hidden" name="entry_date" value="{{ $today }}">
-                    <p class="text-xs text-gray-500">📅 {{ __('messages.auto_today_hint') }}</p>
+                    <p class="text-xs text-gray-500 flex items-center gap-1.5">
+                        <x-icon name="calendar-days" class="w-4 h-4" /> {{ __('messages.auto_today_hint') }}
+                    </p>
                 @endif
 
                 {{-- Optional note --}}
                 <div>
-                    <label class="block text-sm font-medium mb-1">{{ __('messages.note') }} {{ __('messages.optional') }}</label>
-                    <textarea name="note" rows="2" class="w-full border border-gray-300 rounded-lg px-4 py-3 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">{{ old('note') }}</textarea>
+                    <label class="label">{{ __('messages.note') }} {{ __('messages.optional') }}</label>
+                    <textarea name="note" rows="2" class="input">{{ old('note') }}</textarea>
                 </div>
 
                 @if(auth()->user()->isOwner() && in_array($type, ['purchases', 'expenses'], true))
-                    <p class="text-xs text-gray-500">💵 {{ __('messages.current_cash') }}: {{ \App\Support\Money::format((float) $cashInHand) }}</p>
+                    <p class="text-xs text-gray-500 flex items-center gap-1.5">
+                        <x-icon name="banknotes" class="w-4 h-4" /> {{ __('messages.current_cash') }}: {{ \App\Support\Money::format((float) $cashInHand) }}
+                    </p>
                     <p id="cash_overdraw_hint" class="hidden text-xs bg-red-50 border border-red-300 text-red-700 rounded-lg px-3 py-2"></p>
                 @endif
 
-                <button type="submit" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-lg rounded-xl py-3">
-                    📩 {{ __('messages.submit_entry') }}
+                <button type="submit" class="btn-primary w-full text-lg">
+                    <x-icon name="check" class="w-5 h-5" /> {{ __('messages.submit_entry') }}
                 </button>
             </form>
         </div>
@@ -129,7 +145,7 @@
                 function checkCashOverdraw() {
                     var total = 0;
                     @if($type === 'purchases')
-                        total = (parseFloat($('#quantity').val()) || 0) * (parseFloat($('#unit_price').val()) || 0);
+                        total = parseFloat($('#total').val()) || 0;
                     @else
                         total = parseFloat($('#amount').val()) || 0;
                     @endif
@@ -144,7 +160,7 @@
                         hint.addClass('hidden').text('');
                     }
                 }
-                $(document).on('input', '#quantity, #unit_price, #amount', checkCashOverdraw);
+                $(document).on('input', '#total, #amount', checkCashOverdraw);
                 checkCashOverdraw();
             });
         </script>
@@ -164,7 +180,7 @@
                         return;
                     }
                     var text = @json(__('messages.available_stock_hint')).replace(':available', available).replace(':unit', unit);
-                    hint.text('📦 ' + text);
+                    hint.text(text);
                     hint.toggleClass('text-red-600 font-bold', available <= 0);
                 }
                 $(document).on('change', '#head_id', updateStockHint);

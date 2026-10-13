@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 #[Fillable(['user_id', 'commission_period_id', 'period_start', 'period_end', 'business_profit', 'commission_rate', 'amount', 'status'])]
 class CommissionSettlement extends Model
@@ -21,8 +22,8 @@ class CommissionSettlement extends Model
     protected function casts(): array
     {
         return [
-            'period_start' => 'date',
-            'period_end' => 'date',
+            'period_start' => 'datetime',
+            'period_end' => 'datetime',
             'business_profit' => 'decimal:2',
             'commission_rate' => 'decimal:2',
             'amount' => 'decimal:2',
@@ -42,11 +43,11 @@ class CommissionSettlement extends Model
     /**
      * Scope: settlements whose period starts within the given dates.
      */
-    public function scopePeriodBetween(Builder $query, ?string $from, ?string $to): Builder
+    public function scopePeriodBetween(Builder $query, Carbon|string|null $from, Carbon|string|null $to): Builder
     {
         return $query
-            ->when($from, fn (Builder $q) => $q->whereDate('period_start', '>=', $from))
-            ->when($to, fn (Builder $q) => $q->whereDate('period_start', '<=', $to));
+            ->when($from, fn (Builder $q) => $q->where('period_start', '>=', $from))
+            ->when($to, fn (Builder $q) => $q->where('period_start', '<=', $to));
     }
 
     public function user(): BelongsTo

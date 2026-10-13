@@ -3,17 +3,19 @@
 @section('title', __('messages.stock_page'))
 
 @section('content')
-    <h1 class="text-xl font-bold mb-1">🏪 {{ __('messages.stock_page') }}</h1>
+    <h1 class="page-title flex items-center gap-2">
+        <x-icon name="building-storefront" class="w-6 h-6 text-emerald-600" /> {{ __('messages.stock_page') }}
+    </h1>
     <p class="text-xs text-gray-500 mb-4">{{ __('messages.stock_page_hint') }}</p>
 
-    <div class="bg-white rounded-xl shadow mb-6 overflow-hidden">
+    <div class="card mb-6 overflow-hidden p-0">
         @if($rows === [])
             <p class="p-4 text-gray-500 text-sm">{{ __('messages.no_stock') }}</p>
         @else
             <ul class="divide-y divide-gray-100">
                 @foreach($rows as $row)
                     <li>
-                        <a href="{{ route('owner.stock.show', $row['item']) }}" class="px-4 py-2 flex items-center justify-between gap-2 text-sm hover:bg-emerald-50">
+                        <a href="{{ route('owner.stock.show', $row['item']) }}" class="px-4 py-2 flex items-center justify-between gap-2 text-sm hover:bg-emerald-50 transition">
                             <div class="min-w-0">
                                 <span class="font-medium">{{ $row['item']->name }}</span>
                                 <span class="text-xs text-gray-500">({{ \App\Support\ItemUnits::label($row['item']->unit) }})</span>

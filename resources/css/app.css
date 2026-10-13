@@ -7,4 +7,192 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --animate-flash-in: flash-in 0.35s ease-out;
+    --animate-fade-up: fade-up 0.4s ease-out both;
+
+    @keyframes flash-in {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes fade-up {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+}
+
+/* ---------- Base polish (mobile-first smoothness) ---------- */
+html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+}
+
+body {
+    overscroll-behavior-y: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Shared base classes ----------
+   `.btn`, `.card`, `.badge` and `.alert` must be `@utility` so other
+   component classes can `@apply` them (Tailwind v4 requirement). */
+@utility btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl font-bold transition duration-200 select-none
+        active:scale-[0.97] min-h-[44px] px-4 py-2.5 text-sm disabled:opacity-50 disabled:pointer-events-none;
+}
+
+@utility card {
+    @apply bg-white rounded-2xl shadow-sm ring-1 ring-gray-900/5 p-4;
+}
+
+@utility badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+}
+
+@utility alert {
+    @apply flex items-start gap-2.5 rounded-xl px-4 py-3 text-sm font-medium animate-flash-in;
+}
+
+@layer components {
+    /* ---------- Brand gradient ---------- */
+    .bg-brand-gradient {
+        @apply bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-500;
+    }
+
+    .bg-brand-gradient-soft {
+        @apply bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50;
+    }
+
+    .card-hover {
+        @apply transition duration-200 active:scale-[0.99] hover:shadow-md hover:ring-gray-900/10;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn-primary {
+        @apply btn text-white bg-gradient-to-r from-emerald-600 to-teal-500 shadow-md shadow-emerald-600/25 hover:from-emerald-700 hover:to-teal-600;
+    }
+
+    .btn-sale {
+        @apply btn text-white bg-gradient-to-r from-blue-600 to-indigo-500 shadow-md shadow-blue-600/25 hover:from-blue-700 hover:to-indigo-600;
+    }
+
+    .btn-purchase {
+        @apply btn text-white bg-gradient-to-r from-orange-500 to-amber-500 shadow-md shadow-orange-500/25 hover:from-orange-600 hover:to-amber-600;
+    }
+
+    .btn-expense {
+        @apply btn text-white bg-gradient-to-r from-rose-500 to-pink-500 shadow-md shadow-rose-500/25 hover:from-rose-600 hover:to-pink-600;
+    }
+
+    .btn-payout {
+        @apply btn text-white bg-gradient-to-r from-violet-600 to-purple-500 shadow-md shadow-violet-600/25 hover:from-violet-700 hover:to-purple-600;
+    }
+
+    .btn-danger {
+        @apply btn text-white bg-gradient-to-r from-red-600 to-rose-600 shadow-md shadow-red-600/25 hover:from-red-700 hover:to-rose-700;
+    }
+
+    .btn-neutral {
+        @apply btn text-gray-700 bg-gray-100 ring-1 ring-gray-200 hover:bg-gray-200;
+    }
+
+    .btn-soft-danger {
+        @apply btn text-red-700 bg-red-50 ring-1 ring-red-200 hover:bg-red-100;
+    }
+
+    /* Small icon-only round button (44px touch target) */
+    .btn-icon {
+        @apply inline-flex items-center justify-center w-11 h-11 rounded-full transition duration-200 active:scale-95;
+    }
+
+    /* ---------- Forms ---------- */
+    .input {
+        @apply w-full rounded-xl border-0 bg-white px-4 py-3 text-base text-gray-900 ring-1 ring-gray-300
+            placeholder:text-gray-400 outline-none transition focus:ring-2 focus:ring-emerald-500;
+    }
+
+    .input-sm {
+        @apply w-full rounded-lg border-0 bg-white px-3 py-2 text-sm text-gray-900 ring-1 ring-gray-300
+            placeholder:text-gray-400 outline-none transition focus:ring-2 focus:ring-emerald-500;
+    }
+
+    .input-readonly {
+        @apply bg-emerald-50/60 font-bold text-emerald-800;
+    }
+
+    .label {
+        @apply block text-sm font-semibold text-gray-700 mb-1.5;
+    }
+
+    .hint {
+        @apply flex items-start gap-1.5 text-xs text-gray-500 mt-1.5;
+    }
+
+    /* ---------- Badges ---------- */
+    .badge-pending {
+        @apply badge bg-amber-100 text-amber-800;
+    }
+
+    .badge-confirmed {
+        @apply badge bg-emerald-100 text-emerald-800;
+    }
+
+    .badge-rejected {
+        @apply badge bg-red-100 text-red-800;
+    }
+
+    .badge-inactive {
+        @apply badge bg-gray-200 text-gray-500;
+    }
+
+    /* ---------- Filter pills ---------- */
+    .filter-pill {
+        @apply inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap
+            bg-white text-gray-600 ring-1 ring-gray-200 transition active:scale-95;
+    }
+
+    .filter-pill-active {
+        @apply inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold whitespace-nowrap
+            text-white bg-gradient-to-r from-emerald-600 to-teal-500 shadow-md shadow-emerald-600/25 transition active:scale-95;
+    }
+
+    /* ---------- Section headings ---------- */
+    .section-title {
+        @apply flex items-center gap-2 font-bold text-base text-gray-900 mb-3;
+    }
+
+    .page-title {
+        @apply text-xl font-extrabold text-gray-900 mb-4;
+    }
+
+    /* ---------- Alert / flash ---------- */
+    .alert-success {
+        @apply alert bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200;
+    }
+
+    .alert-warning {
+        @apply alert bg-amber-50 text-amber-800 ring-1 ring-amber-200;
+    }
+
+    .alert-error {
+        @apply alert bg-red-50 text-red-800 ring-1 ring-red-200;
+    }
+
+    /* ---------- Empty state ---------- */
+    .empty-state {
+        @apply card p-8 text-center text-gray-500;
+    }
 }

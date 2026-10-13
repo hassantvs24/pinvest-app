@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\EntryStatus;
 use App\Models\CommissionPeriod;
 use App\Models\Expense;
+use App\Models\ExpenseHead;
 use App\Models\Item;
 use App\Models\Purchase;
 use App\Models\Sale;
@@ -13,9 +14,11 @@ use App\Support\CommissionSettlementService;
 use App\Support\EntryTypes;
 use App\Support\InventoryService;
 use App\Support\ItemUnits;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 /**
@@ -35,26 +38,48 @@ class EntryController extends Controller
     }
 
     /**
-     * Entry-date rules for the owner: entries must land inside the
-     * current open cycle (never inside a closed one — stored closed-cycle
-     * profit must stay reproducible) and never in the future. Partners
-     * always report today, so their date is only sanity-checked.
+     * Entry-moment rules for the owner's optional date picker: the date
+     * may be today or any past day, but never on/inside a closed cycle
+     * (backdated entries land at midnight of the picked day, so the day
+     * right after a close is the earliest allowed backdate). Partners
+     * never pick a date — their entries always happen right now.
      *
      * @return array<int, string>
      */
-    private function entryDateRules(?CommissionPeriod $period, bool $isOwner): array
+    private function entryDateRules(bool $isOwner): array
     {
-        $rules = ['required', 'date'];
+        if (! $isOwner) {
+            return ['nullable', 'date'];
+        }
 
-        if ($isOwner) {
-            $rules[] = 'before_or_equal:today';
+        $rules = ['nullable', 'date', 'before_or_equal:'.now()->toDateString()];
 
-            if ($period !== null) {
-                $rules[] = 'after_or_equal:'.CommissionSettlementService::effectiveStart($period)->format('Y-m-d');
-            }
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+        $openPeriod = $this->openPeriod();
+
+        if ($latestClosed !== null) {
+            $rules[] = 'after:'.$latestClosed->toDateString();
+        } elseif ($openPeriod !== null) {
+            $rules[] = 'after_or_equal:'.$openPeriod->opened_at->toDateString();
         }
 
         return $rules;
+    }
+
+    /**
+     * The moment a new entry happened: right now by default. A past
+     * picked date is stored as midnight of that day; picking today
+     * keeps the exact current moment.
+     */
+    private function entryMoment(?string $date): Carbon
+    {
+        $picked = $date !== null && $date !== '' ? Carbon::parse($date) : null;
+
+        if ($picked === null || $picked->toDateString() === now()->toDateString()) {
+            return now();
+        }
+
+        return $picked->startOfDay();
     }
 
     /**
@@ -119,6 +144,11 @@ class EntryController extends Controller
             'type' => $type,
             'config' => $config,
             'items' => $items,
+            // The expense form's optional related-product picker lists
+            // products (master items), not expense heads.
+            'allItems' => $type === 'expenses'
+                ? Item::query()->active()->orderBy('name')->get()
+                : null,
             'available' => $available,
             // Owners see their cash position so overspending warns upfront.
             'cashInHand' => $request->user()->isOwner()
@@ -145,7 +175,7 @@ class EntryController extends Controller
         $confirmed = $user->isOwner()
             ? ['confirmed_by' => $user->id, 'confirmed_at' => now()]
             : ['confirmed_by' => null, 'confirmed_at' => null];
-        $entryDateRules = $this->entryDateRules($this->openPeriod(), $user->isOwner());
+        $entryDateRules = $this->entryDateRules($user->isOwner());
 
         if ($type === 'expenses') {
             $validated = $request->validate([
@@ -156,8 +186,9 @@ class EntryController extends Controller
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            // Partners cannot backdate: entries always land on today.
-            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+            // The entry moment is always "now"; the owner's picked
+            // date only decides the day (today = exact moment).
+            $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
             Expense::query()->create([
                 'user_id' => $user->id,
@@ -165,7 +196,7 @@ class EntryController extends Controller
                 'item_id' => $validated['item_id'] ?? null,
                 'amount' => $validated['amount'],
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $entryDate,
+                'entry_date' => $entryMoment,
                 'status' => $status,
                 ...$confirmed,
             ]);
@@ -173,21 +204,29 @@ class EntryController extends Controller
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'numeric', 'min:0.001'],
-                'unit_price' => ['required', 'numeric', 'min:0.01'],
+                'total' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+            $unitPrice = Money::unitPrice((float) $validated['total'], (float) $validated['quantity']);
+
+            if ($unitPrice < 0.01) {
+                return back()->withInput()->withErrors([
+                    'total' => __('messages.total_too_low_for_quantity'),
+                ]);
+            }
+
+            $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
             Purchase::query()->create([
                 'user_id' => $user->id,
                 'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
-                'unit_price' => $validated['unit_price'],
-                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
+                'unit_price' => $unitPrice,
+                'total' => $validated['total'],
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $entryDate,
+                'entry_date' => $entryMoment,
                 'status' => $status,
                 ...$confirmed,
             ]);
@@ -195,12 +234,20 @@ class EntryController extends Controller
             $validated = $request->validate([
                 'head_id' => ['required', 'exists:items,id'],
                 'quantity' => ['required', 'numeric', 'min:0.001'],
-                'unit_price' => ['required', 'numeric', 'min:0.01'],
+                'total' => ['required', 'numeric', 'min:0.01'],
                 'entry_date' => $entryDateRules,
                 'note' => ['nullable', 'string', 'max:1000'],
             ]);
 
-            $entryDate = $user->isOwner() ? $validated['entry_date'] : now()->format('Y-m-d');
+            $unitPrice = Money::unitPrice((float) $validated['total'], (float) $validated['quantity']);
+
+            if ($unitPrice < 0.01) {
+                return back()->withInput()->withErrors([
+                    'total' => __('messages.total_too_low_for_quantity'),
+                ]);
+            }
+
+            $entryMoment = $this->entryMoment($user->isOwner() ? ($validated['entry_date'] ?? null) : null);
 
             $item = Item::query()->findOrFail($validated['head_id']);
             $available = InventoryService::availableQuantity($item);
@@ -218,10 +265,10 @@ class EntryController extends Controller
                 'user_id' => $user->id,
                 'item_id' => $validated['head_id'],
                 'quantity' => $validated['quantity'],
-                'unit_price' => $validated['unit_price'],
-                'total' => round($validated['quantity'] * $validated['unit_price'], 2),
+                'unit_price' => $unitPrice,
+                'total' => $validated['total'],
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $entryDate,
+                'entry_date' => $entryMoment,
                 'status' => $status,
                 ...$confirmed,
             ]);
@@ -234,16 +281,32 @@ class EntryController extends Controller
                 $user->isOwner() ? __('messages.saved_success') : __('messages.waiting_owner'),
             );
 
+        $warnings = [];
+
+        // A product-cost expense without a linked product spreads across
+        // the average cost of EVERY stocked item — say so right away.
+        if ($type === 'expenses') {
+            $head = ExpenseHead::query()->find($validated['head_id']);
+
+            if ($head?->cost_type?->addsToStock() && ($validated['item_id'] ?? null) === null) {
+                $warnings[] = __('messages.product_expense_no_item_warning');
+            }
+        }
+
         // The owner's own purchases/expenses may overdraw the cash —
         // the entry still counts (credit buying), but warn right away.
         if ($user->isOwner() && in_array($type, ['purchases', 'expenses'], true)) {
             $cash = BusinessStats::all()['cash_in_hand'];
             if ($cash < 0) {
-                $redirect->with('warning', __('messages.cash_overdraw_warning', [
-                    'cash' => number_format($cash + ($type === 'purchases' ? (float) $validated['quantity'] * (float) $validated['unit_price'] : (float) $validated['amount']), 2),
+                $warnings[] = __('messages.cash_overdraw_warning', [
+                    'cash' => number_format($cash + ($type === 'purchases' ? (float) $validated['total'] : (float) $validated['amount']), 2),
                     'short' => number_format($cash, 2),
-                ]));
+                ]);
             }
+        }
+
+        if ($warnings !== []) {
+            $redirect->with('warning', implode(' ', $warnings));
         }
 
         return $redirect;

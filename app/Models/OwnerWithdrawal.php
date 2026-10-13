@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 #[Fillable(['amount', 'note', 'withdrawn_at'])]
 class OwnerWithdrawal extends Model
@@ -28,10 +29,10 @@ class OwnerWithdrawal extends Model
     /**
      * Scope: withdrawals within the given dates.
      */
-    public function scopeDateBetween(Builder $query, ?string $from, ?string $to): Builder
+    public function scopeDateBetween(Builder $query, Carbon|string|null $from, Carbon|string|null $to): Builder
     {
         return $query
-            ->when($from, fn (Builder $q) => $q->whereDate('withdrawn_at', '>=', $from))
-            ->when($to, fn (Builder $q) => $q->whereDate('withdrawn_at', '<=', $to));
+            ->when($from, fn (Builder $q) => $q->where('withdrawn_at', '>=', $from instanceof Carbon ? $from->toDateString() : $from))
+            ->when($to, fn (Builder $q) => $q->where('withdrawn_at', '<=', $to instanceof Carbon ? $to->toDateString() : $to));
     }
 }

@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\CashMovementType;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\CommissionSettlement;
+use App\Models\PartnerCashMovement;
 use App\Models\Payout;
 use App\Models\PayoutRequest;
+use App\Models\User;
 use App\Support\BusinessStats;
+use App\Support\CashLock;
 use App\Support\CommissionSettlementService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,41 +56,31 @@ class CommissionController extends Controller
     }
 
     /**
-     * Open a new cycle (only one open at a time). Optionally records
-     * opening cash and an opening investment entry.
+     * Open a new cycle (only one open at a time). The cycle starts at
+     * this exact moment, so closing a cycle and opening the next one
+     * the SAME DAY is fine — everything up to the previous close stays
+     * in the old cycle, everything after it falls into the new one.
+     * Optionally records opening cash and an opening investment entry.
      */
     public function openPeriod(Request $request): RedirectResponse
     {
-        // A new cycle must start strictly AFTER the latest closed one.
-        // Same-day reopen is impossible to account for correctly at date
-        // granularity (day-close entries would count twice, or the rest
-        // of the day's entries would vanish from every cycle).
-        $latestClosedAt = CommissionPeriod::query()
-            ->closed()
-            ->orderByDesc('closed_at')
-            ->value('closed_at');
-
-        $openedAtRules = ['required', 'date', 'before_or_equal:today'];
-        if ($latestClosedAt !== null) {
-            $openedAtRules[] = 'after:'.Carbon::parse($latestClosedAt)->format('Y-m-d');
-        }
-
         $validated = $request->validate([
             'label' => ['nullable', 'string', 'max:255'],
-            'opened_at' => $openedAtRules,
-            'opening_cash' => ['nullable', 'numeric', 'min:0'],
             'investment_amount' => ['nullable', 'numeric', 'min:0.01'],
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        $openedAt = now();
+
         // Lock against a concurrent open creating a second open cycle.
-        DB::transaction(function () use ($validated): void {
+        DB::transaction(function () use ($validated, $openedAt): void {
             abort_if(CommissionPeriod::query()->open()->lockForUpdate()->exists(), 409);
+            abort_if(CommissionSettlementService::latestClosedDate() !== null
+                && $openedAt->lessThanOrEqualTo(CommissionSettlementService::latestClosedDate()), 409);
 
             CommissionSettlementService::openPeriod(
                 $validated['label'] ?? null,
-                Carbon::parse($validated['opened_at']),
-                isset($validated['opening_cash']) ? (float) $validated['opening_cash'] : null,
+                $openedAt,
                 isset($validated['investment_amount']) ? (float) $validated['investment_amount'] : null,
                 $validated['note'] ?? null,
             );
@@ -107,12 +101,48 @@ class CommissionController extends Controller
             return redirect()->route('owner.commissions.index');
         }
 
-        $closedAt = Carbon::today();
+        $closedAt = now();
         $stats = CommissionSettlementService::periodStats(CommissionSettlementService::effectiveStart($period), $closedAt);
         $profit = $stats['profit'];
         $rows = CommissionSettlementService::settlementRows($profit);
         $totalCommission = array_sum(array_column($rows, 'amount'));
         $pendingEntries = CommissionSettlementService::pendingEntries();
+
+        // Remember which partner rates this preview showed, so the actual
+        // close can warn when a rate drifted in between.
+        session(['close_preview_rate_snapshot' => CommissionSettlementService::rateSnapshot($rows)]);
+
+        // Partner cash (custody) review for this cycle: what moved during
+        // the period and what each partner still holds — so the owner can
+        // top up minuses ("give") or take returns BEFORE closing.
+        $from = CommissionSettlementService::effectiveStart($period);
+        $cycleMovements = PartnerCashMovement::query()
+            ->select('user_id', 'type')
+            ->selectRaw('SUM(amount) as total')
+            ->occurredBetween($from, $closedAt)
+            ->groupBy('user_id', 'type')
+            ->get()
+            ->groupBy('user_id');
+
+        $partnerCash = User::query()->partners()->orderBy('name')->get()
+            ->map(function (User $partner) use ($cycleMovements): array {
+                $cycle = $cycleMovements->get($partner->id, collect());
+                $sum = fn (CashMovementType $type): float => (float) $cycle
+                    ->firstWhere('type', $type->value)?->total ?? 0.0;
+
+                return [
+                    'user' => $partner,
+                    'outstanding' => PartnerCashMovement::outstanding($partner->id),
+                    'cycle_hold' => $sum(CashMovementType::Hold),
+                    'cycle_spent' => $sum(CashMovementType::Spent),
+                    'cycle_return' => $sum(CashMovementType::Return),
+                    'cycle_adjustment' => $sum(CashMovementType::CommissionAdjustment),
+                ];
+            })
+            ->filter(fn (array $row): bool => $row['outstanding'] != 0.0
+                || $row['cycle_hold'] != 0.0 || $row['cycle_spent'] != 0.0
+                || $row['cycle_return'] != 0.0 || $row['cycle_adjustment'] != 0.0)
+            ->values();
 
         return view('owner.close-preview', [
             'period' => $period,
@@ -123,6 +153,8 @@ class CommissionController extends Controller
             'rows' => $rows,
             'totalCommission' => $totalCommission,
             'ownerShare' => $profit - $totalCommission,
+            'partnerCash' => $partnerCash,
+            'partnerCashNegative' => $partnerCash->contains(fn (array $row): bool => $row['outstanding'] < 0.0),
         ]);
     }
 
@@ -143,23 +175,23 @@ class CommissionController extends Controller
                 ->with('warning', trans_choice(__('messages.close_blocked_pending'), $pendingCount, ['count' => $pendingCount]));
         }
 
-        $validated = $request->validate([
-            'closed_at' => [
-                'required',
-                'date',
-                'after_or_equal:'.$period->opened_at->format('Y-m-d'),
-                'before_or_equal:today',
-            ],
-        ]);
+        $result = CommissionSettlementService::closePeriod($period, now());
 
-        $result = CommissionSettlementService::closePeriod($period, Carbon::parse($validated['closed_at']));
+        // Warn when a partner's rate/active flag changed since the preview,
+        // so the settlements never silently differ from what was shown.
+        $previewSnapshot = session()->pull('close_preview_rate_snapshot');
+        $rateDrifted = $previewSnapshot !== null
+            && $previewSnapshot !== CommissionSettlementService::rateSnapshot(
+                CommissionSettlementService::settlementRows($result['profit'])
+            );
+        $driftNote = $rateDrifted ? ' '.__('messages.commission_rate_changed_since_preview') : '';
 
         if ($result['profit'] <= 0) {
             return redirect()
                 ->route('owner.commissions.index')
                 ->with('warning', __('messages.period_closed_loss', [
                     'profit' => number_format($result['profit'], 2),
-                ]));
+                ]).$driftNote);
         }
 
         return redirect()
@@ -167,7 +199,7 @@ class CommissionController extends Controller
             ->with('success', __('messages.period_closed_profit', [
                 'profit' => number_format($result['profit'], 2),
                 'count' => $result['created'],
-            ]));
+            ]).$driftNote);
     }
 
     /**
@@ -182,48 +214,58 @@ class CommissionController extends Controller
 
         $approved = true;
 
-        DB::transaction(function () use ($payoutRequest, &$approved): void {
-            $payoutRequest->refresh();
-            abort_unless($payoutRequest->status === 'pending', 409);
+        // Serialize against every other cash-affecting operation: the
+        // cash-in-hand check below reads an aggregate SUM that has no
+        // row to lock, so the named lock keeps a parallel withdrawal or
+        // approval from overdrawing the same cash figure.
+        CashLock::acquire();
 
-            $settlements = CommissionSettlement::query()
-                ->pending()
-                ->where('user_id', $payoutRequest->user_id)
-                ->lockForUpdate()
-                ->get();
+        try {
+            DB::transaction(function () use ($payoutRequest, &$approved): void {
+                $payoutRequest->refresh();
+                abort_unless($payoutRequest->status === 'pending', 409);
 
-            $total = (float) $settlements->sum('amount');
+                $settlements = CommissionSettlement::query()
+                    ->pending()
+                    ->where('user_id', $payoutRequest->user_id)
+                    ->lockForUpdate()
+                    ->get();
 
-            if ($total <= 0) {
-                // Nothing left to pay — close the request without a payout.
-                $payoutRequest->update(['status' => 'rejected']);
+                $total = (float) $settlements->sum('amount');
 
-                return;
-            }
+                if ($total <= 0) {
+                    // Nothing left to pay — close the request without a payout.
+                    $payoutRequest->update(['status' => 'rejected']);
 
-            // Paying commission is cash out — never pay beyond the cash
-            // actually in hand.
-            $cashInHand = BusinessStats::all()['cash_in_hand'];
+                    return;
+                }
 
-            if ($total > $cashInHand) {
-                $approved = false;
+                // Paying commission is cash out — never pay beyond the cash
+                // actually in hand.
+                $cashInHand = BusinessStats::all()['cash_in_hand'];
 
-                return;
-            }
+                if ($total > $cashInHand) {
+                    $approved = false;
 
-            CommissionSettlement::query()
-                ->whereIn('id', $settlements->pluck('id'))
-                ->update(['status' => 'paid']);
+                    return;
+                }
 
-            Payout::query()->create([
-                'user_id' => $payoutRequest->user_id,
-                'amount' => $total,
-                'note' => __('messages.payout_for_commission', ['name' => $payoutRequest->user->name]),
-                'payout_date' => Carbon::today()->toDateString(),
-            ]);
+                CommissionSettlement::query()
+                    ->whereIn('id', $settlements->pluck('id'))
+                    ->update(['status' => 'paid']);
 
-            $payoutRequest->update(['status' => 'approved', 'amount' => $total]);
-        });
+                Payout::query()->create([
+                    'user_id' => $payoutRequest->user_id,
+                    'amount' => $total,
+                    'note' => __('messages.payout_for_commission', ['name' => $payoutRequest->user->name]),
+                    'payout_date' => Carbon::today()->toDateString(),
+                ]);
+
+                $payoutRequest->update(['status' => 'approved', 'amount' => $total]);
+            });
+        } finally {
+            CashLock::release();
+        }
 
         if ($approved === false) {
             return back()->with('error', __('messages.payout_exceeds_cash', [

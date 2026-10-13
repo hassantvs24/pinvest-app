@@ -11,6 +11,7 @@ use App\Models\ProductionComponent;
 use App\Models\Purchase;
 use App\Models\Sale;
 use App\Models\StockLoss;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -58,6 +59,108 @@ class InventoryService
     public static function stockLossCost(Carbon $from, Carbon $to): float
     {
         return self::simulate($from, $to)['loss_cost'];
+    }
+
+    /**
+     * COGS and stock-loss cost per month (keyed by 'Y-m') for confirmed
+     * sales/losses whose entry date falls inside the given moments. Both
+     * buckets come from ONE simulation trace, so each sale is costed at
+     * its own date's moving average cost.
+     *
+     * @return array<string, array{cogs: float, stock_loss: float}>
+     */
+    public static function monthlyCosts(Carbon $from, Carbon $to): array
+    {
+        $fromPrefix = $from->format('Y-m-d H:i:s');
+        $buckets = [];
+
+        foreach (self::simulate(null, $to)['trace'] as $entry) {
+            $sort = $entry['sort'];
+
+            if (substr($sort, 0, 19) < $fromPrefix) {
+                continue;
+            }
+
+            $month = substr($sort, 0, 7);
+            $id = substr($sort, (int) strrpos($sort, '|') + 1);
+
+            if (str_starts_with($id, 's')) {
+                $buckets[$month]['cogs'] = ($buckets[$month]['cogs'] ?? 0.0) + $entry['cost'];
+            } elseif (str_starts_with($id, 'l')) {
+                $buckets[$month]['stock_loss'] = ($buckets[$month]['stock_loss'] ?? 0.0) + $entry['cost'];
+            }
+        }
+
+        return $buckets;
+    }
+
+    /**
+     * Sales, COGS and gross profit per item for confirmed sales between
+     * the given moments (inclusive). Each sale is costed at its own
+     * date's moving average cost (from the simulation trace), so margins
+     * stay accurate even when costs change over time.
+     *
+     * @return Collection<int, array{name: string, unit: string, quantity: float, sales: float, cogs: float, margin: float, margin_rate: float}>
+     */
+    public static function itemSalesPerformance(?Carbon $from = null, ?Carbon $to = null): Collection
+    {
+        $to ??= now();
+
+        $sales = Sale::query()
+            ->confirmed()
+            ->with('item')
+            ->when($from, fn (Builder $query) => $query->where('entry_date', '>=', $from))
+            ->where('entry_date', '<=', $to)
+            ->get();
+
+        if ($sales->isEmpty()) {
+            return collect();
+        }
+
+        $fromPrefix = $from?->format('Y-m-d H:i:s');
+        $costBySale = [];
+
+        foreach (self::simulate(null, $to)['trace'] as $entry) {
+            $sort = $entry['sort'];
+
+            if ($fromPrefix !== null && substr($sort, 0, 19) < $fromPrefix) {
+                continue;
+            }
+
+            $id = substr($sort, (int) strrpos($sort, '|') + 1);
+
+            if (str_starts_with($id, 's')) {
+                $costBySale[(int) substr($id, 1)] = $entry['cost'];
+            }
+        }
+
+        return $sales
+            ->groupBy('item_id')
+            ->map(function (Collection $group) use ($costBySale): array {
+                $salesTotal = 0.0;
+                $cogs = 0.0;
+                $quantity = 0.0;
+
+                foreach ($group as $sale) {
+                    $salesTotal += (float) $sale->total;
+                    $cogs += $costBySale[$sale->id] ?? 0.0;
+                    $quantity += (float) $sale->quantity;
+                }
+
+                $margin = $salesTotal - $cogs;
+
+                return [
+                    'name' => $group->first()->item->name ?? '—',
+                    'unit' => ItemUnits::label($group->first()->item->unit ?? null),
+                    'quantity' => $quantity,
+                    'sales' => $salesTotal,
+                    'cogs' => $cogs,
+                    'margin' => $margin,
+                    'margin_rate' => $salesTotal > 0.0 ? $margin / $salesTotal : 0.0,
+                ];
+            })
+            ->sortByDesc('sales')
+            ->values();
     }
 
     /**
@@ -190,48 +293,24 @@ class InventoryService
     }
 
     /**
-     * The moving weighted-average cost of one unit of an item, in the
-     * item's own unit (0 when the item has no stock history yet — the
-     * same basis the COGS calculation uses).
-     */
-    public static function avgCostPerUnit(Item $item): float
-    {
-        $states = self::simulate(null, now())['states'];
-        $state = $states[$item->id] ?? null;
-
-        if ($state === null || $state['in_qty'] <= 0.0) {
-            return 0.0;
-        }
-
-        return self::stateAvgCost($state) * ItemUnits::toBase(1.0, $item->unit);
-    }
-
-    /**
      * Validate a production run before it is stored or confirmed.
      * Raw materials may not exceed what is available (pending runs
-     * reserve their materials), and the finished goods must be worth
-     * at least what the run consumes. Returns an error message or null.
+     * reserve their materials). Returns an error message or null.
      *
      * @param  array<int, array{item_id: int, quantity: float}>  $components
-     * @param  array<int, array{item_id: int, quantity: float}>  $outputs
      */
     public static function validateProduction(
         array $components,
-        array $outputs,
-        float $extraCost,
         ?int $excludeProductionId = null,
     ): ?string {
         // Rows are validated distinct, but aggregate defensively so the
         // check stays correct for any caller.
-        $sumByItem = fn (array $rows): array => collect($rows)
+        $componentsByItem = collect($components)
             ->groupBy('item_id')
             ->map(fn ($group): float => (float) $group->sum('quantity'))
             ->all();
 
-        $componentsByItem = $sumByItem($components);
-        $outputsByItem = $sumByItem($outputs);
-
-        // 1. Raw materials must fit the available stock.
+        // Raw materials must fit the available stock.
         foreach ($componentsByItem as $itemId => $quantity) {
             $item = Item::query()->find($itemId);
             if ($item === null) {
@@ -246,30 +325,6 @@ class InventoryService
                     'unit' => ItemUnits::label($item->unit),
                 ]);
             }
-        }
-
-        // 2. The outputs must be worth at least the inputs.
-        $inputCost = $extraCost;
-        foreach ($componentsByItem as $itemId => $quantity) {
-            $item = Item::query()->find($itemId);
-            if ($item !== null) {
-                $inputCost += $quantity * self::avgCostPerUnit($item);
-            }
-        }
-
-        $outputValue = 0.0;
-        foreach ($outputsByItem as $itemId => $quantity) {
-            $item = Item::query()->find($itemId);
-            if ($item !== null) {
-                $outputValue += $quantity * (float) $item->default_price;
-            }
-        }
-
-        if ($outputValue + 0.01 < $inputCost) {
-            return __('messages.production_value_below_cost', [
-                'cost' => number_format($inputCost, 2),
-                'value' => number_format($outputValue, 2),
-            ]);
         }
 
         return null;
@@ -296,9 +351,9 @@ class InventoryService
         $events = collect();
 
         Purchase::query()->confirmed()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->get()
             ->each(fn (Purchase $purchase) => $events->push([
-                'sort' => $purchase->entry_date->format('Y-m-d').'|0|p'.$purchase->id,
+                'sort' => $purchase->entry_date->format('Y-m-d H:i:s').'|0|p'.$purchase->id,
                 'date' => $purchase->entry_date,
                 'kind' => 'purchase',
                 'direction' => 'in',
@@ -308,7 +363,7 @@ class InventoryService
                 'note' => self::ledgerNote($purchase->user?->name, $purchase->note),
             ]));
 
-        Production::query()->confirmed()->whereDate('entry_date', '<=', $asOf)
+        Production::query()->confirmed()->where('entry_date', '<=', $asOf)
             ->where(function ($query) use ($item): void {
                 $query->whereHas('components', fn ($q) => $q->where('item_id', $item->id))
                     ->orWhereHas('outputs', fn ($q) => $q->where('item_id', $item->id));
@@ -318,7 +373,7 @@ class InventoryService
             ->each(function (Production $production) use ($events, $item): void {
                 foreach ($production->components->where('item_id', $item->id) as $component) {
                     $events->push([
-                        'sort' => $production->entry_date->format('Y-m-d').'|2|prc'.$production->id.'c'.$component->id,
+                        'sort' => $production->entry_date->format('Y-m-d H:i:s').'|2|prc'.$production->id.'c'.$component->id,
                         'date' => $production->entry_date,
                         'kind' => 'production',
                         'direction' => 'out',
@@ -330,7 +385,7 @@ class InventoryService
                 }
                 foreach ($production->outputs->where('item_id', $item->id) as $output) {
                     $events->push([
-                        'sort' => $production->entry_date->format('Y-m-d').'|2|pro'.$production->id.'o'.$output->id,
+                        'sort' => $production->entry_date->format('Y-m-d H:i:s').'|2|pro'.$production->id.'o'.$output->id,
                         'date' => $production->entry_date,
                         'kind' => 'production',
                         'direction' => 'in',
@@ -343,9 +398,9 @@ class InventoryService
             });
 
         Sale::query()->confirmed()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->get()
             ->each(fn (Sale $sale) => $events->push([
-                'sort' => $sale->entry_date->format('Y-m-d').'|3|s'.$sale->id,
+                'sort' => $sale->entry_date->format('Y-m-d H:i:s').'|3|s'.$sale->id,
                 'date' => $sale->entry_date,
                 'kind' => 'sale',
                 'direction' => 'out',
@@ -356,9 +411,9 @@ class InventoryService
             ]));
 
         StockLoss::query()->confirmed()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->get()
             ->each(fn (StockLoss $loss) => $events->push([
-                'sort' => $loss->entry_date->format('Y-m-d').'|4|l'.$loss->id,
+                'sort' => $loss->entry_date->format('Y-m-d H:i:s').'|4|l'.$loss->id,
                 'date' => $loss->entry_date,
                 'kind' => 'stock-loss',
                 'direction' => 'out',
@@ -404,14 +459,14 @@ class InventoryService
         // stock yet, but hold it): sales, stock losses and production
         // raw materials — everything `pendingReservations` counts.
         $pending = Sale::query()->pending()->where('item_id', $item->id)
-            ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
+            ->where('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
             ->map(fn (Sale $sale): array => [
                 'date' => $sale->entry_date,
                 'quantity' => (float) $sale->quantity,
                 'note' => self::ledgerNote($sale->user?->name, $sale->note),
             ])
             ->merge(StockLoss::query()->pending()->where('item_id', $item->id)
-                ->whereDate('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
+                ->where('entry_date', '<=', $asOf)->with('user')->latest('entry_date')->get()
                 ->map(fn (StockLoss $loss): array => [
                     'date' => $loss->entry_date,
                     'quantity' => (float) $loss->quantity,
@@ -421,7 +476,7 @@ class InventoryService
                 ->where('item_id', $item->id)
                 ->whereHas('production', function ($query) use ($asOf): void {
                     $query->where('status', EntryStatus::Pending->value)
-                        ->whereDate('entry_date', '<=', $asOf);
+                        ->where('entry_date', '<=', $asOf);
                 })
                 ->with(['production.user'])->get()
                 ->map(fn (ProductionComponent $component): array => [
@@ -583,13 +638,13 @@ class InventoryService
     {
         return Purchase::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with('item')
             ->get()
             ->map(fn (Purchase $purchase): array => [
                 'kind' => 'purchase',
                 'id' => 'p'.$purchase->id,
-                'date' => $purchase->entry_date->format('Y-m-d'),
+                'date' => $purchase->entry_date->format('Y-m-d H:i:s'),
                 'order' => 0,
                 'item_id' => $purchase->item_id,
                 'qty_base' => ItemUnits::toBase((float) $purchase->quantity, $purchase->item->unit),
@@ -607,13 +662,13 @@ class InventoryService
     {
         return Expense::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->whereHas('expenseHead', fn ($query) => $query->where('cost_type', ExpenseCostType::Product->value))
             ->get()
             ->map(fn (Expense $expense): array => [
                 'kind' => 'product-expense',
                 'id' => 'e'.$expense->id,
-                'date' => $expense->entry_date->format('Y-m-d'),
+                'date' => $expense->entry_date->format('Y-m-d H:i:s'),
                 'order' => 1,
                 'amount' => (float) $expense->amount,
                 'item_id' => $expense->item_id,
@@ -631,14 +686,14 @@ class InventoryService
     {
         return Production::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with(['components.item', 'outputs.item'])
             ->get()
             ->map(fn (Production $production): array => [
                 'kind' => 'production',
                 'id' => 'pr'.$production->id,
                 'num' => $production->id,
-                'date' => $production->entry_date->format('Y-m-d'),
+                'date' => $production->entry_date->format('Y-m-d H:i:s'),
                 'order' => 2,
                 'extra_cost' => (float) $production->extra_cost,
                 'components' => $production->components
@@ -669,13 +724,13 @@ class InventoryService
     {
         return Sale::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with('item')
             ->get()
             ->map(fn (Sale $sale): array => [
                 'kind' => 'sale',
                 'id' => 's'.$sale->id,
-                'date' => $sale->entry_date->format('Y-m-d'),
+                'date' => $sale->entry_date->format('Y-m-d H:i:s'),
                 'order' => 3,
                 'item_id' => $sale->item_id,
                 'qty_base' => ItemUnits::toBase((float) $sale->quantity, $sale->item->unit),
@@ -693,13 +748,13 @@ class InventoryService
     {
         return StockLoss::query()
             ->confirmed()
-            ->whereDate('entry_date', '<=', $to)
+            ->where('entry_date', '<=', $to)
             ->with('item')
             ->get()
             ->map(fn (StockLoss $loss): array => [
                 'kind' => 'stock-loss',
                 'id' => 'l'.$loss->id,
-                'date' => $loss->entry_date->format('Y-m-d'),
+                'date' => $loss->entry_date->format('Y-m-d H:i:s'),
                 'order' => 4,
                 'item_id' => $loss->item_id,
                 'qty_base' => ItemUnits::toBase((float) $loss->quantity, $loss->item->unit),

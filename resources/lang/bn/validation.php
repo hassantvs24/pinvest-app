@@ -20,6 +20,9 @@ return [
     'confirmed' => ':attribute মিলছে না।',
     'email' => ':attribute সঠিক ইমেইল ঠিকানা হতে হবে।',
     'date' => ':attribute সঠিক তারিখ হতে হবে।',
+    'after' => ':attribute তারিখটি অবশ্যই :date-এর পরের তারিখ হতে হবে।',
+    'after_or_equal' => ':attribute তারিখটি অবশ্যই :date অথবা তার পরের তারিখ হতে হবে।',
+    'before_or_equal' => ':attribute তারিখটি অবশ্যই :date অথবা তার আগের তারিখ হতে হবে।',
     'in' => 'নির্বাচিত :attribute সঠিক নয়।',
     'boolean' => ':attribute সঠিক নয়।',
 
@@ -36,6 +39,8 @@ return [
         'unit_price' => 'একক দাম',
         'total' => 'মোট',
         'entry_date' => 'তারিখ',
+        'opened_at' => 'শুরুর তারিখ',
+        'closed_at' => 'শেষের তারিখ',
         'invested_at' => 'তারিখ',
         'payout_date' => 'তারিখ',
         'note' => 'নোট',

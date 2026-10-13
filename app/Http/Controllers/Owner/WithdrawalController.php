@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Owner;
 use App\Http\Controllers\Controller;
 use App\Models\OwnerWithdrawal;
 use App\Support\BusinessStats;
+use App\Support\CashLock;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -41,19 +42,27 @@ class WithdrawalController extends Controller
             'note' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Read the cash position and insert atomically, so two parallel
-        // withdrawals cannot both pass the check and overdraw the cash.
-        DB::transaction(function () use ($validated): void {
-            $cashInHand = BusinessStats::all()['cash_in_hand'];
+        // Serialize against every other cash-affecting operation, then
+        // read the cash position and insert atomically — two parallel
+        // withdrawals can never both pass the check and overdraw the
+        // cash (the aggregate SUM itself has no row to lock).
+        CashLock::acquire();
 
-            if ((float) $validated['amount'] > $cashInHand) {
-                throw ValidationException::withMessages([
-                    'amount' => __('messages.withdrawal_exceeds_cash', ['cash' => number_format($cashInHand, 2)]),
-                ]);
-            }
+        try {
+            DB::transaction(function () use ($validated): void {
+                $cashInHand = BusinessStats::all()['cash_in_hand'];
 
-            OwnerWithdrawal::query()->create($validated);
-        });
+                if ((float) $validated['amount'] > $cashInHand) {
+                    throw ValidationException::withMessages([
+                        'amount' => __('messages.withdrawal_exceeds_cash', ['cash' => number_format($cashInHand, 2)]),
+                    ]);
+                }
+
+                OwnerWithdrawal::query()->create($validated);
+            });
+        } finally {
+            CashLock::release();
+        }
 
         return back()->with('success', __('messages.withdrawal_added'));
     }

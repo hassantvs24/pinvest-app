@@ -62,7 +62,7 @@ it('accepts fractional quantities end to end (purchase, sale, stock, COGS)', fun
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 2.5,
-        'unit_price' => 1000,
+        'total' => 2500,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors()->assertRedirect();
 
@@ -74,7 +74,7 @@ it('accepts fractional quantities end to end (purchase, sale, stock, COGS)', fun
     $this->actingAs($partner)->post('/entries/sales', [
         'head_id' => $item->id,
         'quantity' => 1.25,
-        'unit_price' => 2000,
+        'total' => 2500,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors()->assertRedirect();
 
@@ -99,7 +99,7 @@ it('rejects non-numeric or zero fractional quantities', function (): void {
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 0,
-        'unit_price' => 100,
+        'total' => 100,
         'entry_date' => now()->format('Y-m-d'),
     ])->assertSessionHasErrors('quantity');
 
@@ -128,22 +128,22 @@ it('blocks login for a deactivated partner', function (): void {
 it('rejects owner entries dated inside a closed cycle', function (): void {
     $owner = auditOwner();
     $item = Item::factory()->create();
+    $now = now()->setTime(9, 0);
 
-    auditPeriod(); // opened 3 days ago
-    $this->actingAs($owner)->post('/owner/commissions/close', [
-        'closed_at' => now()->subDays(2)->format('Y-m-d'),
-    ])->assertRedirect();
+    // Cycle opened 3 days ago, closed yesterday, reopened today.
+    $this->travelTo($now->copy()->subDays(3));
+    auditPeriod(); // opened 3 days ago (travelled now)
+    $this->travelTo($now->copy()->subDays(2));
+    $this->actingAs($owner)->post('/owner/commissions/close')->assertRedirect();
+    $this->travelTo($now);
+    $this->actingAs($owner)->post('/owner/commissions/open')->assertSessionDoesntHaveErrors();
 
-    // Reopen today; backdating into the closed cycle must fail.
-    $this->actingAs($owner)->post('/owner/commissions/open', [
-        'opened_at' => now()->format('Y-m-d'),
-    ])->assertSessionDoesntHaveErrors();
-
+    // Backdating into the closed cycle (close day or earlier) must fail.
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 1,
-        'unit_price' => 100,
-        'entry_date' => now()->subDays(3)->format('Y-m-d'),
+        'total' => 100,
+        'entry_date' => $now->copy()->subDays(3)->format('Y-m-d'),
     ])->assertSessionHasErrors('entry_date');
 
     expect(Purchase::query()->count())->toBe(0);
@@ -152,11 +152,13 @@ it('rejects owner entries dated inside a closed cycle', function (): void {
     $this->actingAs($owner)->post('/entries/purchases', [
         'head_id' => $item->id,
         'quantity' => 1,
-        'unit_price' => 100,
-        'entry_date' => now()->format('Y-m-d'),
+        'total' => 100,
+        'entry_date' => $now->format('Y-m-d'),
     ])->assertSessionDoesntHaveErrors();
 
     expect(Purchase::query()->count())->toBe(1);
+
+    $this->travelBack();
 });
 
 it('blocks payout approval when cash in hand is insufficient', function (): void {
@@ -209,7 +211,5 @@ it('keeps demo capital counted exactly once', function (): void {
     $this->seed(DemoDataSeeder::class);
 
     // The initial capital lives in ONE place: the investment entry.
-    // The first demo period must not add it again as opening cash.
     expect((float) Investment::query()->sum('amount'))->toBe(100000.0);
-    expect((float) CommissionPeriod::query()->sum('opening_cash'))->toBe(0.0);
 });

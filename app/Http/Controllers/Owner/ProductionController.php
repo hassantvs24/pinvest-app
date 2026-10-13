@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers\Owner;
 
+use App\Enums\CashMovementType;
 use App\Enums\EntryStatus;
 use App\Http\Controllers\Controller;
 use App\Models\CommissionPeriod;
 use App\Models\Item;
+use App\Models\PartnerCashMovement;
 use App\Models\Production;
+use App\Support\CommissionSettlementService;
 use App\Support\InventoryService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
@@ -23,18 +27,56 @@ use Illuminate\View\View;
 class ProductionController extends Controller
 {
     /**
+     * Owner date-picker rules: today or a past day, never on/inside a
+     * closed cycle (backdated entries land at midnight of the picked
+     * day). The picked day resolves to the exact current moment when it
+     * is today, midnight of that day otherwise.
+     *
+     * @return array<int, string>
+     */
+    private function entryDateRules(): array
+    {
+        $rules = ['required', 'date', 'before_or_equal:'.now()->toDateString()];
+
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+
+        if ($latestClosed !== null) {
+            $rules[] = 'after:'.$latestClosed->toDateString();
+        } elseif (($openPeriod = CommissionPeriod::query()->open()->latest('id')->first()) !== null) {
+            $rules[] = 'after_or_equal:'.$openPeriod->opened_at->toDateString();
+        }
+
+        return $rules;
+    }
+
+    private function entryMoment(string $date): Carbon
+    {
+        $picked = Carbon::parse($date);
+
+        return $picked->toDateString() === now()->toDateString() ? now() : $picked->startOfDay();
+    }
+
+    /**
      * List productions (newest first) with the create form data.
      */
     public function index(): View
     {
+        $items = Item::query()->active()->orderBy('name')->get();
+        $available = InventoryService::availableMap();
+
         return view('owner.productions', [
             'productions' => Production::query()
                 ->with(['outputs.item', 'components.item', 'user'])
                 ->orderByDesc('entry_date')
                 ->orderByDesc('id')
                 ->paginate(15),
-            'items' => Item::query()->active()->orderBy('name')->get(),
-            'available' => InventoryService::availableMap(),
+            'items' => $items,
+            // Component rows may only use items that actually have stock
+            // right now, exactly like the sale form's item dropdown.
+            'componentItems' => $items
+                ->filter(fn (Item $item): bool => ($available[$item->id] ?? 0.0) > 0.00001)
+                ->values(),
+            'available' => $available,
             'today' => now()->format('Y-m-d'),
         ]);
     }
@@ -49,6 +91,22 @@ class ProductionController extends Controller
     }
 
     /**
+     * A run made on/before the latest cycle close belongs to that
+     * closed cycle — its stock/COGS are baked into the stored profit
+     * and settlements, so it must stay untouched.
+     */
+    private function closedCycleEntryError(Production $production): ?string
+    {
+        $latestClosed = CommissionSettlementService::latestClosedDate();
+
+        if ($latestClosed !== null && $production->entry_date->lessThanOrEqualTo($latestClosed)) {
+            return __('messages.entry_locked_closed_cycle');
+        }
+
+        return null;
+    }
+
+    /**
      * Store a production run with its component lines. Owner entries
      * are auto-confirmed (the owner is the approver).
      */
@@ -58,7 +116,7 @@ class ProductionController extends Controller
 
         $validated = $request->validate([
             'extra_cost' => ['nullable', 'numeric', 'min:0'],
-            'entry_date' => ['required', 'date'],
+            'entry_date' => $this->entryDateRules(),
             'note' => ['nullable', 'string', 'max:1000'],
             'outputs' => ['required', 'array', 'min:1'],
             'outputs.*.item_id' => ['required', 'distinct', 'exists:items,id'],
@@ -79,8 +137,6 @@ class ProductionController extends Controller
 
         $error = InventoryService::validateProduction(
             $validated['components'] ?? [],
-            $validated['outputs'],
-            (float) ($validated['extra_cost'] ?? 0),
         );
         if ($error !== null) {
             return back()->withInput()->with('error', $error);
@@ -91,7 +147,7 @@ class ProductionController extends Controller
                 'user_id' => $request->user()->id,
                 'extra_cost' => $validated['extra_cost'] ?? 0,
                 'note' => $validated['note'] ?? null,
-                'entry_date' => $validated['entry_date'],
+                'entry_date' => $this->entryMoment($validated['entry_date']),
                 'status' => EntryStatus::Confirmed,
                 'confirmed_by' => $request->user()->id,
                 'confirmed_at' => now(),
@@ -122,9 +178,9 @@ class ProductionController extends Controller
     {
         abort_unless($this->cycleOpen(), 409);
 
-        // Stock and prices may have moved since the partner submitted —
-        // re-validate both checks under a row lock so two simultaneous
-        // confirms cannot oversell the same units.
+        // Stock may have moved since the partner submitted — re-validate
+        // under a row lock so two simultaneous confirms cannot oversell
+        // the same units.
         $error = null;
 
         DB::transaction(function () use ($production, &$error): void {
@@ -134,8 +190,6 @@ class ProductionController extends Controller
 
             $error = InventoryService::validateProduction(
                 $production->components->map(fn ($c): array => ['item_id' => $c->item_id, 'quantity' => (float) $c->quantity])->all(),
-                $production->outputs->map(fn ($o): array => ['item_id' => $o->item_id, 'quantity' => (float) $o->quantity])->all(),
-                (float) $production->extra_cost,
                 excludeProductionId: $production->id,
             );
 
@@ -148,6 +202,20 @@ class ProductionController extends Controller
                 'confirmed_by' => request()->user()->id,
                 'confirmed_at' => now(),
             ]);
+
+            // Labour is paid in cash from whatever the partner holds:
+            // auto-deduct from their outstanding (may go negative — the
+            // owner tops up later). The owner's own runs have no partner
+            // custody, so they are skipped.
+            if ((float) $production->extra_cost > 0 && ! $production->user->isOwner()) {
+                PartnerCashMovement::query()->create([
+                    'user_id' => $production->user_id,
+                    'type' => CashMovementType::Spent,
+                    'amount' => (float) $production->extra_cost,
+                    'note' => __('messages.auto_spent_production', ['id' => $production->id]),
+                    'occurred_at' => $production->entry_date,
+                ]);
+            }
         });
 
         if ($error !== null) {
@@ -182,6 +250,27 @@ class ProductionController extends Controller
     public function destroy(Production $production): RedirectResponse
     {
         abort_unless($this->cycleOpen(), 409);
+
+        $locked = $this->closedCycleEntryError($production);
+
+        if ($locked !== null) {
+            return back()->with('error', $locked);
+        }
+
+        // Refund the partner's held cash before deleting a confirmed run
+        // — the labour auto-spent movement stays in the immutable ledger,
+        // so the custody side must be given back to keep both in sync.
+        if ($production->status === EntryStatus::Confirmed
+            && ! $production->user->isOwner()
+            && (float) $production->extra_cost > 0) {
+            PartnerCashMovement::query()->create([
+                'user_id' => $production->user_id,
+                'type' => CashMovementType::Hold,
+                'amount' => (float) $production->extra_cost,
+                'note' => __('messages.custody_delete_refund', ['id' => $production->id]),
+                'occurred_at' => $production->entry_date,
+            ]);
+        }
 
         $production->delete();
 

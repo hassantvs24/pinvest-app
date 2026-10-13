@@ -66,15 +66,15 @@ it('blocks production when a component exceeds available stock', function (): vo
     expect(Production::count())->toBe(0);
 });
 
-it('blocks production when the outputs are worth less than the inputs', function (): void {
+it('allows production when the outputs are worth less than the inputs', function (): void {
     $wood = prodItem(['name' => 'কাঠ']);
     $chair = prodItem(['name' => 'চেয়ার', 'default_price' => 50]);
     prodStock($wood, 10); // avg cost 100/pcs
 
-    // 5 pcs in (৳500) but outputs worth 2 × ৳50 = ৳100.
-    postProduction(prodPartner(), $chair, 2, [[$wood, 5]]);
+    // 5 pcs in (৳500) but outputs worth 2 × ৳50 = ৳100 — still allowed.
+    postProduction(prodPartner(), $chair, 2, [[$wood, 5]])->assertRedirect();
 
-    expect(Production::count())->toBe(0);
+    expect(Production::query()->pending()->count())->toBe(1);
 });
 
 it('lets a valid production through', function (): void {
@@ -120,4 +120,42 @@ it('blocks the owner from confirming a production that no longer fits', function
     $this->actingAs($owner)->patch("/owner/productions/{$production->id}/confirm")->assertRedirect();
 
     expect($production->fresh()->status)->toBe(EntryStatus::Pending);
+});
+
+it('lists only in-stock items in the partner production component dropdown', function (): void {
+    $stocked = prodItem(['name' => 'স্টকে থাকা কাঠ']);
+    $empty = prodItem(['name' => 'শূন্য স্টকের কাঠ']);
+    prodStock($stocked, 10);
+
+    $response = $this->actingAs(prodPartner())->get('/productions')->assertOk();
+
+    expect(collect($response->viewData('componentItems'))->pluck('id'))
+        ->toContain($stocked->id)
+        ->not->toContain($empty->id);
+
+    // The finished-good output dropdown still lists every active item.
+    expect(collect($response->viewData('items'))->pluck('id'))
+        ->toContain($stocked->id)
+        ->toContain($empty->id);
+});
+
+it('lists only in-stock items in the owner production component dropdown', function (): void {
+    $stocked = prodItem(['name' => 'স্টকে থাকা কাঠ']);
+    $empty = prodItem(['name' => 'শূন্য স্টকের কাঠ']);
+    prodStock($stocked, 10);
+
+    $response = $this->actingAs(prodOwner())->get('/owner/productions')->assertOk();
+
+    expect(collect($response->viewData('componentItems'))->pluck('id'))
+        ->toContain($stocked->id)
+        ->not->toContain($empty->id);
+});
+
+it('shows the no-component-stock hint when nothing is in stock', function (): void {
+    prodItem(['name' => 'শূন্য স্টকের কাঠ']);
+
+    $this->actingAs(prodPartner())
+        ->get('/productions')
+        ->assertOk()
+        ->assertSee(__('messages.no_component_stock'));
 });
